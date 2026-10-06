@@ -4,6 +4,7 @@
   "description": "SnekPad Studio: configure your SnekPad macropad",
   "main": "./out/main/index.js",
   "author": "SnekPad",
+  "homepage": "https://github.com/NaveenGuna9299/Snekpad",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
