@@ -1,4 +1,4 @@
-appId: com.electron.app
+appId: com.snekpad.studio
 productName: SnekPad Studio
 directories:
   buildResources: build
@@ -21,20 +21,16 @@ nsis:
   createDesktopShortcut: always
 mac:
   entitlementsInherit: build/entitlements.mac.plist
-  extendInfo:
-    - NSCameraUsageDescription: Application requests access to the device's camera.
-    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
-    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
-    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  target:
+    - dmg
   notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
   target:
     - AppImage
-    - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: SnekPad <gunanaveen122@gmail.com>
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
