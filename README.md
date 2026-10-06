@@ -6,6 +6,22 @@ SnekPad is a 12-key macropad with a rotary knob, a small OLED screen and per-key
 [KMK](https://github.com/KMKfw/kmk_firmware) on CircuitPython (Waveshare RP2040-Zero) and shows up on the computer as a
 plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. No cloud, no accounts, no telemetry.
 
+## Download
+
+SnekPad Studio v1.0.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+
+| OS | Download |
+|---|---|
+| Windows | [snekpad-studio-1.0.0-setup.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0-setup.exe) |
+| macOS | [snekpad-studio-1.0.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.dmg) |
+| Linux (any distro) | [snekpad-studio-1.0.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.AppImage) |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.0.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio_1.0.0_amd64.deb) |
+
+The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
+right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
+
+The app only configures the pad. A new pad still needs its firmware set up by hand, see [Quick start](#quick-start).
+
 ## What is in this repo
 
 | Folder | What it is |
