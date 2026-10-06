@@ -166,12 +166,13 @@ class AppProfiles(Module):
     # ------------------------------------------------------------ CFG_* (receive a config)
     def _cfg_begin(self, parts, now):
         # CFG_BEGIN<TAB>length<TAB>crc32hex -> OK | ERR<TAB>reason
-        self._rx = None
+        self._drop_rx()
         try:
             if not config_loader.can_save():
                 raise OSError("drive is visible: replug without holding the top-left key")
             self._rx = config_loader.Receiver(int(parts[1]), parts[2])
             self._rx_t = now
+            self._ui_call("suspend")    # frees the screen's RAM for the config that is about to arrive
             self._write("OK\n")
         except Exception as e:
             self._cfg_error(e)
@@ -185,13 +186,15 @@ class AppProfiles(Module):
             self._write("ERR\tno CFG_BEGIN\n")
             return
         try:
-            text = rx.finish()
-            cfg = json.loads(text)
+            rx.finish()                         # length + CRC of the file the lines were written to
+            cfg = config_loader.load_received()
             config_loader.check(cfg)
             config_loader.build_profiles(cfg)
             cfg = None
-            config_loader.save(text)
+            config_loader.commit()
         except Exception as e:
+            rx.abort()
+            rx = None
             self._cfg_error(e)
             return
         print("app_profiles: config saved, reloading")
@@ -202,14 +205,28 @@ class AppProfiles(Module):
             pass
         self._reload_at = time.monotonic() + 0.5   # let the reply reach the app first
 
+    def _drop_rx(self):
+        rx = self._rx
+        self._rx = None
+        if rx is not None:
+            rx.abort()
+
     def _cfg_error(self, e):
         print("app_profiles config error:", e)
         reason = "".join(c if " " <= c <= "~" else " " for c in str(e))[:60]
+        self._ui_call("resume")
         self._notify(reason)
         try:
             self._write("ERR\t" + reason + "\n")
         except Exception:
             pass
+
+    def _ui_call(self, name):
+        if self.ui is not None:
+            try:
+                getattr(self.ui, name)()
+            except Exception as e:
+                print("app_profiles ui", name, "error:", e)
 
     def _notify(self, reason):
         if self.ui is not None:
@@ -237,7 +254,7 @@ class AppProfiles(Module):
                     self._rx.add(line[len("CFG_LINE\t"):])
                     self._rx_t = now
                 except Exception as e:
-                    self._rx = None
+                    self._drop_rx()
                     self._cfg_error(e)
         elif parts[0] == "CFG_END":
             self._cfg_end()
@@ -306,8 +323,9 @@ class AppProfiles(Module):
         try:
             self._read(now)
             if self._rx is not None and now - self._rx_t > RX_TIMEOUT_S:
-                self._rx = None
+                self._drop_rx()
                 print("app_profiles: config transfer timed out")
+                self._ui_call("resume")
                 self._notify("transfer timed out")
 
             base = keyboard.active_layers[-1]

@@ -36,10 +36,11 @@ MAX_BYTES = 24000              # bigger than any real config; guards RAM
 MODS = {"CTRL": "LCTL", "SHIFT": "LSFT", "ALT": "LALT", "GUI": "LGUI"}
 
 
-def crc32(data):
+def crc32(data, value=0):
+    """CRC-32 of data; pass the previous result as value to continue over more data."""
     if _crc32_fast is not None:
-        return _crc32_fast(data) & 0xFFFFFFFF
-    crc = 0xFFFFFFFF
+        return _crc32_fast(data, value) & 0xFFFFFFFF
+    crc = value ^ 0xFFFFFFFF
     for b in data:
         crc ^= b
         for _ in range(8):
@@ -49,29 +50,66 @@ def crc32(data):
 
 # ---------------------------------------------------------------- receiving
 class Receiver:
-    """Collects CFG_LINE chunks and checks length + CRC at the end."""
+    """Writes CFG_LINE chunks straight into the temporary file and checks length + CRC at the end.
+
+    The text never sits in RAM as one string: next to KMK and the OLED the pad has no free block
+    big enough for a 5 KB config. The file is parsed from flash afterwards (load_received)."""
 
     def __init__(self, length, crc):
         if length <= 0 or length > MAX_BYTES:
             raise ValueError("config too large")
         self.length = length
         self.crc = crc
-        self.parts = []
         self.size = 0
+        self.run = 0            # CRC so far
+        self.f = open(TMP, "w")
 
     def add(self, chunk):
         self.size += len(chunk)
         if self.size > self.length:
             raise ValueError("longer than announced")
-        self.parts.append(chunk)
+        self.run = crc32(chunk.encode("utf-8"), self.run)
+        self.f.write(chunk)
 
     def finish(self):
-        text = "".join(self.parts)
-        if len(text) != self.length:
+        self.f.close()
+        self.f = None
+        if self.size != self.length:
             raise ValueError("length mismatch")
-        if "%08x" % crc32(text.encode("utf-8")) != self.crc:
+        if "%08x" % self.run != self.crc:
             raise ValueError("crc mismatch")
-        return text
+
+    def abort(self):
+        """Throw the partial file away (refused, damaged or abandoned transfer)."""
+        try:
+            if self.f is not None:
+                self.f.close()
+        except Exception:
+            pass
+        self.f = None
+        try:
+            os.remove(TMP)
+        except OSError:
+            pass
+
+
+def load_received():
+    """The config that Receiver wrote, parsed straight from the file."""
+    with open(TMP) as f:
+        return json.load(f)
+
+
+def commit():
+    """Replace config.json with the received file (which has been checked completely first)."""
+    try:
+        os.remove(PATH)
+    except OSError:
+        pass
+    os.rename(TMP, PATH)
+    try:
+        os.sync()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------- file

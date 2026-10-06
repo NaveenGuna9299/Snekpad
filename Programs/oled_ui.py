@@ -150,6 +150,7 @@ class OledUI(Module):
         self._level = 1.0
         self._pages = {}
         self._idle_pages = []
+        self._suspended = False
 
     # ------------------------------------------------------------ setup
     def _fail(self, where, err):
@@ -199,6 +200,45 @@ class OledUI(Module):
             self.sw_tiles = self.sw_labels = self.sw_title = self.sw_time = None
         self._pages.pop(page, None)
         gc.collect()
+
+    def suspend(self):
+        """Free the main page's RAM (about 16 KB) while a config is being received; the pad
+        has too little left to receive and test-build one with the screen fully loaded."""
+        if not self.enabled or self._suspended:
+            return
+        try:
+            self._suspended = True
+            self.hl_tiles = self.cell_labels = self.lbl_layer = self.lbl_knob = None
+            self.sw_tiles = self.sw_labels = self.sw_title = self.sw_time = None
+            self._pages = {}
+            self.page = None
+            self.hl_idx = None
+            self.hl_until = None
+            self._root[0] = displayio.Group()
+            gc.collect()
+            g = displayio.Group()
+            g.append(_text("RECEIVING...", self._w // 2, self._h // 2))
+            self._root[0] = g
+            self._set_level(1.0)
+        except Exception as e:
+            self._fail("suspend", e)
+
+    def resume(self):
+        """Rebuild the main page after suspend() when the pad keeps running (a refused push)."""
+        if not self._suspended:
+            return
+        try:
+            self._root[0] = displayio.Group()
+            gc.collect()
+            self._pages["main"] = self._build_main()
+            self._suspended = False
+            self.layer = -1         # before_matrix_scan redraws the labels on its next tick
+            self._top = None
+            self.page = None
+            self._show("main")
+            self.last_activity = time.monotonic()
+        except Exception as e:
+            self._fail("resume", e)
 
     def _build_main(self):
         g = displayio.Group()
@@ -495,7 +535,7 @@ class OledUI(Module):
     # used by EncoderModes: knob events count as activity, and the first one
     # after the idle screens only wakes the display
     def wake(self):
-        if self.enabled:
+        if self.enabled and not self._suspended:
             try:
                 self._wake(time.monotonic())
             except Exception as e:
@@ -523,7 +563,7 @@ class OledUI(Module):
             self._fail("setup", e)
 
     def process_key(self, keyboard, key, is_pressed, int_coord):
-        if not self.enabled:
+        if not self.enabled or self._suspended:
             return key
         try:
             now = time.monotonic()
@@ -539,7 +579,7 @@ class OledUI(Module):
         return key
 
     def before_matrix_scan(self, keyboard):
-        if not self.enabled:
+        if not self.enabled or self._suspended:
             return None
         now = time.monotonic()
         if now - self._last_tick < 0.05:
