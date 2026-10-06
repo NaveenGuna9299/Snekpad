@@ -166,12 +166,10 @@ class OledUI(Module):
         self.display = adafruit_displayio_ssd1306.SSD1306(
             bus, width=self._w, height=self._h, rotation=self._rotation)
 
+        # Only the main page lives permanently. Every other page is built when it is first shown and
+        # dropped again when the display goes back to main (_show), because the RP2040 has too little
+        # RAM to keep all of them next to KMK.
         self._pages["main"] = self._build_main()
-        self._pages["owner"] = self._build_owner()
-        self._pages["logo"] = self._build_logo()
-        self._pages["switch"] = self._build_switch()
-        if self._notice:
-            self._pages["notice"] = self._build_notice()
         # root = [current page, knob-press overlay]; _show swaps item 0
         self._root = displayio.Group()
         self._root.append(displayio.Group())
@@ -180,10 +178,26 @@ class OledUI(Module):
         # the owner screen (two names + date) is only shown if names were given
         has_owner = bool(self._names[0] or self._names[1])
         if self._compact:
-            self._pages["date"] = self._build_date()
             self._idle_pages = ["owner", "date", "logo"] if has_owner else ["logo"]
         else:
             self._idle_pages = ["owner", "logo"] if has_owner else ["logo"]
+        gc.collect()
+
+    def _build_page(self, page):
+        if page == "owner":
+            return self._build_owner()
+        if page == "logo":
+            return self._build_logo()
+        if page == "switch":
+            return self._build_switch()
+        if page == "notice":
+            return self._build_notice()
+        return self._build_date()
+
+    def _drop_page(self, page):
+        if page == "switch":    # these hold the widgets alive otherwise
+            self.sw_tiles = self.sw_labels = self.sw_title = self.sw_time = None
+        self._pages.pop(page, None)
         gc.collect()
 
     def _build_main(self):
@@ -387,8 +401,9 @@ class OledUI(Module):
             self._notice = text
             self._notice_title = title
             self._notice_footer = footer
-            self._pages["notice"] = self._build_notice()
-            self.page = None        # the page object was replaced, so force the swap
+            if self.page == "notice":   # rebuild it with the new text
+                self.page = None
+                self._drop_page("notice")
             self._show("notice")
             now = time.monotonic()
             self.last_activity = now
@@ -427,8 +442,13 @@ class OledUI(Module):
     def _show(self, page):
         if page == self.page:
             return
+        old = self.page
+        if page not in self._pages:
+            self._pages[page] = self._build_page(page)
         self._root[0] = self._pages[page]
         self.page = page
+        if old is not None and old != "main" and old in self._pages:
+            self._drop_page(old)
 
     def _top_text(self, layer):
         app = self.app

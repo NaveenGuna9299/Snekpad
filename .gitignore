@@ -10,3 +10,4 @@ __pycache__/
 .vscode/
 .claude/
 snekpad-app-prompt.md
+Programs/build/

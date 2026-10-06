@@ -32,9 +32,21 @@ The app does not install firmware yet, so a new pad (Waveshare RP2040-Zero) is s
    | `adafruit_displayio_ssd1306.mpy` | `oled_ui.py` (OLED driver) |
    | `adafruit_display_text/` (folder) | `oled_ui.py` (text labels) |
 
-4. **Pad programs.** Copy these files from `../Programs` to the root of `CIRCUITPY`: `code.py`, `config_loader.py`,
-   `app_profiles.py`, `encoder_modes.py`, `oled_ui.py`, `rgb_keys.py`. Do not copy `focus_sender.py`: it runs on the PC
-   as an alternative to this app.
+4. **Pad programs, precompiled.** Left as plain `.py` source, KMK and the firmware use so much RAM on the RP2040 that
+   the OLED fails with `MemoryError` (seen on CircuitPython 10.3.1). So compile them to `.mpy` first:
+
+   1. Download the `mpy-cross` build that matches your CircuitPython version from
+      `adafruit-circuit-python.s3.amazonaws.com/index.html?prefix=bin/mpy-cross/` (for example
+      `mpy-cross-windows-10.3.1.static.exe`).
+   2. Run, in `../Programs`: `python build_mpy.py --mpy-cross <path to mpy-cross> --kmk <path to your kmk folder>`
+   3. Copy everything in `Programs/build/` to the root of `CIRCUITPY` (it replaces `code.py` with a two-line stub
+      that runs the compiled `firmware.mpy`, and includes `kmk/`).
+   4. Delete the `.py` files that now have a `.mpy` twin from `CIRCUITPY` (the old `kmk/` `.py` files,
+      `config_loader.py`, `rgb_keys.py`, `encoder_modes.py`, `app_profiles.py`, `oled_ui.py`), because CircuitPython
+      loads a `.py` before a `.mpy` of the same name.
+
+   Do not copy `focus_sender.py`: it runs on the PC as an alternative to this app. Edit the files in `../Programs`,
+   never on the pad, and run `build_mpy.py` again after every change.
 5. **Check it works** (keys, LEDs and screen respond) while the drive is still visible.
 6. **`boot.py` last.** Copy `boot.py`, then unplug and replug the pad. It hides the drive and turns on the second serial
    port this app talks to. To get the drive back later, hold the top-left key while plugging in USB.
