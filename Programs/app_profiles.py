@@ -214,12 +214,24 @@ class AppProfiles(Module):
     def _cfg_error(self, e):
         print("app_profiles config error:", e)
         reason = "".join(c if " " <= c <= "~" else " " for c in str(e))[:60]
-        self._ui_call("resume")
-        self._notify(reason)
         try:
-            self._write("ERR\t" + reason + "\n")
+            self._write("ERR\t" + reason + "\n")     # the app gets its answer even if the screen code fails
         except Exception:
             pass
+        self._refuse(reason)
+
+    def _refuse(self, reason):
+        ui = self.ui
+        if ui is not None and ui.suspended:
+            # The screen's RAM was released for the transfer and a fragmented heap often can't fit it
+            # back, so show the reason on the small screen and restart: the old config.json is kept.
+            try:
+                ui.show_refused(reason)
+            except Exception as e:
+                print("app_profiles notice error:", e)
+            self._reload_at = time.monotonic() + 3.0
+        else:
+            self._notify(reason)
 
     def _ui_call(self, name):
         if self.ui is not None:
@@ -325,8 +337,7 @@ class AppProfiles(Module):
             if self._rx is not None and now - self._rx_t > RX_TIMEOUT_S:
                 self._drop_rx()
                 print("app_profiles: config transfer timed out")
-                self._ui_call("resume")
-                self._notify("transfer timed out")
+                self._refuse("transfer timed out")
 
             base = keyboard.active_layers[-1]
             if self._auto_layer is not None and base != self._auto_layer:

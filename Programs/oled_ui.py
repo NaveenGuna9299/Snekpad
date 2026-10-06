@@ -223,22 +223,22 @@ class OledUI(Module):
         except Exception as e:
             self._fail("suspend", e)
 
-    def resume(self):
-        """Rebuild the main page after suspend() when the pad keeps running (a refused push)."""
+    @property
+    def suspended(self):
+        return self._suspended
+
+    def show_refused(self, text, title="PUSH REFUSED", footer="pad keeps old config"):
+        """While suspended: replace the RECEIVING screen by the reason a push was refused. The main
+        page is not rebuilt (a fragmented heap often can't fit it); the caller restarts the pad."""
         if not self._suspended:
             return
         try:
-            self._root[0] = displayio.Group()
-            gc.collect()
-            self._pages["main"] = self._build_main()
-            self._suspended = False
-            self.layer = -1         # before_matrix_scan redraws the labels on its next tick
-            self._top = None
-            self.page = None
-            self._show("main")
-            self.last_activity = time.monotonic()
+            self._notice = text
+            self._notice_title = title
+            self._notice_footer = footer
+            self._root[0] = self._build_notice()
         except Exception as e:
-            self._fail("resume", e)
+            self._fail("show_refused", e)
 
     def _build_main(self):
         g = displayio.Group()
