@@ -1,0 +1,381 @@
+# SnekPad firmware
+# Board: Waveshare RP2040-Zero, CircuitPython 10.x + KMK
+#
+# Files on CIRCUITPY:  code.py  boot.py  oled_ui.py  app_profiles.py  rgb_keys.py  encoder_modes.py  kmk/  lib/
+#
+# Pin map (verify against Waveshare's pinout before ordering PCBs):
+#   Matrix rows  GP0 GP1 GP2        Matrix cols  GP3 GP4 GP5 GP6   (COL2ROW)
+#   Encoder      A=GP7  B=GP8  SW=GP9  (encoder_modes.py)
+#   RGB data     GP10 (via level shifter)
+#   OLED         SDA=GP14  SCL=GP15 (I2C1), address 0x3C
+#   GP16 is the onboard LED: left alone.
+#
+# Layout: 3 rows x 4 columns = 12 keys. Key index = row * 4 + column.
+#
+# How the layers work: each PROFILE is one layer of 12 keys for one application.
+# With the laptop helper running, the board switches to the profile of the
+# focused window; anything it doesn't know gets "General".
+# Holding the knob opens the profile switcher to pick a layer by hand until you change app.
+# At most MAX_PROFILES profiles are kept in memory (General is always the first).
+
+import gc
+
+import board
+
+from kmk.kmk_keyboard import KMKKeyboard
+from kmk.keys import KC
+from kmk.scanners import DiodeOrientation
+from kmk.modules.layers import Layers
+from kmk.modules.macros import Macros, Tap
+from kmk.extensions.media_keys import MediaKeys
+
+print("snekpad firmware starting")
+
+# The profiles below are the built-in ones. If the app has sent a config (/config.json), that is used
+# instead; if the file is missing or can't be built, the built-in profiles are used.
+ENABLE_CONFIG = True
+CFG = None
+CONFIG_ERROR = None     # shown on the OLED at start-up when a saved config could not be used
+if ENABLE_CONFIG:
+    try:
+        import config_loader
+
+        CFG = config_loader.load()
+        CONFIG_ERROR = config_loader.error
+        print("config.json:", "loaded" if CFG else "none, using built-in profiles")
+    except Exception as e:
+        CONFIG_ERROR = "config: " + str(e)
+        print("config.json ignored:", e)
+
+# ---------------------------------------------------------------- settings
+# Optional owner screen shown on the OLED when the pad is idle. Leave both
+# names empty ("") to switch it off.
+OWNER_LINE_1 = ""
+OWNER_LINE_2 = ""
+OWNER_DATE = ""
+
+MAX_PROFILES = 4               # memory limit: General + up to 3 more (a 5th is ignored)
+
+ENCODER_REVERSE = False        # True if the knob turns the wrong way
+ENCODER_DIVISOR = 4            # raw pulses per click; 2 if a click needs two turns, 1 if it skips
+KNOB_HOLD_S = 0.5              # hold the knob this long for the profile switcher
+KNOB_SWITCH_TIMEOUT_S = 5.0    # the switcher cancels itself after this long with no input
+
+ENABLE_ENCODER = True
+ENABLE_OLED = True
+ENABLE_RGB = True
+ENABLE_APP_PROFILES = True     # needs boot.py + the SnekPad desktop app (or focus_sender.py) running
+
+if CFG:   # owner screen from the app (the OLED size stays a hardware setting below)
+    try:
+        OWNER_LINE_1 = CFG["device"]["owner_screen"]["line1"]
+        OWNER_LINE_2 = CFG["device"]["owner_screen"]["line2"]
+        OWNER_DATE = CFG["device"]["owner_screen"]["date"]
+    except Exception as e:
+        print("config owner screen ignored:", e)
+
+OLED_HEIGHT = 64               # 64 = GME12864-13 test screen, 32 = the 0.91" screen on the PCB
+OLED_COMPACT = False           # True shows the 128x32 layout on a 128x64 test screen
+OLED_ROTATION = 0              # 180 if the screen turns out to be upside down
+RGB_START_LEVEL = 3            # 0-4 index into LEVELS in rgb_keys.py (3 = 40% brightness)
+
+# ---------------------------------------------------------------- keyboard
+keyboard = KMKKeyboard()
+keyboard.col_pins = (board.GP3, board.GP4, board.GP5, board.GP6)
+keyboard.row_pins = (board.GP0, board.GP1, board.GP2)
+keyboard.diode_orientation = DiodeOrientation.COL2ROW
+
+# Modules and extensions must exist before KC.MO / KC.MACRO / KC.VOLD / KC.LED_* are used below.
+layers = Layers()
+macros = Macros()
+keyboard.modules = [layers, macros]
+keyboard.extensions.append(MediaKeys())
+
+# Per-key RGB: created now so KC.LED_TOG / LED_DIM / LED_BRT exist for the utility layer.
+leds = None
+if ENABLE_RGB:
+    from rgb_keys import RgbKeys, LEVELS
+
+    if CFG:
+        try:
+            RGB_START_LEVEL = config_loader.level_for(CFG["settings"]["brightness"], LEVELS)
+        except Exception as e:
+            print("config brightness ignored:", e)
+    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL)
+    keyboard.modules.append(leds)
+
+
+# ---------------------------------------------------------------- helpers
+# Each helper falls back to a dead key (and prints why) if the macro API
+# differs in your KMK version, so one bad macro can't stop the whole file loading.
+def txt(s):
+    """Type text, no Enter (cursor stays so you can review or finish it)."""
+    try:
+        return KC.MACRO(s)
+    except Exception as e:
+        print("macro error:", e)
+        return KC.NO
+
+
+def cmd(s):
+    """Type text then press Enter."""
+    try:
+        return KC.MACRO(s, Tap(KC.ENTER))
+    except Exception as e:
+        print("macro error:", e)
+        return KC.NO
+
+
+def seq(*actions):
+    """Press a sequence of keys, e.g. seq(Tap(KC.ESC), Tap(KC.A))."""
+    try:
+        return KC.MACRO(*actions)
+    except Exception as e:
+        print("macro error:", e)
+        return KC.NO
+
+
+def C(k):
+    return KC.LCTL(k)
+
+
+def CS(k):
+    return KC.LCTL(KC.LSFT(k))
+
+
+# ---------------------------------------------------------------- colours
+OFF = 0x000000
+RED = 0xFF2020
+ORANGE = 0xFF7000
+YELLOW = 0xFFC000
+GREEN = 0x00E060
+CYAN = 0x00C8C8
+BLUE = 0x2060FF
+PURPLE = 0xA040FF
+PINK = 0xFF40A0
+WHITE = 0xC0C0C0
+DIM = 0x303030
+
+# ---------------------------------------------------------------- profiles
+# Each profile is a dict:
+#   name    shown on the OLED when the app matches
+#   proc    process names that select it (lower case, no .exe; trailing * = starts with)
+#   title   words in the window title that select it
+#   keys    12 keys, row by row (3 rows x 4 columns). "FN" = hold for the utility layer
+#   labels  12 short labels (5 characters max) for the on-screen legend
+#   colors  12 key colours, 0xRRGGBB, same order as keys
+#   knob    (turn left, turn right, short press, top-bar text, press label)
+#           the press label (5 characters max) is shown while the knob is held.
+#           Holding the knob (not a short press) opens the profile switcher.
+# Profile 0 must be General: it has no matches and is used for every other app.
+
+def p_general():
+    return dict(
+        name="General", proc=(), title=(),
+        keys=[C(KC.C), C(KC.V), C(KC.X), C(KC.Z),
+              C(KC.Y), C(KC.A), C(KC.S), C(KC.F),
+              C(KC.T), C(KC.W), KC.LGUI(KC.LSFT(KC.S)), "FN"],
+        labels=["copy", "paste", "cut", "undo", "redo", "all", "save", "find",
+                "tab+", "close", "snip", "FN"],
+        colors=[BLUE, BLUE, BLUE, ORANGE,
+                ORANGE, CYAN, GREEN, CYAN,
+                PURPLE, RED, YELLOW, DIM],
+        knob=(KC.VOLD, KC.VOLU, KC.MUTE, "KNOB:VOL", "MUTE"),
+    )
+
+
+def p_vscode():
+    return dict(
+        name="VS Code", proc=("code", "cursor"), title=(),
+        keys=[C(KC.P), CS(KC.P), C(KC.GRV), C(KC.B),
+              C(KC.SLSH), KC.F12, CS(KC.F), KC.F5,
+              C(KC.S), C(KC.Z), KC.LSFT(KC.LALT(KC.F)), "FN"],
+        labels=["open", "cmd", "term", "side", "cmnt", "def", "find", "debug",
+                "save", "undo", "fmt", "FN"],
+        colors=[CYAN, CYAN, PURPLE, PURPLE,
+                YELLOW, BLUE, BLUE, GREEN,
+                GREEN, ORANGE, PINK, DIM],
+        knob=(C(KC.PGUP), C(KC.PGDN), C(KC.S), "KNOB:TAB", "SAVE"),
+    )
+
+
+def p_terminal():
+    return dict(
+        name="Terminal",
+        proc=("windowsterminal", "wt", "powershell", "pwsh", "cmd", "mintty", "git-bash", "conhost"),
+        title=(),
+        keys=[C(KC.C), C(KC.L), seq(Tap(KC.UP), Tap(KC.ENTER)), C(KC.R),
+              cmd("git status"), cmd("git pull"), txt("git push"), txt('git commit -m "'),
+              cmd("npm run dev"), cmd("npm test"), cmd("python"), "FN"],
+        labels=["^C", "clear", "rerun", "hist", "stat", "pull", "push", "comm",
+                "dev", "test", "py", "FN"],
+        colors=[RED, YELLOW, ORANGE, PURPLE,
+                GREEN, GREEN, CYAN, CYAN,
+                BLUE, BLUE, PINK, DIM],
+        knob=(KC.LSFT(KC.PGUP), KC.LSFT(KC.PGDN), KC.ENTER, "KNOB:SCRL", "ENTER"),
+    )
+
+
+def p_browser():
+    return dict(
+        name="Browser", proc=("chrome", "msedge", "firefox", "brave", "opera", "vivaldi"), title=(),
+        keys=[KC.F12, KC.F5, CS(KC.R), CS(KC.C),
+              CS(KC.J), C(KC.T), C(KC.W), CS(KC.T),
+              C(KC.L), KC.LALT(KC.LEFT), KC.LALT(KC.RIGHT), "FN"],
+        labels=["tools", "reld", "hard", "insp", "cons", "tab+", "close", "reopn",
+                "url", "back", "fwd", "FN"],
+        colors=[PURPLE, GREEN, GREEN, CYAN,
+                CYAN, BLUE, RED, ORANGE,
+                YELLOW, WHITE, WHITE, DIM],
+        knob=(C(KC.PGUP), C(KC.PGDN), KC.MPLY, "KNOB:TAB", "PLAY"),
+    )
+
+
+# Order = layer number. The first profile must be General.
+# Add more p_*() functions above and list them here; only MAX_PROFILES are used.
+PROFILES = None
+if CFG:
+    try:
+        PROFILES = config_loader.build_profiles(CFG)
+        print("profiles from config.json:", len(PROFILES))
+    except Exception as e:
+        print("config.json can't be built, using built-in profiles:", e)
+        CONFIG_ERROR = "can't build: " + str(e)
+        PROFILES = None
+CFG = None      # free the memory
+if PROFILES is None:
+    PROFILES = [p_general(), p_vscode(), p_terminal(), p_browser()]
+if len(PROFILES) > MAX_PROFILES:
+    print("only", MAX_PROFILES, "profiles fit in memory, ignoring", len(PROFILES) - MAX_PROFILES)
+    PROFILES = PROFILES[:MAX_PROFILES]
+
+N = len(PROFILES)
+UTIL_LAYER = N                 # the utility layer sits after the last profile
+FN = KC.MO(UTIL_LAYER)         # hold the bottom-right key for the utility layer
+
+# Utility layer: bootloader, reload, LED controls, jump to a layer.
+# Bootloader needs bottom-right held + top-left pressed, so it can't happen by accident.
+if ENABLE_RGB:
+    led_keys = [KC.LED_TOG, KC.LED_DIM, KC.LED_BRT]
+else:
+    led_keys = [KC.NO] * 3
+
+UTILITY_KEYS = [
+    KC.BOOTLOADER, KC.RELOAD, led_keys[0], led_keys[1],
+    led_keys[2], KC.NO, KC.NO, KC.NO,
+    KC.NO, KC.TO(0), KC.TO(1), KC.TRNS,
+]
+UTILITY_LABELS = ["BOOT", "RELD", "LED", "DIM", "BRIT", "", "", "",
+                  "", "L0", "L1", ""]
+UTILITY_COLORS = [RED, ORANGE, GREEN, WHITE,
+                  WHITE, OFF, OFF, OFF,
+                  OFF, CYAN, CYAN, DIM]
+
+keymap = []
+LABELS = []
+LAYER_NAMES = []
+KNOB_TEXT = []
+ENC_MAP = []
+PRESS_LABELS = []
+COLORS = []
+for i, p in enumerate(PROFILES):
+    keymap.append([FN if k == "FN" else k for k in p["keys"]])
+    LABELS.append(p["labels"])
+    COLORS.append(p["colors"])
+    LAYER_NAMES.append(p["name"])
+    left, right, press, text, press_label = p["knob"]
+    KNOB_TEXT.append(text)
+    ENC_MAP.append((left, right, press))
+    PRESS_LABELS.append(press_label)
+
+keymap.append(UTILITY_KEYS)
+LABELS.append(UTILITY_LABELS)
+COLORS.append(UTILITY_COLORS)
+LAYER_NAMES.append("UTILITY")
+KNOB_TEXT.append("KNOB:-")
+ENC_MAP.append((KC.NO, KC.NO, KC.NO))
+PRESS_LABELS.append("-")
+
+keyboard.keymap = keymap
+
+# ---------------------------------------------------------------- encoder
+# Four modes: idle (first touch only wakes the screen), default (turn = the profile's
+# knob action), short press (the profile's press action), hold = profile switcher.
+# Per layer: (turn left, turn right, short press). See encoder_modes.py.
+encoder = None
+if ENABLE_ENCODER:
+    from encoder_modes import EncoderModes
+
+    encoder = EncoderModes(
+        board.GP7, board.GP8, board.GP9,
+        actions=ENC_MAP,
+        press_labels=PRESS_LABELS,
+        n_profiles=N,
+        reverse=ENCODER_REVERSE,
+        divisor=ENCODER_DIVISOR,
+        hold_s=KNOB_HOLD_S,
+        switch_timeout_s=KNOB_SWITCH_TIMEOUT_S,
+    )
+    keyboard.modules.append(encoder)
+
+# ---------------------------------------------------------------- RGB
+if ENABLE_RGB:
+    leds.set_colors(COLORS)
+
+# ---------------------------------------------------------------- focused app
+apps = None
+if ENABLE_APP_PROFILES:
+    from app_profiles import AppProfiles
+
+    def live_view():
+        """What the pad shows right now, for the app's GET_CFG: per profile name, knob text, labels, colours."""
+        import json
+
+        profs = []
+        for i in range(N):   # the utility layer is not a profile
+            profs.append({
+                "n": LAYER_NAMES[i],
+                "k": KNOB_TEXT[i],
+                "l": LABELS[i],
+                "c": ["#%06x" % c for c in COLORS[i]],   # COLORS is what the LEDs show (set_key changes it in place)
+            })
+        return json.dumps({"h": OLED_HEIGHT, "p": profs})
+
+    apps = AppProfiles([(p["name"], p["proc"], p["title"]) for p in PROFILES], general=0, view=live_view, leds=leds)
+    keyboard.modules.append(apps)
+
+# ---------------------------------------------------------------- OLED
+# Screens live in oled_ui.py (128x64 or the compact 128x32 layout). Needs adafruit_display_text and
+# adafruit_displayio_ssd1306 in CIRCUITPY/lib (10.x bundle).
+if ENABLE_OLED:
+    from oled_ui import OledUI
+
+    oled = OledUI(
+        labels=LABELS,
+        layer_names=LAYER_NAMES,
+        knob_text=KNOB_TEXT,
+        sda=board.GP14,
+        scl=board.GP15,
+        names=(OWNER_LINE_1, OWNER_LINE_2),
+        date=OWNER_DATE,
+        width=128,
+        height=OLED_HEIGHT,
+        compact=True if OLED_COMPACT else None,   # None = automatic from the height
+        rotation=OLED_ROTATION,
+        app=apps,
+        enc=encoder,
+        n_profiles=N,
+        notice=("CONFIG: " + CONFIG_ERROR) if CONFIG_ERROR else None,
+    )
+    keyboard.modules.append(oled)
+    if encoder is not None:
+        encoder.ui = oled
+    if apps is not None:
+        apps.ui = oled      # refused config pushes show up on the screen
+
+# ---------------------------------------------------------------- go
+gc.collect()
+print("layers:", N + 1, "free RAM:", gc.mem_free())
+
+if __name__ == "__main__":
+    keyboard.go()

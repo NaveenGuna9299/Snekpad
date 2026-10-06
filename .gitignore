@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+.DS_Store
+Thumbs.db
+.eslintcache
+*.log*
+*.tsbuildinfo
+__pycache__/
+.vscode/
+.claude/
+snekpad-app-prompt.md

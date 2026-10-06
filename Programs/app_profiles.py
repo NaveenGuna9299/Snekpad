@@ -1,0 +1,344 @@
+# app_profiles.py - switches the macropad layer to match the focused window.
+# Copy this file to the root of CIRCUITPY (next to code.py).
+#
+# A small program on the laptop (focus_sender.py) sends one line per change over
+# the board's second USB serial port:
+#       APP<TAB>process name<TAB>window title
+# The board picks the first profile that matches and makes it the base layer.
+# Anything that matches no profile gets the General layer (profile 0).
+#
+# - Pressing the knob picks a layer by hand. That choice stays until you switch
+#   to a different app, then the app's profile takes over again.
+# - If the laptop program stops, the board keeps its current layer and the OLED
+#   goes back to showing the layer name.
+# - Needs boot.py on the board (it turns the second serial port on), then a
+#   full unplug and replug.
+
+import time
+
+import usb_cdc
+
+import json
+
+import supervisor
+
+import config_loader
+from kmk.modules import Module
+
+CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/protocol.ts)
+RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
+
+
+class AppProfiles(Module):
+    def __init__(self, profiles, general=0, timeout_s=5.0, view=None, leds=None):
+        # profiles: list of (display name, process names, title words), one per layer,
+        #   in layer order. Process names match exactly (lower case, no .exe);
+        #   a trailing * means "starts with". Title words match anywhere in the title.
+        # leds: the RgbKeys module, so LED<TAB>layer<TAB>key<TAB>#RRGGBB can preview a colour.
+        # view: function returning the JSON text the app gets for GET_CFG (None = not supported).
+        self.profiles = profiles
+        self.view = view
+        self.leds = leds        # RgbKeys; None = the LED command is not supported
+        self.general = general
+        self.timeout_s = timeout_s
+
+        self.ser = None
+        self.enabled = False
+        self.connected = False
+        self.app_label = None
+        self.manual = False
+        self.last_seen = 0
+        self.host_os = None     # "windows", "macos" or "linux" once the app has said so
+
+        self._kb = None
+        self._buf = b""
+        self._proc = None
+        self._idx = None
+        self._held = 0
+        self._pending = None
+        self._auto_layer = None
+        self._last_tick = 0
+        self.ui = None              # OledUI, set by code.py: refused pushes are shown on the screen
+        self._rx = None             # config_loader.Receiver while a config is arriving
+        self._rx_t = 0
+        self._reload_at = None      # reload the board once a new config is saved
+
+    # ------------------------------------------------------------ matching
+    def _clean(self, proc):
+        p = proc.lower()
+        if p.endswith(".exe"):
+            p = p[:-4]
+        return p
+
+    def _match(self, proc, title):
+        p = self._clean(proc)
+        t = title.lower()
+        for i, prof in enumerate(self.profiles):
+            procs = prof[1]
+            titles = prof[2]
+            for m in procs:
+                if m.endswith("*"):
+                    if p.startswith(m[:-1]):
+                        return i
+                elif p == m:
+                    return i
+            for w in titles:
+                if w in t:
+                    return i
+        return self.general
+
+    def _label(self, idx, proc):
+        if idx != self.general:
+            return self.profiles[idx][0]
+        p = self._clean(proc)
+        if not p:
+            return "Desktop"
+        return (p[:1].upper() + p[1:])[:9]
+
+    # ------------------------------------------------------------ layer control
+    def _apply(self, idx):
+        # the base layer is the last item; a held layer key sits on top of it
+        self._kb.active_layers[-1] = idx
+        self._auto_layer = idx
+        self._pending = None
+
+    def _request(self, idx):
+        if self._held > 0:
+            self._pending = idx     # wait until the keys are released
+        else:
+            self._apply(idx)
+
+    # ------------------------------------------------------------ LED
+    def _led(self, parts):
+        # LED<TAB>layer<TAB>key<TAB>#RRGGBB -> OK | ERR<TAB>reason.
+        # Live preview only: not saved, a reboot goes back to the colours in code.py.
+        if self.leds is None:
+            self._write("ERR\tRGB is off\n")
+            return
+        try:
+            if len(parts) != 4 or len(parts[3]) != 7 or parts[3][0] != "#":
+                raise ValueError("bad command")
+            layer = int(parts[1])
+            key = int(parts[2])
+            rgb = int(parts[3][1:], 16)
+        except Exception:
+            self._write("ERR\tbad LED command\n")
+            return
+        if not 0 <= layer < len(self.profiles) or not 0 <= key < 12:
+            self._write("ERR\tlayer or key out of range\n")
+            return
+        try:
+            self.leds.set_key(layer, key, rgb)
+            self._write("OK\n")
+        except Exception as e:
+            print("app_profiles LED error:", e)
+            self._write("ERR\tcould not set LED\n")
+
+    # ------------------------------------------------------------ GET_CFG
+    def _write(self, data):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        while data:     # a long write may be accepted in parts
+            n = self.ser.write(data)
+            if not n:
+                break
+            data = data[n:]
+
+    def _send_cfg(self):
+        # Same framing the app uses to push: CFG_BEGIN<TAB>length<TAB>crc32hex, CFG_LINE<TAB>chunk..., CFG_END
+        if self.view is None:
+            self._write("ERR\tGET_CFG not supported\n")
+            return
+        try:
+            text = self.view()
+            data = text.encode("utf-8")
+            self._write("CFG_BEGIN\t%d\t%08x\n" % (len(text), config_loader.crc32(data)))
+            for i in range(0, len(text), CFG_CHUNK):
+                self._write("CFG_LINE\t" + text[i:i + CFG_CHUNK] + "\n")
+            self._write("CFG_END\n")
+        except Exception as e:
+            print("app_profiles GET_CFG error:", e)
+            try:
+                self._write("ERR\tcould not read config\n")
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------ CFG_* (receive a config)
+    def _cfg_begin(self, parts, now):
+        # CFG_BEGIN<TAB>length<TAB>crc32hex -> OK | ERR<TAB>reason
+        self._rx = None
+        try:
+            if not config_loader.can_save():
+                raise OSError("drive is visible: replug without holding the top-left key")
+            self._rx = config_loader.Receiver(int(parts[1]), parts[2])
+            self._rx_t = now
+            self._write("OK\n")
+        except Exception as e:
+            self._cfg_error(e)
+
+    def _cfg_end(self):
+        # Checks length + CRC, tries to build every profile, and only then saves. A config the pad
+        # could not run is refused here, so it never reaches the file.
+        rx = self._rx
+        self._rx = None
+        if rx is None:
+            self._write("ERR\tno CFG_BEGIN\n")
+            return
+        try:
+            text = rx.finish()
+            cfg = json.loads(text)
+            config_loader.check(cfg)
+            config_loader.build_profiles(cfg)
+            cfg = None
+            config_loader.save(text)
+        except Exception as e:
+            self._cfg_error(e)
+            return
+        print("app_profiles: config saved, reloading")
+        self._write("OK\n")
+        try:
+            self.ser.flush()
+        except Exception:
+            pass
+        self._reload_at = time.monotonic() + 0.5   # let the reply reach the app first
+
+    def _cfg_error(self, e):
+        print("app_profiles config error:", e)
+        reason = "".join(c if " " <= c <= "~" else " " for c in str(e))[:60]
+        self._notify(reason)
+        try:
+            self._write("ERR\t" + reason + "\n")
+        except Exception:
+            pass
+
+    def _notify(self, reason):
+        if self.ui is not None:
+            try:
+                self.ui.show_notice(reason, title="PUSH REFUSED", footer="pad keeps old config")
+            except Exception as e:
+                print("app_profiles notice error:", e)
+
+    # ------------------------------------------------------------ serial input
+    def _line(self, raw, now):
+        try:
+            line = raw.decode("utf-8").strip("\r")
+        except Exception:
+            return
+        parts = line.split("\t")
+        if parts[0] == "PING":
+            self.ser.write(b"PONG\n")
+        elif parts[0] == "LED":
+            self._led(parts)
+        elif parts[0] == "CFG_BEGIN" and len(parts) >= 3:
+            self._cfg_begin(parts, now)
+        elif parts[0] == "CFG_LINE":
+            if self._rx is not None:
+                try:
+                    self._rx.add(line[len("CFG_LINE\t"):])
+                    self._rx_t = now
+                except Exception as e:
+                    self._rx = None
+                    self._cfg_error(e)
+        elif parts[0] == "CFG_END":
+            self._cfg_end()
+        elif parts[0] == "GET_CFG":
+            self._send_cfg()
+        elif parts[0] == "OS" and len(parts) >= 2:
+            self.host_os = parts[1]
+            print("app_profiles: host os", self.host_os)
+        elif parts[0] == "APP" and len(parts) >= 2:
+            proc = parts[1]
+            title = parts[2] if len(parts) > 2 else ""
+            idx = self._match(proc, title)
+            if not self.connected:
+                print("app_profiles: helper connected")
+            self.connected = True
+            self.last_seen = now
+            self.app_label = self._label(idx, proc)
+            if proc != self._proc or idx != self._idx:
+                print("app_profiles:", proc, "->", self.profiles[idx][0])
+                self._proc = proc
+                self._idx = idx
+                self.manual = False
+                self._request(idx)
+
+    def _read(self, now):
+        n = self.ser.in_waiting
+        if not n:
+            return
+        self._buf += self.ser.read(n)
+        if len(self._buf) > 1024:
+            self._buf = self._buf[-1024:]
+        while b"\n" in self._buf:
+            raw, self._buf = self._buf.split(b"\n", 1)
+            self._line(raw, now)
+
+    # ------------------------------------------------------------ KMK hooks
+    def during_bootup(self, keyboard):
+        self._kb = keyboard
+        self.ser = usb_cdc.data
+        if self.ser is None:
+            print("app_profiles: second serial port is off - add boot.py, then unplug and replug")
+            return
+        self.ser.write_timeout = 1      # never hang the keyboard if the app stops reading
+        self._auto_layer = keyboard.active_layers[-1]
+        self.enabled = True
+        print("app_profiles ready")
+
+    def process_key(self, keyboard, key, is_pressed, int_coord):
+        if int_coord is not None:
+            if is_pressed:
+                self._held += 1
+            elif self._held > 0:
+                self._held -= 1
+        return key
+
+    def before_matrix_scan(self, keyboard):
+        if not self.enabled:
+            return None
+        now = time.monotonic()
+        if self._reload_at is not None and now >= self._reload_at:
+            supervisor.reload()     # start again with the new config.json
+        # poll every scan while a config is arriving (the port's buffer is small), else every 50 ms
+        if self._rx is None and now - self._last_tick < 0.05:
+            return None
+        self._last_tick = now
+        try:
+            self._read(now)
+            if self._rx is not None and now - self._rx_t > RX_TIMEOUT_S:
+                self._rx = None
+                print("app_profiles: config transfer timed out")
+                self._notify("transfer timed out")
+
+            base = keyboard.active_layers[-1]
+            if self._auto_layer is not None and base != self._auto_layer:
+                self.manual = True      # the knob (or a layer key) chose a layer
+                self._auto_layer = base
+
+            if self._pending is not None and self._held == 0:
+                self._apply(self._pending)
+
+            if self.connected and now - self.last_seen > self.timeout_s:
+                self.connected = False
+                self.app_label = None
+                self.manual = False
+                print("app_profiles: helper stopped sending")
+        except Exception as e:
+            print("app_profiles error:", e)
+            self.enabled = False
+        return None
+
+    def after_matrix_scan(self, keyboard):
+        return None
+
+    def before_hid_send(self, keyboard):
+        return None
+
+    def after_hid_send(self, keyboard):
+        return None
+
+    def on_powersave_enable(self, keyboard):
+        return None
+
+    def on_powersave_disable(self, keyboard):
+        return None

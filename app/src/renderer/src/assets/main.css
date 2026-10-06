@@ -1,0 +1,86 @@
+@import 'tailwindcss';
+
+/* Colour tokens: a dark, Discord-style palette. */
+:root {
+  --bg: #1a1b1e; /* main area */
+  --surface: #141518; /* side panels */
+  --surface-2: #25262a; /* hover, keys */
+  --selected: #2e3036;
+  --input: #0f1012;
+  --titlebar: var(--bg);
+  --line: #2e3035;
+  --fg: #dbdee1;
+  --muted: #949ba4;
+  --accent: #5865f2;
+  --accent-fg: #ffffff;
+  --ok: #23a55a;
+  --danger: #f23f43;
+  --oled-bg: #05080a;
+  --oled-fg: #e8f6ff;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface2: var(--surface-2);
+  --color-selected: var(--selected);
+  --color-input: var(--input);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accentfg: var(--accent-fg);
+  --color-ok: var(--ok);
+  --color-danger: var(--danger);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'gg sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  user-select: none;
+}
+
+input,
+select,
+textarea {
+  user-select: text;
+}
+
+/* The title bar is the window's drag handle; anything clickable inside it opts out. */
+.drag {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* slim dark scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #1a1b1e;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
+}
