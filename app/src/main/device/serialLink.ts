@@ -33,7 +33,11 @@ class SerialLink implements Link {
   }
 
   write(line: string): void {
-    this.port.write(line + '\n')
+    if (!this.port.isOpen) return
+    // a failed write (pad rebooting, cable pulled) must not throw in the main process
+    this.port.write(line + '\n', (e) => {
+      if (e) this.closeCb(e.message)
+    })
   }
 
   onLine(cb: (line: string) => void): void {
@@ -45,13 +49,14 @@ class SerialLink implements Link {
   }
 
   close(): void {
-    if (this.port.isOpen) this.port.close()
+    if (this.port.isOpen) this.port.close(() => {})
   }
 }
 
 function open(path: string): Promise<SerialPort> {
   return new Promise((resolve, reject) => {
     const p = new SerialPort({ path, baudRate: BAUD, autoOpen: false })
+    p.on('error', () => {}) // stray errors before a SerialLink takes over must not crash the app
     p.open((err) => (err ? reject(err) : resolve(p)))
   })
 }
@@ -71,7 +76,9 @@ function probe(port: SerialPort): Promise<boolean> {
     }
     const timer = setTimeout(() => done(false), 1000)
     port.on('data', onData)
-    port.write('PING\n')
+    port.write('PING\n', (e) => {
+      if (e) done(false)
+    })
   })
 }
 
@@ -88,7 +95,7 @@ export async function findPad(): Promise<Link | null> {
       continue // busy (open in another program), skip
     }
     if (await probe(port)) return new SerialLink(port, info.path)
-    if (port.isOpen) port.close()
+    if (port.isOpen) port.close(() => {})
   }
   return null
 }
