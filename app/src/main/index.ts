@@ -1,9 +1,11 @@
-import { app, shell, screen, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, screen, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
 import { join } from 'path'
+import { existsSync, writeFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { showSplash } from './splash'
 import { DeviceManager } from './device/manager'
+import { FocusWatcher } from './focusWatcher'
 import { loadConfig, saveConfig, backupPushed, loadTemplates, saveTemplates } from './store'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { validateConfig, type Config, type Template } from '../shared/config'
@@ -14,7 +16,13 @@ import type { PushResult } from '../shared/api'
 app.commandLine.appendSwitch('disable-http-cache')
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 
+const LOGIN_DELAY_MS = 20000 // when started by Windows at login, wait this long before doing any work
 const device = new DeviceManager()
+// tells the pad which program is in focus, so it can switch profiles by itself
+const focus = new FocusWatcher((proc, title) => device.sendApp(proc, title))
+// Closing the window keeps the app running in the tray: profile switching needs it to stay alive.
+let tray: Tray | null = null
+let quitting = false
 
 function createWindow(onShown?: () => void): BrowserWindow {
   // Fit the window to the screen: tall enough to show the whole home page, never bigger than the
@@ -40,6 +48,12 @@ function createWindow(onShown?: () => void): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false
     }
+  })
+
+  mainWindow.on('close', (e) => {
+    if (quitting || process.platform === 'darwin') return
+    e.preventDefault()
+    mainWindow.hide()
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -74,6 +88,13 @@ function createWindow(onShown?: () => void): BrowserWindow {
   return mainWindow
 }
 
+// only an installed Windows build can sit in Windows' startup list (a dev build would register electron.exe)
+const canAutoStart = (): boolean => app.isPackaged && process.platform === 'win32'
+
+// Windows only reports the entry when asked with the same args it was registered with
+const STARTUP_ARGS = ['--hidden']
+const loginEnabled = (): boolean => app.getLoginItemSettings({ args: STARTUP_ARGS }).openAtLogin
+
 function registerIpc(): void {
   ipcMain.handle('config:load', () => loadConfig())
 
@@ -95,6 +116,12 @@ function registerIpc(): void {
   ipcMain.handle('templates:load', () => loadTemplates())
   ipcMain.handle('templates:save', (_e, list: Template[]) => saveTemplates(list))
 
+  ipcMain.handle('startup:get', () => ({ supported: canAutoStart(), enabled: loginEnabled() }))
+  ipcMain.handle('startup:set', (_e, on: boolean) => {
+    if (canAutoStart()) app.setLoginItemSettings({ openAtLogin: on, args: STARTUP_ARGS })
+    return loginEnabled()
+  })
+
   ipcMain.handle('programs:running', () => listRunning().catch(() => []))
   ipcMain.handle('programs:remember', (_e, proc: string) => rememberProgram(proc))
   ipcMain.handle('programs:icon', (_e, proc: string) => programIcon(proc))
@@ -111,23 +138,70 @@ function registerIpc(): void {
   })
 }
 
+// one copy only: a second one would fight the first over the pad's serial port
+if (!app.requestSingleInstanceLock()) app.quit()
+else app.on('second-instance', () => showWindow())
+
+function showWindow(): void {
+  const w = BrowserWindow.getAllWindows()[0]
+  if (!w) return void createWindow()
+  w.show()
+  w.focus()
+}
+
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.snekpad.studio')
 
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
 
   registerIpc()
-  device.start()
-  const splash = showSplash()
-  createWindow(() => void splash.close())
+  const startHidden = process.argv.includes('--hidden')
+  // At login the app stays out of Windows' way: no window or renderer is created, and the pad
+  // connection and focus watcher wait until the desktop has settled.
+  const startWork = (): void => {
+    device.start()
+    focus.start()
+  }
+  if (startHidden) setTimeout(startWork, LOGIN_DELAY_MS)
+  else startWork()
+
+  // First run of an installed build: start with Windows (hidden in the tray) so profiles switch
+  // without opening the window. After that the choice is the user's, set in the top bar.
+  if (canAutoStart()) {
+    const marker = join(app.getPath('userData'), 'startup-offered')
+    if (!existsSync(marker)) {
+      app.setLoginItemSettings({ openAtLogin: true, args: STARTUP_ARGS })
+      try { writeFileSync(marker, '1') } catch { /* will just offer again next launch */ }
+    }
+  }
+
+  const show = showWindow
+  tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
+  tray.setToolTip('SnekPad Studio (profile switching is on)')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Open SnekPad Studio', click: show },
+      { label: 'Quit (stops profile switching)', click: () => app.quit() }
+    ])
+  )
+  tray.on('click', show)
+
+  if (!startHidden) {
+    const splash = showSplash()
+    createWindow(() => void splash.close())
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-app.on('before-quit', () => device.stop())
+app.on('before-quit', () => {
+  quitting = true
+  focus.stop()
+  device.stop()
+})
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit()
+  // the window only hides on close, so the app (and the focus watcher) keeps running in the tray
 })

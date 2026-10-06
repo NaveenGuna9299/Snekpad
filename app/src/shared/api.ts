@@ -35,5 +35,8 @@ export interface SnekApi {
   /** Keep the icon of a picked program so it still shows when the program is closed. */
   rememberProgram(proc: string): Promise<void>
   programIcon(proc: string): Promise<string | null>
+  /** Start with Windows (hidden in the tray). `supported` is false in dev builds and off Windows. */
+  getStartup(): Promise<{ supported: boolean; enabled: boolean }>
+  setStartup(on: boolean): Promise<boolean>
   onDeviceState(cb: (s: DeviceState) => void): () => void
 }

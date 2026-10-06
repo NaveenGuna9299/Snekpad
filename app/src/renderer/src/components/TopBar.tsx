@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { DeviceState } from '../../../shared/api'
 
 type Props = {
@@ -16,6 +17,10 @@ type Props = {
 
 export function TopBar({ onHome, device, mock, onMock, onPush, pushing, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
+  const [startup, setStartup] = useState<{ supported: boolean; enabled: boolean }>({ supported: false, enabled: false })
+  useEffect(() => {
+    void window.api.getStartup().then(setStartup)
+  }, [])
   return (
     <header className="flex items-center gap-3 border-b border-line bg-bg px-4 py-2.5 shadow-sm">
       <h1 className="sr-only">SnekPad Studio</h1>
@@ -31,6 +36,17 @@ export function TopBar({ onHome, device, mock, onMock, onPush, pushing, canUndo,
         <input type="checkbox" checked={mock} onChange={(e) => onMock(e.target.checked)} />
         Mock pad
       </label>
+
+      {startup.supported && (
+        <label className="flex items-center gap-1.5 text-xs text-muted" title="Starts hidden in the tray so profiles switch by themselves">
+          <input
+            type="checkbox"
+            checked={startup.enabled}
+            onChange={(e) => void window.api.setStartup(e.target.checked).then((enabled) => setStartup({ supported: true, enabled }))}
+          />
+          Start with Windows
+        </label>
+      )}
 
       <div className="ml-auto flex items-center gap-2">
         <button onClick={onUndo} disabled={!canUndo} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">Undo</button>

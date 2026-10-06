@@ -14,6 +14,8 @@ const api: SnekApi = {
   runningPrograms: () => ipcRenderer.invoke('programs:running'),
   rememberProgram: (proc) => ipcRenderer.invoke('programs:remember', proc),
   programIcon: (proc) => ipcRenderer.invoke('programs:icon', proc),
+  getStartup: () => ipcRenderer.invoke('startup:get'),
+  setStartup: (on) => ipcRenderer.invoke('startup:set', on),
   onDeviceState: (cb) => {
     const handler = (_: unknown, s: DeviceState): void => cb(s)
     ipcRenderer.on('device:state', handler)
