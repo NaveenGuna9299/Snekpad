@@ -63,4 +63,9 @@ A new pad is set up by hand: install CircuitPython, KMK and three Adafruit libra
 
 ## License
 
-[MIT](LICENSE)
+SnekPad has two licenses, one per folder:
+
+- **Pad firmware, [`Programs/`](Programs/LICENSE): GPL-3.0.** The firmware is built on [KMK](https://github.com/KMKfw/kmk_firmware), which is GPL-3.0, so the firmware has to be GPL-3.0 as well. If you give or sell a pad to someone, they can get this source, and the pad can always be re-flashed.
+- **Desktop app, [`app/`](app/LICENSE): MIT.** SnekPad Studio is a separate program that talks to the pad over a serial port.
+
+See [`LICENSE`](LICENSE) and [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). The SnekPad name and logo are not covered by either license.

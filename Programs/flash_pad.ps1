@@ -30,6 +30,7 @@
 .EXAMPLE
   .\flash_pad.ps1 -MpyCross C:\tools\mpy-cross-windows-10.3.1.static.exe
 #>
+# SPDX-License-Identifier: GPL-3.0-only
 param(
     [Parameter(Mandatory = $true)][string]$MpyCross,
     [switch]$Dev,

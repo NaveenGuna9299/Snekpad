@@ -1,21 +1,15 @@
-MIT License
+SnekPad is licensed in two parts. Each folder has its own LICENSE file:
 
-Copyright (c) 2026 Naveen Gunasekaran
+  Programs/   The pad firmware (code.py, boot.py, the modules it loads, and the
+              build and flash tools)
+              GNU General Public License v3.0 - see Programs/LICENSE
+              The firmware is built on KMK (https://github.com/KMKfw/kmk_firmware),
+              which is GPL-3.0, so the firmware has to be GPL-3.0 as well.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+  app/        SnekPad Studio, the desktop app
+              MIT License - see app/LICENSE
+              The app is a separate program that talks to the pad over a serial
+              port. It does not contain KMK.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Third-party components and their licenses are listed in THIRD-PARTY-NOTICES.md.
+The SnekPad name and logo are not covered by either license.

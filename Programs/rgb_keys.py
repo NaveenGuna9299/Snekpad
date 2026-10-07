@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # rgb_keys.py - per-key RGB for the 3x4 pad, as a KMK module.
 # Copy this file to the root of CIRCUITPY (next to code.py).
 #

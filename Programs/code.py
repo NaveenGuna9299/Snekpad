@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # SnekPad firmware
 # Board: Waveshare RP2040-Zero, CircuitPython 10.x + KMK
 #
