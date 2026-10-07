@@ -8,14 +8,14 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 ## Download
 
-SnekPad Studio v0.1.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+SnekPad Studio v0.2.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
 | OS | Download |
 |---|---|
-| Windows | [snekpad-studio-0.1.0-setup.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.1.0/snekpad-studio-0.1.0-setup.exe) |
-| macOS | [snekpad-studio-0.1.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.1.0/snekpad-studio-0.1.0.dmg) |
-| Linux (any distro) | [snekpad-studio-0.1.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.1.0/snekpad-studio-0.1.0.AppImage) |
-| Linux (Debian / Ubuntu) | [snekpad-studio_0.1.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.1.0/snekpad-studio_0.1.0_amd64.deb) |
+| Windows | [snekpad-studio-0.2.0-setup.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0-setup.exe) |
+| macOS | [snekpad-studio-0.2.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0.dmg) |
+| Linux (any distro) | [snekpad-studio-0.2.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0.AppImage) |
+| Linux (Debian / Ubuntu) | [snekpad-studio_0.2.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio_0.2.0_amd64.deb) |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
