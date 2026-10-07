@@ -51,6 +51,29 @@ The app does not install firmware yet, so a new pad (Waveshare RP2040-Zero) is s
 6. **`boot.py` last.** Copy `boot.py`, then unplug and replug the pad. It hides the drive and turns on the second serial
    port this app talks to. To get the drive back later, hold the top-left key while plugging in USB.
 
+### Updating or re-flashing a pad that is already set up (Windows)
+
+Once `boot.py` has hidden the drive, `Programs/flash_pad.ps1` does steps 4.2 to 4.4 for you over the pad's USB console,
+so no drive is needed:
+
+```powershell
+cd Programs
+.\flash_pad.ps1 -MpyCross <path to mpy-cross>
+```
+
+It builds the firmware, removes leftovers from the pad (old `.py` files that shadow a `.mpy`, `.bak` and `.new` files,
+editor and trash folders), writes the files and checks the size of each one, restarts the pad, and prints PASS or FAIL.
+It does not touch `kmk/`, `lib/` or `boot.py` settings, and it keeps `config.json` (add `-ResetConfig` to delete it).
+The pad's console port is found automatically. Close anything else that has it open (a terminal, Thonny). The app
+scans serial ports, so if the script says the port is busy, wait a few seconds and run it again.
+
+**Watchdog and crash recovery.** The customer build resets the pad by itself if the main loop freezes for 5 seconds,
+and if the firmware stops with an error (for example a `MemoryError`) the `code.py` stub restarts it up to 3 times,
+then leaves it running so it can be inspected. Unplugging the pad starts over. While you develop, add `-Dev` to the
+command: it creates a `/nowatchdog` file on the pad so the watchdog does not reset the pad while you are at the
+console. Flash again without `-Dev` before the pad goes to a customer. The watchdog is also off whenever the drive is
+visible (top-left key held while plugging in).
+
 `config.json` is not copied by hand: the pad creates it when you push from the app. Until then it uses the built-in
 profiles in `code.py`.
 
@@ -68,27 +91,24 @@ tests/                   vitest
 
 ## The rotary encoder (knob)
 
-The knob has four modes. Each profile sets its own turn and short-press actions in the **Rotary encoder** panel.
+The knob has three modes. Each profile sets its own turn and press actions in the **Rotary encoder** panel.
 
 | Mode | When | What the knob does |
 |---|---|---|
 | Idle | The pad's screen is showing the owner/logo screen | The first turn or press only wakes the screen. It does nothing else, so you can't change the volume by accident. |
 | Default | Any other time | Turning runs the profile's **turn left / turn right** action (volume, tab, scroll, ...). |
-| Short press | Press and release in under 0.5 s | Runs the profile's **short press** action (for example mute), then back to Default. |
-| Profile switcher | Hold the knob for 0.5 s | Turn to choose a profile, short press to confirm, hold again to cancel. It also cancels after 5 s without input. |
+| Press | Any other time | Pressing runs the profile's **press** action (for example mute). |
 
-While the knob is held, the top of the pad's screen shows what releasing will do (`REL:MUTE`), a progress bar and a
-countdown to the switcher (`SWITCH 0.3s`). A profile chosen in the switcher stays until you change app, and the
-screen shows a `*` next to the app name.
+Profiles follow the focused app. To pick one by hand, use the `L0`/`L1` keys on the utility layer (hold the bottom-right
+key); the screen then shows that profile's name with a `*`.
 
 In the app:
-- **Short press** has an action and a label of up to 5 characters. The label is what the pad's screen shows while the knob is held.
+- **Press** has an action and a label of up to 5 characters. The pad no longer shows the label; it is kept in the config.
 - Turn and short-press actions can be a media key, a single shortcut, a single key, or nothing. A shortcut of two or more
   ordinary keys pressed together (not counting Ctrl, Shift, Alt and GUI) does not work on the knob.
 - "Next profile" no longer exists as a press action. Older saved configs that used it are converted when loaded:
   the starter profiles get their default short press (mute, save, Enter, play/pause), any other profile gets "Nothing".
-- The hold time, switcher timeout and direction are firmware settings in `code.py` (`KNOB_HOLD_S`,
-  `KNOB_SWITCH_TIMEOUT_S`, `ENCODER_REVERSE`, `ENCODER_DIVISOR`), not in the app.
+- The direction and clicks-per-step are firmware settings in `code.py` (`ENCODER_REVERSE`, `ENCODER_DIVISOR`), not in the app.
 
 ## Status
 
