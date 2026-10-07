@@ -24,6 +24,8 @@ export type Studio = {
   update: (fn: (c: Config) => Config) => void
   history: History<Config>
   device: DeviceState
+  /** Pad keys held down right now (empty unless the pad reports key presses). */
+  pressed: ReadonlySet<number>
   connected: boolean
   sync: SyncStatus
   push: () => Promise<void>
@@ -38,6 +40,7 @@ export function useStudio(): Studio {
   const config = history.value
   const [baseline, setBaseline] = useState<Config | null>(null)
   const [device, setDevice] = useState<DeviceState>({ status: 'disconnected' })
+  const [pressed, setPressed] = useState<ReadonlySet<number>>(new Set())
   const [pushing, setPushing] = useState(false)
   const [message, setMessage] = useState<Message | null>(null)
   const messageTimer = useRef<number | undefined>(undefined)
@@ -56,7 +59,23 @@ export function useStudio(): Studio {
       replace(c)
     })
     void window.api.deviceState().then(setDevice)
-    return window.api.onDeviceState(setDevice)
+    const offState = window.api.onDeviceState((s) => {
+      setDevice(s)
+      // a pad that went away cannot still be holding keys
+      if (s.status !== 'connected') setPressed(new Set())
+    })
+    const offEvent = window.api.onDeviceEvent((e) =>
+      setPressed((held) => {
+        const next = new Set(held)
+        if (e.down) next.add(e.index)
+        else next.delete(e.index)
+        return next
+      })
+    )
+    return () => {
+      offState()
+      offEvent()
+    }
   }, [replace])
 
   // when a pad connects, show what is live on it, unless that would overwrite unsent edits
@@ -128,6 +147,7 @@ export function useStudio(): Studio {
     update,
     history,
     device,
+    pressed,
     connected,
     sync,
     push,

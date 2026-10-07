@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SnekApi, DeviceState } from '../shared/api'
+import type { PadEvent } from '../shared/protocol'
 
 const api: SnekApi = {
   loadConfig: () => ipcRenderer.invoke('config:load'),
@@ -20,6 +21,11 @@ const api: SnekApi = {
   programIcon: (proc) => ipcRenderer.invoke('programs:icon', proc),
   getStartup: () => ipcRenderer.invoke('startup:get'),
   setStartup: (on) => ipcRenderer.invoke('startup:set', on),
+  onDeviceEvent: (cb) => {
+    const handler = (_: unknown, e: Extract<PadEvent, { kind: 'key' }>): void => cb(e)
+    ipcRenderer.on('device:event', handler)
+    return () => ipcRenderer.removeListener('device:event', handler)
+  },
   onDeviceState: (cb) => {
     const handler = (_: unknown, s: DeviceState): void => cb(s)
     ipcRenderer.on('device:state', handler)

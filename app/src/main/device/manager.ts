@@ -4,7 +4,7 @@
 import { EventEmitter } from 'events'
 import { resolveForOs, type Config } from '../../shared/config'
 import type { DeviceState, PullResult, PushResult } from '../../shared/api'
-import { appLine, osLine, hostOsFrom } from '../../shared/protocol'
+import { appLine, osLine, hostOsFrom, type PadEvent } from '../../shared/protocol'
 import type { Link } from './link'
 import { MockLink } from './mockLink'
 import { findPad } from './serialLink'
@@ -39,7 +39,12 @@ export class DeviceManager extends EventEmitter {
 
   private attach(link: Link): void {
     this.link = link
-    this.session = new DeviceSession(link)
+    const session = new DeviceSession(link)
+    this.session = session
+    session.onHello((v) => {
+      if (this.session === session && v >= 2) this.setState({ ...this.state, events: true })
+    })
+    session.onEvent((e) => this.onPadEvent(session, e))
     link.onClose((reason) => {
       if (this.link !== link) return
       this.link = null
@@ -47,7 +52,18 @@ export class DeviceManager extends EventEmitter {
       this.setState({ status: 'disconnected', error: reason })
     })
     this.setState({ status: 'connected', kind: link.kind, label: link.label })
-    this.session.send(osLine(this.os)) // tell the pad which OS it is plugged into
+    session.send(osLine(this.os)) // tell the pad which OS it is plugged into
+    session.hello() // a pad that knows protocol 2 now starts reporting its profile and key presses
+  }
+
+  private onPadEvent(session: DeviceSession, e: PadEvent): void {
+    if (this.session !== session) return // a late line from a pad that is gone
+    if (e.kind === 'layer') {
+      if (this.state.activeProfile !== e.index)
+        this.setState({ ...this.state, activeProfile: e.index })
+    } else {
+      this.emit('event', e)
+    }
   }
 
   /** Look for a real pad (skipped while connected or while the mock is chosen). */

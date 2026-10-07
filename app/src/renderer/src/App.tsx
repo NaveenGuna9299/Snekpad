@@ -22,7 +22,7 @@ import { PresetBrowser } from './components/PresetBrowser'
 import type { Preset } from './lib/presets'
 
 function App(): React.JSX.Element {
-  const { config, update, history, device, sync, push, pushing, message, flash, dismiss } =
+  const { config, update, history, device, pressed, sync, push, pushing, message, flash, dismiss } =
     useStudio()
   const [selectedProfile, setSelectedProfile] = useState(0)
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
@@ -159,6 +159,10 @@ function App(): React.JSX.Element {
     if (patch.color) void window.api.previewLed(selectedProfile, index, patch.color)
   }
 
+  // the profile the pad itself says it is running (only pads with protocol 2 say)
+  const padProfile =
+    device.activeProfile === undefined ? undefined : config.profiles[device.activeProfile]
+  const selectedProfileIndex = config.profiles.indexOf(profile)
   const selectedKey = selection.kind === 'key' ? profile.keys[selection.index] : null
 
   return (
@@ -166,7 +170,9 @@ function App(): React.JSX.Element {
       <TitleBar device={device} />
       {view === 'home' ? (
         <Home
-          profile={profile}
+          profile={padProfile ?? profile}
+          padProfileName={padProfile?.name}
+          pressed={pressed}
           oledHeight={config.device.oled.height}
           device={device}
           profileCount={config.profiles.length}
@@ -201,6 +207,7 @@ function App(): React.JSX.Element {
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
               <Sidebar
+                activeOnPad={device.activeProfile}
                 profiles={config.profiles}
                 selected={config.profiles.indexOf(profile)}
                 onSelect={setSelectedProfile}
@@ -219,6 +226,7 @@ function App(): React.JSX.Element {
                 selection={selection}
                 onSelect={setSelection}
                 onSwap={swapKeys}
+                pressed={device.activeProfile === selectedProfileIndex ? pressed : undefined}
               />
               <p className="text-sm text-muted" aria-live="polite">
                 {selectedKey

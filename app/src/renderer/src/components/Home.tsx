@@ -8,6 +8,9 @@ type Props = {
   device: DeviceState
   profileCount: number
   onOpen: () => void
+  /** Name of the profile the pad reports running; undefined if it does not report one. */
+  padProfileName?: string
+  pressed?: ReadonlySet<number>
 }
 
 function greeting(): string {
@@ -21,7 +24,9 @@ export function Home({
   oledHeight,
   device,
   profileCount,
-  onOpen
+  onOpen,
+  padProfileName,
+  pressed
 }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
@@ -41,6 +46,7 @@ export function Home({
               oledHeight={oledHeight}
               selection={{ kind: 'key', index: -1 }}
               onSelect={() => {}}
+              pressed={pressed}
             />
           </span>
         </button>
@@ -56,7 +62,8 @@ export function Home({
           </span>
         </div>
         <p className="text-sm text-muted">
-          {profileCount} profile{profileCount === 1 ? '' : 's'} · showing: {profile.name}
+          {profileCount} profile{profileCount === 1 ? '' : 's'} ·{' '}
+          {padProfileName ? `on the pad: ${padProfileName}` : `showing: ${profile.name}`}
         </p>
       </div>
     </main>

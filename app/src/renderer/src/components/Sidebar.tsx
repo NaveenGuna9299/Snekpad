@@ -11,6 +11,8 @@ type Props = {
   onDelete: () => void
   onRename: (name: string) => void
   onMore: () => void
+  /** Index of the profile the pad is running, once the pad reports it. */
+  activeOnPad?: number
 }
 
 export function Sidebar({
@@ -21,7 +23,8 @@ export function Sidebar({
   onDuplicate,
   onDelete,
   onRename,
-  onMore
+  onMore,
+  activeOnPad
 }: Props): React.JSX.Element {
   const full = profiles.length >= MAX_PROFILES
   const current = profiles[selected]
@@ -43,7 +46,18 @@ export function Sidebar({
               aria-current={i === selected}
               className={`w-full rounded-md px-3 py-2 text-left ${i === selected ? 'bg-selected text-fg' : 'hover:bg-surface2'}`}
             >
-              <span className="block font-medium">{p.name}</span>
+              <span className="flex items-center justify-between font-medium">
+                {p.name}
+                {i === activeOnPad && (
+                  <span
+                    className="flex items-center gap-1 text-xs font-normal text-ok"
+                    title="The pad is running this profile"
+                  >
+                    <span className="h-2 w-2 rounded-full bg-ok" />
+                    On pad
+                  </span>
+                )}
+              </span>
               <span className="mt-0.5 flex items-center gap-1 text-xs text-muted">
                 {p.id === 'general' ? (
                   'Fallback for every other app'

@@ -10,9 +10,11 @@
 //   CFG_LINE<TAB>chunk                           (no reply)
 //   CFG_END                                      OK | ERR<TAB>reason
 //   GET_CFG                                      CFG_BEGIN, CFG_LINE..., CFG_END (the config now on the pad) | ERR<TAB>reason
+//   HELLO                                        HELLO<TAB>version (pads from protocol 2; older pads ignore it)
+//   (nothing)                                    EVT<TAB>layer<TAB>n  /  EVT<TAB>key<TAB>n<TAB>0|1  (only after HELLO)
 
 import { z } from 'zod'
-import { FN_KEY, KEY_COUNT, LABEL_MAX, type Config } from './config'
+import { FN_KEY, KEY_COUNT, LABEL_MAX, MAX_PROFILES, type Config } from './config'
 
 export const CFG_CHUNK = 160 // characters of JSON per CFG_LINE (keeps pad buffers small)
 
@@ -50,6 +52,10 @@ export const osLine = (os: HostOs): string => `OS\t${os}`
 export const appLine = (proc: string, title: string): string =>
   `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
 export const getCfgLine = (): string => 'GET_CFG'
+export const helloLine = (): string => 'HELLO'
+
+/** 1 = the original protocol; 2 adds HELLO and the pad's own EVT lines. */
+export const PROTOCOL_VERSION = 2
 export const ledLine = (layer: number, key: number, color: string): string =>
   `LED\t${layer}\t${key}\t${color}`
 
@@ -161,4 +167,35 @@ export function applyLiveView(config: Config, view: LiveView): Config {
       }
     })
   }
+}
+
+// ---- HELLO and EVT: the pad talking first -----------------------------------------------------
+// A pad that understands protocol 2 answers HELLO with its version and from then on reports which
+// profile is active and which keys are held. An older pad ignores HELLO, so the app just never
+// sees events from it and everything else works as before.
+
+export const HELLO_PREFIX = 'HELLO\t'
+export const EVT_PREFIX = 'EVT\t'
+
+/** The version in a `HELLO<TAB>n` reply, or null if the line is not one. */
+export function parseHello(line: string): number | null {
+  if (!line.startsWith(HELLO_PREFIX)) return null
+  const n = Number(line.slice(HELLO_PREFIX.length).split('\t')[0])
+  return Number.isInteger(n) && n >= 1 ? n : null
+}
+
+export type PadEvent =
+  | { kind: 'layer'; index: number } // the profile the pad is running changed
+  | { kind: 'key'; index: number; down: boolean }
+
+/** Parse an `EVT` line; anything malformed or out of range is dropped (null). */
+export function parseEvent(line: string): PadEvent | null {
+  if (!line.startsWith(EVT_PREFIX)) return null
+  const [, kind, a, b] = line.replace(/\r$/, '').split('\t')
+  const index = Number(a)
+  if (!Number.isInteger(index) || index < 0) return null
+  if (kind === 'layer') return index < MAX_PROFILES ? { kind, index } : null
+  if (kind === 'key')
+    return index < KEY_COUNT && (b === '0' || b === '1') ? { kind, index, down: b === '1' } : null
+  return null
 }

@@ -1,7 +1,7 @@
 // A fake pad so the whole app works without hardware (and for tests).
 // It answers the protocol the way the firmware does.
 
-import { ConfigReceiver, configFrames, liveViewOf } from '../../shared/protocol'
+import { ConfigReceiver, configFrames, liveViewOf, PROTOCOL_VERSION } from '../../shared/protocol'
 import type { Link } from './link'
 
 export class MockLink implements Link {
@@ -26,12 +26,18 @@ export class MockLink implements Link {
       return
     }
     if (cmd === 'PING') reply = 'PONG'
+    else if (cmd === 'HELLO') reply = `HELLO\t${PROTOCOL_VERSION}`
     else if (cmd === 'LED') reply = 'OK'
     else if (cmd.startsWith('CFG_')) {
       reply = this.rx.handle(line)
       if (cmd === 'CFG_END' && reply === 'OK') this.config = this.rx.received
     }
     if (reply) setTimeout(() => this.lineCb(reply), 5)
+  }
+
+  /** Pretend the pad sent this line on its own (for tests and the mock pad). */
+  emit(line: string): void {
+    this.lineCb(line)
   }
 
   onLine(cb: (line: string) => void): void {

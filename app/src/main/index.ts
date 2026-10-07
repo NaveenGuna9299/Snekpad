@@ -171,6 +171,10 @@ function registerIpc(): void {
     device.previewLed(layer, key, color)
   )
 
+  device.on('event', (e) => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('device:event', e)
+  })
+
   device.on('state', (s) => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('device:state', s)
   })

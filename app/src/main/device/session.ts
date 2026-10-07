@@ -10,9 +10,14 @@ import {
   configFrames,
   crcHex,
   getCfgLine,
+  helloLine,
   ledLine,
   liveViewSchema,
+  parseEvent,
+  parseHello,
   parseReply,
+  EVT_PREFIX,
+  type PadEvent,
   type Reply
 } from '../../shared/protocol'
 import type { PullResult, PushResult } from '../../shared/api'
@@ -29,8 +34,47 @@ export class DeviceSession {
   private stale = false // the last exchange timed out, so a late reply may still be on its way
   private longOps = 0 // push / pull in flight or waiting
 
+  /** Protocol version the pad announced with HELLO; 1 until (and unless) it does. */
+  version = 1
+  private eventCb: (e: PadEvent) => void = () => {}
+  private helloCb: (version: number) => void = () => {}
+
   constructor(private readonly link: Link) {
-    link.onLine((line) => this.handler?.(line)) // lines nobody is waiting for are dropped
+    link.onLine((line) => this.route(line))
+  }
+
+  /** Called for each report the pad sends on its own (profile change, key held / released). */
+  onEvent(cb: (e: PadEvent) => void): void {
+    this.eventCb = cb
+  }
+
+  /** Called when the pad answers HELLO. */
+  onHello(cb: (version: number) => void): void {
+    this.helloCb = cb
+  }
+
+  /** Ask the pad to announce itself and start reporting events. Pads without support ignore it. */
+  hello(): void {
+    this.link.write(helloLine())
+  }
+
+  /**
+   * One incoming line. The pad's own reports (EVT) and its HELLO answer can arrive at any time,
+   * even in the middle of an exchange, so they are peeled off here and never counted as a reply.
+   */
+  private route(line: string): void {
+    if (line.startsWith(EVT_PREFIX)) {
+      const e = parseEvent(line)
+      if (e) this.eventCb(e)
+      return
+    }
+    const v = parseHello(line)
+    if (v !== null) {
+      this.version = v
+      this.helloCb(v)
+      return
+    }
+    this.handler?.(line) // lines nobody is waiting for are dropped
   }
 
   /** True while a push or pull is queued or running. */

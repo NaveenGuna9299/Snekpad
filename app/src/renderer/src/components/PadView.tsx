@@ -9,6 +9,8 @@ type Props = {
   oledHeight: 32 | 64
   selection: Selection
   onSelect: (s: Selection) => void
+  /** Keys the pad reports as held right now. */
+  pressed?: ReadonlySet<number>
   /** Drag one key onto another to swap them (the FN key stays put). */
   onSwap?: (from: number, to: number) => void
 }
@@ -27,7 +29,8 @@ export function PadView({
   oledHeight,
   selection,
   onSelect,
-  onSwap
+  onSwap,
+  pressed
 }: Props): React.JSX.Element {
   const gridTop = PAD + TOP_H + GAP
   const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null)
@@ -162,6 +165,18 @@ export function PadView({
               fill={k.color}
               opacity={k.color.toLowerCase() === '#000000' ? 0.15 : 0.92}
             />
+            {pressed?.has(i) && (
+              <rect
+                x={x + 8}
+                y={y + 8}
+                width={KEY - 16}
+                height={KEY - 16}
+                rx="6"
+                fill="#fff"
+                opacity="0.45"
+                pointerEvents="none"
+              />
+            )}
             <text
               x={x + KEY / 2}
               y={y + KEY / 2 + 5}

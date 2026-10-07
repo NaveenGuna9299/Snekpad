@@ -2,13 +2,17 @@
 
 import type { Config, Template, ValidationResult } from './config'
 import type { ThemePref } from './theme'
-import type { LiveView } from './protocol'
+import type { LiveView, PadEvent } from './protocol'
 
 export type DeviceState = {
   status: 'disconnected' | 'connected'
   kind?: 'serial' | 'mock'
   label?: string
   error?: string
+  /** The pad speaks protocol 2: it reports its active profile and key presses. */
+  events?: boolean
+  /** Index of the profile the pad is running (known once the pad reports it). */
+  activeProfile?: number
 }
 
 export type PushResult = { ok: true } | { ok: false; error: string }
@@ -46,4 +50,6 @@ export interface SnekApi {
   getStartup(): Promise<{ supported: boolean; enabled: boolean }>
   setStartup(on: boolean): Promise<boolean>
   onDeviceState(cb: (s: DeviceState) => void): () => void
+  /** Key presses reported by the pad (profile changes arrive as part of the device state). */
+  onDeviceEvent(cb: (e: Extract<PadEvent, { kind: 'key' }>) => void): () => void
 }
