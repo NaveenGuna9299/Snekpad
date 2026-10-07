@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { blankProfile, COLS, defaultConfig, KEY_COUNT, MAX_PROFILES, type KeyConfig, type Profile } from '../../shared/config'
+import { useCallback, useRef, useState } from 'react'
+import { blankProfile, COLS, defaultConfig, FN_KEY, KEY_COUNT, MAX_PROFILES, type KeyConfig, type Profile } from '../../shared/config'
 import { useStudio } from './lib/useStudio'
 import { PadView, type Selection } from './components/PadView'
 import { Sidebar } from './components/Sidebar'
@@ -26,12 +26,46 @@ function App(): React.JSX.Element {
     [update, selectedProfile]
   )
 
+  const clipboard = useRef<KeyConfig | null>(null)
+  const sel = selection.kind === 'key' ? selection.index : -1
+  const copyKey = (): void => {
+    const key = config?.profiles[selectedProfile]?.keys[sel]
+    if (!key || sel === FN_KEY) return
+    clipboard.current = structuredClone(key)
+    flash(`Copied key ${sel + 1}.`)
+  }
+  const pasteKey = (): void => {
+    const key = clipboard.current
+    if (!key || sel < 0 || sel === FN_KEY) return
+    editProfile((p) => ({ ...p, keys: p.keys.map((k, i) => (i === sel ? structuredClone(key) : k)) }))
+    void window.api.previewLed(selectedProfile, sel, key.color)
+    flash(`Pasted onto key ${sel + 1}.`, false, true)
+  }
+
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem('sidebar') !== 'closed'
+    } catch {
+      return true
+    }
+  })
+  const toggleSidebar = (): void => {
+    setSidebarOpen(!sidebarOpen)
+    try {
+      localStorage.setItem('sidebar', sidebarOpen ? 'closed' : 'open')
+    } catch {
+      /* the choice just is not remembered */
+    }
+  }
+
   const editing = view === 'editor' && !browsing
   useShortcuts(
     {
       undo: history.undo,
       redo: history.redo,
       push: () => void push(),
+      copy: copyKey,
+      paste: pasteKey,
       move: (dCol, dRow) =>
         setSelection((s) => {
           if (s.kind !== 'key') return s
@@ -99,6 +133,8 @@ function App(): React.JSX.Element {
         <>
       <TopBar
         onHome={() => setView('home')}
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={toggleSidebar}
         device={device}
         mock={mock}
         onMock={(on) => {
@@ -120,6 +156,7 @@ function App(): React.JSX.Element {
       />
 
       <div className="flex min-h-0 flex-1">
+        {sidebarOpen && (
         <Sidebar
           profiles={config.profiles}
           selected={config.profiles.indexOf(profile)}
@@ -130,6 +167,7 @@ function App(): React.JSX.Element {
           onRename={(name) => editProfile((p) => ({ ...p, name }))}
           onMore={() => setBrowsing(true)}
         />
+        )}
 
         <main className="flex min-w-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
           <PadView profile={profile} oledHeight={config.device.oled.height} selection={selection} onSelect={setSelection} />

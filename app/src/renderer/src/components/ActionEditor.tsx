@@ -35,18 +35,22 @@ type Props = {
 export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-xs text-muted">
-        Action
-        <select
-          value={action.type}
-          onChange={(e) => onChange(DEFAULTS[e.target.value as Kind])}
-          className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
-        >
+      <div role="radiogroup" aria-label="Action" className="flex flex-col gap-1">
+        <span className="text-xs text-muted">Action</span>
+        <div className="grid grid-cols-3 gap-1.5">
           {allowed.map((k) => (
-            <option key={k} value={k}>{LABELS[k]}</option>
+            <button
+              key={k}
+              role="radio"
+              aria-checked={action.type === k}
+              onClick={() => action.type !== k && onChange(DEFAULTS[k])}
+              className={`rounded-md border px-1.5 py-1.5 text-xs ${action.type === k ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
+            >
+              {LABELS[k]}
+            </button>
           ))}
-        </select>
-      </label>
+        </div>
+      </div>
 
       {action.type === 'hotkey' && (
         <ComboRecorder
@@ -109,7 +113,7 @@ function TextField({ label, value, onChange, maxLength }: { label: string; value
  * Press and hold any number of keys (up to MAX_COMBO) and let go: everything held at the same
  * time is recorded. This allows Ctrl+Shift+Alt+K, two normal keys together, or modifiers only.
  */
-function ComboRecorder({ display, idle, button, onRecord }: { display: string; idle: string; button: string; onRecord: (keys: string[]) => void }): React.JSX.Element {
+function ComboRecorder({ display, idle, button, onRecord, bare = false }: { display: string; idle: string; button: string; onRecord: (keys: string[]) => void; bare?: boolean }): React.JSX.Element {
   const [recording, setRecording] = useState(false)
   const [live, setLive] = useState<string[]>([])
 
@@ -148,10 +152,10 @@ function ComboRecorder({ display, idle, button, onRecord }: { display: string; i
 
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 rounded-md border border-line bg-input px-3 py-1.5 font-mono text-sm" aria-live="polite">
+      <div className={`flex-1 font-mono text-sm ${bare ? '' : 'rounded-md border border-line bg-input px-3 py-1.5'}`} aria-live="polite">
         {recording ? (live.length ? live.join(' + ') : idle) : display}
       </div>
-      <button onClick={() => { setRecording((r) => !r); setLive([]) }} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">
+      <button onClick={() => { setRecording((r) => !r); setLive([]) }} className={`rounded-md border border-line text-sm hover:bg-surface2 ${bare ? 'px-2 py-0.5 text-xs' : 'px-3 py-1.5'}`}>
         {recording ? 'Cancel' : button}
       </button>
     </div>
@@ -165,6 +169,13 @@ type Step = Extract<Action, { type: 'sequence' }>['steps'][number]
  * slider for the pause (in ms) before the next step starts.
  */
 function SequenceEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step[]) => void }): React.JSX.Element {
+  const setKeys = (i: number, keys: string[]): void => onChange(steps.map((s, j) => (j === i ? { ...s, keys } : s)))
+  // moving a step moves its own pause with it
+  const move = (i: number, d: number): void => {
+    const next = [...steps]
+    ;[next[i], next[i + d]] = [next[i + d], next[i]]
+    onChange(next)
+  }
   const setWait = (i: number, wait: number): void => onChange(steps.map((s, j) => (j === i ? { ...s, wait } : s)))
   return (
     <div className="flex flex-col gap-1">
@@ -173,7 +184,9 @@ function SequenceEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step
           <li key={i} className="flex flex-col">
             <div className="flex items-center gap-2 rounded-md border border-line bg-input px-3 py-1.5 font-mono text-sm">
               <span className="w-4 text-muted">{i + 1}</span>
-              <span className="flex-1">{s.keys.join(' + ')}</span>
+              <ComboRecorder bare display={s.keys.join(' + ')} idle="Press the keys…" button="Re-record" onRecord={(keys) => setKeys(i, keys)} />
+              <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move step ${i + 1} up`} className="text-muted hover:text-fg disabled:opacity-30">▲</button>
+              <button onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label={`Move step ${i + 1} down`} className="text-muted hover:text-fg disabled:opacity-30">▼</button>
               <button
                 onClick={() => onChange(steps.filter((_, j) => j !== i))}
                 disabled={steps.length === 1}

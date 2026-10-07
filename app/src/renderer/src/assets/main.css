@@ -84,3 +84,8 @@ textarea:focus-visible,
   background-clip: padding-box;
   border-radius: 8px;
 }
+
+/* hover cue on the pad's keys and knob (the selected one keeps its accent outline) */
+.padkey:not([aria-pressed='true']):hover > :is(rect, circle):first-of-type {
+  stroke: var(--muted);
+}

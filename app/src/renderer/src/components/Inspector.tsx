@@ -50,7 +50,7 @@ export function KeyPanel({ profile, index, onKey, onApplyColorToAll }: { profile
         <p className="text-sm text-muted">This key opens the utility layer (bootloader, LED brightness, jump to profile) while held. It can only change colour.</p>
       ) : (
         <label className="flex flex-col gap-1 text-xs text-muted">
-          Label on the pad&apos;s screen (max {LABEL_MAX} characters)
+          <FieldLabel text="Label on the pad&apos;s screen" value={key.label} max={LABEL_MAX} />
           <input value={key.label} maxLength={LABEL_MAX} onChange={(e) => onKey(index, { label: e.target.value })} className="rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg" />
         </label>
       )}
@@ -68,20 +68,32 @@ export function EncoderPanel({ profile, onEncoder }: { profile: Profile; onEncod
     <section className="flex flex-col gap-4">
       <h3 className="text-base font-semibold">Rotary encoder</h3>
       <label className="flex flex-col gap-1 text-xs text-muted">
-        Hint on the pad&apos;s screen (max 10 characters)
+        <FieldLabel text="Hint on the pad&apos;s screen" value={e.label} max={10} />
         <input value={e.label} maxLength={10} onChange={(ev) => onEncoder({ label: ev.target.value.toUpperCase() })} className="rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg" />
       </label>
       <Group title="Turn right"><ActionEditor action={e.cw} allowed={ENC_ACTIONS} onChange={(cw) => onEncoder({ cw })} /></Group>
       <Group title="Turn left"><ActionEditor action={e.ccw} allowed={ENC_ACTIONS} onChange={(ccw) => onEncoder({ ccw })} /></Group>
       <Group title="Short press">
         <label className="flex flex-col gap-1 text-xs text-muted">
-          Label while the knob is held (max {LABEL_MAX} characters)
+          <FieldLabel text="Label while the knob is held" value={e.pressLabel} max={LABEL_MAX} />
           <input value={e.pressLabel} maxLength={LABEL_MAX} onChange={(ev) => onEncoder({ pressLabel: ev.target.value.toUpperCase() })} className="rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg" />
         </label>
         <ActionEditor action={e.press} allowed={ENC_ACTIONS} onChange={(press) => onEncoder({ press })} />
       </Group>
       <p className="text-xs text-muted">Press and release quickly to run the short press. Hold the knob for half a second to open the profile switcher: turn to choose, press to confirm, hold to cancel.</p>
     </section>
+  )
+}
+
+/** A field caption with a live "n/max" counter, so a cut-off label is never a surprise. */
+function FieldLabel({ text, value, max }: { text: string; value: string; max: number }): React.JSX.Element {
+  return (
+    <span className="flex justify-between">
+      <span>{text}</span>
+      <span className={value.length >= max ? 'font-semibold text-fg' : ''} aria-label={`${value.length} of ${max} characters`}>
+        {value.length}/{max}
+      </span>
+    </span>
   )
 }
 

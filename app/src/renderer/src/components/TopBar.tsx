@@ -15,14 +15,17 @@ type Props = {
   onRedo: () => void
   onReset: () => void
   onHome: () => void
+  sidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
-export function TopBar({ onHome, device, mock, onMock, onPush, pushing, sync, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
+export function TopBar({ onHome, sidebarOpen, onToggleSidebar, device, mock, onMock, onPush, pushing, sync, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
     <header className="flex items-center gap-3 border-b border-line bg-bg px-4 py-2.5 shadow-sm">
       <h1 className="sr-only">SnekPad Studio</h1>
       <button onClick={onHome} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">Home</button>
+      <button onClick={onToggleSidebar} aria-pressed={sidebarOpen} title="Show or hide the profile list" className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">Profiles</button>
 
       <div className="flex items-center gap-2 text-sm" role="status" aria-live="polite">
         <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-ok' : 'bg-muted'}`} />
@@ -42,7 +45,7 @@ export function TopBar({ onHome, device, mock, onMock, onPush, pushing, sync, ca
           className={`rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40 ${sync === 'in-sync' ? 'border border-line text-fg hover:bg-surface2' : 'bg-accent text-accentfg'}`}
           title={connected ? 'Send this setup to the pad' : 'Connect a pad first'}
         >
-          {pushing ? 'Sending…' : 'Push to pad'}
+          {pushing ? 'Sendingâ€¦' : 'Push to pad'}
         </button>
       </div>
     </header>

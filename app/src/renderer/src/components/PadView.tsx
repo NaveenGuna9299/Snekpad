@@ -1,4 +1,5 @@
 import { COLS, ROWS, type Profile } from '../../../shared/config'
+import { describeAction } from '../lib/describe'
 
 export type Selection = { kind: 'key'; index: number } | { kind: 'encoder' }
 
@@ -31,7 +32,7 @@ export function PadView({ profile, oledHeight, selection, onSelect }: Props): Re
         tabIndex={0}
         aria-label="Rotary encoder"
         aria-pressed={selection.kind === 'encoder'}
-        className="cursor-pointer"
+        className="padkey cursor-pointer"
         onClick={() => onSelect({ kind: 'encoder' })}
         onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect({ kind: 'encoder' })}
       >
@@ -61,10 +62,11 @@ export function PadView({ profile, oledHeight, selection, onSelect }: Props): Re
             tabIndex={0}
             aria-label={`Key ${i + 1}: ${k.label || 'empty'}`}
             aria-pressed={selected}
-            className="cursor-pointer"
+            className="padkey cursor-pointer"
             onClick={() => onSelect({ kind: 'key', index: i })}
             onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect({ kind: 'key', index: i })}
           >
+            <title>{`Key ${i + 1}: ${describeAction(k.action)}`}</title>
             <rect x={x} y={y} width={KEY} height={KEY} rx="10" fill="var(--surface-2)" stroke={selected ? 'var(--accent)' : 'var(--line)'} strokeWidth={selected ? 4 : 2} />
             <rect x={x + 8} y={y + 8} width={KEY - 16} height={KEY - 16} rx="6" fill={k.color} opacity={k.color.toLowerCase() === '#000000' ? 0.15 : 0.92} />
             <text x={x + KEY / 2} y={y + KEY / 2 + 5} textAnchor="middle" fontSize="15" fontFamily="Consolas, monospace" fontWeight="600" fill={light ? '#111' : '#fff'}>
