@@ -20,12 +20,6 @@ SnekPad Studio v0.3.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
 
-The Windows installer is a small miniature of the pad: the 12 keys light up as files install and the display shows the progress.
-
-| Ready | Installing | Done |
-|---|---|---|
-| ![Installer ready](docs/installer-ready.png) | ![Installer installing](docs/installer-installing.png) | ![Installer done](docs/installer-done.png) |
-
 The app only configures the pad. A new pad still needs its firmware set up by hand, see [Quick start](#quick-start).
 
 ## What is in this repo

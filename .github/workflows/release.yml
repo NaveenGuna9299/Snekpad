@@ -57,6 +57,6 @@ jobs:
         with:
           path: installers
           merge-multiple: true
-      - run: gh release create "$GITHUB_REF_NAME" installers/* --title "SnekPad $GITHUB_REF_NAME" --notes-file RELEASE_NOTES_$GITHUB_REF_NAME.md
+      - run: gh release create "$GITHUB_REF_NAME" $(find installers -type f) --title "SnekPad $GITHUB_REF_NAME" --notes-file RELEASE_NOTES_$GITHUB_REF_NAME.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
