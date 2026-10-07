@@ -1,0 +1,19 @@
+appId: com.snekpad.studio.setup
+productName: SnekPad Studio Setup
+directories:
+  output: ../dist/installer
+  buildResources: ../build
+files:
+  - main.js
+  - preload.js
+  - index.html
+  - package.json
+extraResources:
+  - from: payload
+    to: payload
+win:
+  icon: ../build/icon.ico
+  signAndEditExecutable: true
+portable:
+  artifactName: SnekPad-Studio-Setup-${version}.${ext}
+npmRebuild: false

@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SnekPad Studio Installer Designs</title>
+<style>
+:root{--bg:#1a1b1e;--surface:#141518;--s2:#25262a;--line:#2e3035;--fg:#dbdee1;--muted:#949ba4;--accent:#5865f2;--ok:#23a55a;--page:#0c0d0f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--fg);font:14px 'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px 48px}
+h1{font-size:18px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px;text-align:center;max-width:620px}
+.tabs{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;justify-content:center}
+.tabs button{background:var(--s2);color:var(--fg);border:1px solid var(--line);padding:8px 16px;border-radius:8px;cursor:pointer;font:inherit}
+.tabs button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.note{color:var(--muted);font-size:13px;margin-top:16px;max-width:640px;text-align:center}
+/* window chrome */
+.win{width:640px;max-width:100%;height:440px;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 20px 60px #000a;display:flex;flex-direction:column;overflow:hidden}
+.win .bar{height:32px;display:flex;align-items:center;justify-content:space-between;padding-left:12px;font-size:12px;color:var(--muted);background:var(--surface);flex:none}
+.win .bar b{width:46px;text-align:center;font-weight:400;letter-spacing:6px}
+.body{flex:1;display:flex;min-height:0}
+.design{display:none}.design.on{display:block}
+.pg{display:none;flex-direction:column;height:100%}.pg.on{display:flex}
+button.p{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:9px 20px;font:inherit;cursor:pointer}
+button.p:hover{filter:brightness(1.1)}
+button.g{background:transparent;color:var(--muted);border:0;padding:9px 14px;font:inherit;cursor:pointer}
+.prog{height:8px;background:var(--surface);border-radius:4px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s}
+input[type=text]{background:#0f1012;border:1px solid var(--line);color:var(--fg);border-radius:6px;padding:8px 10px;font:inherit;width:100%}
+label.chk{display:flex;gap:8px;align-items:center;margin:8px 0;color:var(--fg)}
+.logo{width:64px;height:64px;border-radius:14px;background:linear-gradient(135deg,#5865f2,#23a55a);display:grid;place-items:center;font-weight:700;font-size:26px;color:#fff}
+.logo.s{width:40px;height:40px;font-size:17px;border-radius:10px}
+.muted{color:var(--muted)}
+/* A: wizard */
+.A .side{width:190px;background:var(--surface);padding:24px 18px;display:flex;flex-direction:column;gap:6px;flex:none}
+.A .side h3{margin:12px 0 18px;font-size:15px}
+.A .step{display:flex;gap:10px;align-items:center;color:var(--muted);padding:6px 0}
+.A .step span{width:22px;height:22px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font-size:11px}
+.A .step.on{color:var(--fg)}.A .step.on span{background:var(--accent);border-color:var(--accent);color:#fff}
+.A .step.done span{background:var(--ok);border-color:var(--ok);color:#fff}
+.A .main{flex:1;padding:28px 28px 18px;display:flex;flex-direction:column;min-width:0}
+.A .main h2{margin:0 0 6px;font-size:20px}
+.A .foot{margin-top:auto;display:flex;justify-content:flex-end;gap:8px}
+/* B: one-click */
+.B .win{height:440px}
+.B .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:0 48px;background:radial-gradient(circle at 50% 0,#5865f233,transparent 60%)}
+.B h2{margin:0;font-size:24px}
+.B .big{padding:13px 44px;font-size:16px;border-radius:8px}
+.B .opts{width:100%;max-width:420px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:none}
+.B .opts.show{display:block}
+.B .link{color:var(--muted);cursor:pointer;font-size:13px;background:none;border:0;font-family:inherit}
+.B .link:hover{color:var(--fg)}
+/* C: pad */
+.C .win{background:#08090b}
+.C .grid{display:grid;grid-template-columns:repeat(4,52px);gap:10px}
+.C .key{height:52px;border-radius:10px;background:var(--s2);border:1px solid #3a3c42;border-bottom-width:4px;transition:all .25s}
+.C .key.lit{border-color:var(--c);background:color-mix(in srgb,var(--c) 28%,#1a1b1e);box-shadow:0 0 14px var(--c),inset 0 0 10px color-mix(in srgb,var(--c) 40%,transparent)}
+.C .knob{width:60px;height:60px;border-radius:50%;background:conic-gradient(#3a3c42,#202125,#3a3c42,#202125,#3a3c42);border:3px solid #111;transition:transform .15s}
+.C .oled{width:220px;height:92px;background:#05080a;border:2px solid #2a2d33;border-radius:6px;padding:10px 12px;font:13px/1.5 Consolas,monospace;color:#e8f6ff;display:flex;flex-direction:column;justify-content:center}
+.C .oled .cur{animation:bl 1s steps(1) infinite}@keyframes bl{50%{opacity:0}}
+.C .stage{flex:1;display:flex;align-items:center;justify-content:center;gap:28px;padding:20px}
+.C .cta{display:flex;gap:10px;align-items:center;justify-content:center;padding:14px;border-top:1px solid var(--line);background:#0c0d10}
+.C .cta .path{flex:1;font-size:12px;color:var(--muted);font-family:Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
+</head>
+<body>
+<h1>SnekPad Studio: installer designs</h1>
+<p class="sub">Click through each one. Buttons and progress are simulated. Pick a favourite and I'll build the real installer from it.</p>
+<div class="tabs" id="tabs">
+  <button data-d="A" class="on">A · Classic Wizard</button>
+  <button data-d="B">B · One-Click</button>
+  <button data-d="C">C · Pad Themed</button>
+</div>
+
+<!-- ============ A ============ -->
+<div class="design A on" id="dA">
+ <div class="win">
+  <div class="bar"><span>SnekPad Studio Setup</span><b>– ☐ ✕</b></div>
+  <div class="body">
+   <div class="side">
+     <div class="logo s">S</div><h3>SnekPad Studio</h3>
+     <div class="step on" data-s="0"><span>1</span>Welcome</div>
+     <div class="step" data-s="1"><span>2</span>Location</div>
+     <div class="step" data-s="2"><span>3</span>Installing</div>
+     <div class="step" data-s="3"><span>4</span>Finish</div>
+     <div class="muted" style="margin-top:auto;font-size:12px">v0.2.0 · No cloud, no accounts</div>
+   </div>
+   <div class="main">
+    <div class="pg on"><h2>Welcome to SnekPad Studio</h2><p class="muted">Configure your 12-key macropad: keys, knob, RGB and OLED. Everything stays on your computer.</p>
+      <p class="muted">This will install SnekPad Studio on your PC. It takes about a minute.</p>
+      <div class="foot"><button class="g">Cancel</button><button class="p" data-go="1">Next</button></div></div>
+    <div class="pg"><h2>Choose install location</h2><p class="muted">Setup will install into this folder.</p>
+      <input type="text" value="C:\Users\You\AppData\Local\Programs\SnekPad Studio">
+      <label class="chk"><input type="checkbox" checked>Create a desktop shortcut</label>
+      <label class="chk"><input type="checkbox" checked>Add to Start menu</label>
+      <label class="chk"><input type="checkbox">Launch when I sign in</label>
+      <div class="foot"><button class="g" data-go="0">Back</button><button class="p" data-go="2">Install</button></div></div>
+    <div class="pg"><h2>Installing…</h2><p class="muted" data-status>Preparing</p><div class="prog" style="margin-top:12px"><i></i></div>
+      <div class="foot"><button class="g" disabled>Cancel</button></div></div>
+    <div class="pg"><h2>All set</h2><p class="muted">SnekPad Studio is installed. Plug in your pad and open the app to get started.</p>
+      <label class="chk"><input type="checkbox" checked>Launch SnekPad Studio</label>
+      <div class="foot"><button class="p" data-go="0">Finish</button></div></div>
+   </div>
+  </div>
+ </div>
+ <p class="note">Closest to a normal Windows installer: sidebar with steps, familiar flow. Easiest to ship.</p>
+</div>
+
+<!-- ============ B ============ -->
+<div class="design B" id="dB">
+ <div class="win">
+  <div class="bar"><span>SnekPad Studio</span><b>✕</b></div>
+  <div class="center">
+   <div class="pg on" style="align-items:center;justify-content:center;gap:14px">
+     <div class="logo">S</div><h2>SnekPad Studio</h2><p class="muted" style="margin:0">Configure your macropad. Version 0.2.0</p>
+     <button class="p big" data-go="1">Install</button>
+     <button class="link" id="bOpt">Customize ▾</button>
+     <div class="opts" id="bOpts"><div class="muted" style="font-size:12px;margin-bottom:6px">Install to</div><input type="text" value="C:\Users\You\AppData\Local\Programs\SnekPad Studio">
+       <label class="chk"><input type="checkbox" checked>Desktop shortcut</label><label class="chk"><input type="checkbox">Launch at sign-in</label></div>
+   </div>
+   <div class="pg" style="align-items:center;justify-content:center;gap:14px;width:100%">
+     <div class="logo">S</div><h2>Installing</h2><div class="prog" style="width:320px"><i></i></div><p class="muted" data-status style="margin:0">Preparing</p>
+   </div>
+   <div class="pg" style="align-items:center;justify-content:center;gap:14px">
+     <div class="logo" style="background:var(--ok)">✓</div><h2>You're ready</h2><p class="muted" style="margin:0">Starting SnekPad Studio…</p>
+     <button class="p big" data-go="0">Open SnekPad Studio</button>
+   </div>
+  </div>
+ </div>
+ <p class="note">Discord / VS Code style. One button, one screen, no wizard. Best first impression, least friction.</p>
+</div>
+
+<!-- ============ C ============ -->
+<div class="design C" id="dC">
+ <div class="win">
+  <div class="bar" style="background:#0c0d10"><span>SnekPad Studio Setup</span><b>– ✕</b></div>
+  <div class="pg on" style="flex:1">
+   <div class="stage">
+     <div class="grid" id="keys"></div>
+     <div style="display:flex;flex-direction:column;gap:16px;align-items:center">
+       <div class="oled" id="oled"><div>SnekPad Studio</div><div class="muted" style="color:#7fb0c8">v0.2.0</div><div>Ready<span class="cur">_</span></div></div>
+       <div class="knob" id="knob"></div>
+     </div>
+   </div>
+   <div class="cta"><span class="path">C:\Users\You\AppData\Local\Programs\SnekPad Studio</span><button class="g">Change</button><button class="p" id="cInstall">Install</button></div>
+  </div>
+ </div>
+ <p class="note">Installer is a miniature SnekPad: 12 RGB keys light up as files install, OLED shows status, knob spins. Most unique to your product, most custom work.</p>
+</div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+$$('#tabs button').forEach(b=>b.onclick=()=>{$$('#tabs button').forEach(x=>x.classList.toggle('on',x===b));$$('.design').forEach(d=>d.classList.toggle('on',d.id==='d'+b.dataset.d))});
+const msgs=['Extracting files','Copying app resources','Writing shortcuts','Registering uninstaller','Finishing up'];
+function run(fn,done){let p=0;const t=setInterval(()=>{p+=2;fn(p,msgs[Math.min(4,Math.floor(p/20))]);if(p>=100){clearInterval(t);done()}},60)}
+function wire(root,afterInstallIdx){
+  const pgs=$$('.pg',root),show=i=>{pgs.forEach((p,k)=>p.classList.toggle('on',k===i));$$('.step',root).forEach((s,k)=>{s.classList.toggle('on',k===i);s.classList.toggle('done',k<i)});
+    if(i===2||(root.id==='dB'&&i===1)){const bar=$('.prog i',pgs[i]),st=$('[data-status]',pgs[i]);bar.style.width=0;run((p,m)=>{bar.style.width=p+'%';st.textContent=m+'…'},()=>show(i+1))}};
+  $$('[data-go]',root).forEach(b=>b.onclick=()=>show(+b.dataset.go));
+}
+wire($('#dA'));wire($('#dB'));
+$('#bOpt').onclick=()=>$('#bOpts').classList.toggle('show');
+// C
+const cols=['#ff3b6b','#ff8a3b','#ffd23b','#7dff3b','#3bffa0','#3bd9ff','#3b7dff','#8a3bff','#ff3bf0','#3bffe0','#ffa53b','#5865f2'];
+const keys=$('#keys');cols.forEach(()=>keys.appendChild(Object.assign(document.createElement('div'),{className:'key'})));
+$$('.key',keys).forEach((k,i)=>k.style.setProperty('--c',cols[i]));
+const idle=setInterval(()=>{},1e9);
+$('#cInstall').onclick=function(){const btn=this;btn.disabled=true;btn.textContent='Installing…';const ks=$$('.key',keys),o=$('#oled'),kn=$('#knob');ks.forEach(k=>k.classList.remove('lit'));
+ run((p,m)=>{ks.forEach((k,i)=>k.classList.toggle('lit',p>=(i+1)*8.3));kn.style.transform=`rotate(${p*10}deg)`;o.innerHTML=`<div>Installing ${p}%</div><div style="color:#7fb0c8">${m}</div><div>${'█'.repeat(Math.round(p/100*18)).padEnd(18,'░')}</div>`},()=>{o.innerHTML='<div>Done!</div><div style="color:#7fb0c8">SnekPad Studio</div><div>Open it <span class="cur">_</span></div>';btn.disabled=false;btn.textContent='Launch';btn.onclick=()=>location.reload()})};
+</script>
+</body>
+</html>

@@ -19,6 +19,9 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",
+    "build:installer": "node installer/build.mjs",
+    "build:win:setup": "npm run build:win && npm run build:installer",
+    "start:installer": "electron installer",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux"
   },

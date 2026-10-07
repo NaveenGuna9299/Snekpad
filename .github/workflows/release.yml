@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            script: build:win
+            script: build:win:setup
           - os: macos-latest
             script: build:mac
           - os: ubuntu-latest
@@ -41,7 +41,7 @@ jobs:
         with:
           name: installer-${{ matrix.os }}
           path: |
-            app/dist/*.exe
+            app/dist/installer/*.exe
             app/dist/*.dmg
             app/dist/*.AppImage
             app/dist/*.deb

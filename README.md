@@ -12,7 +12,7 @@ SnekPad Studio v0.2.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/
 
 | OS | Download |
 |---|---|
-| Windows | [snekpad-studio-0.2.0-setup.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0-setup.exe) |
+| Windows | [SnekPad-Studio-Setup-0.2.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/SnekPad-Studio-Setup-0.2.0.exe) |
 | macOS | [snekpad-studio-0.2.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0.dmg) |
 | Linux (any distro) | [snekpad-studio-0.2.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio-0.2.0.AppImage) |
 | Linux (Debian / Ubuntu) | [snekpad-studio_0.2.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.2.0/snekpad-studio_0.2.0_amd64.deb) |

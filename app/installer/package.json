@@ -1,0 +1,8 @@
+{
+  "name": "snekpad-studio-setup",
+  "version": "0.2.0",
+  "description": "Themed installer for SnekPad Studio",
+  "main": "main.js",
+  "author": "SnekPad",
+  "license": "MIT"
+}
