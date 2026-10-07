@@ -34,9 +34,17 @@ The app only configures the pad. A new pad still needs its firmware set up by ha
 - 3 x 4 keys, up to 4 profiles, each with its own key actions, labels and per-key RGB colours.
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
-- Automatic profile switching based on the focused app.
+- Automatic profile switching based on the focused app (Windows). The app can start with Windows and keep switching
+  profiles from the tray with its window closed.
 - Config is pushed from the app over USB serial with a length and CRC check, then saved on the pad as `config.json`.
-- A **Mock pad** option in the app, so you can try everything without hardware.
+- The app always shows whether the pad is up to date ("Pad is up to date" / "Changes not on the pad yet"), and plugging
+  the pad in again never overwrites edits you have not sent.
+- A quick editor: undo / redo, keyboard shortcuts, drag a key onto another to swap them, copy and paste keys, and a
+  message with **Undo** instead of "are you sure?" dialogs. See [Keyboard shortcuts](app/README.md#keyboard-shortcuts).
+- Dark and light theme (or follow the system).
+- With the updated firmware, the app also shows which profile the pad is running ("On pad") and lights up keys on the
+  pad drawing while you hold them on the real pad.
+- A **Mock pad** option in the app (Settings), so you can try everything without hardware.
 
 ## Quick start
 
