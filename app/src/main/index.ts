@@ -15,6 +15,8 @@ import type { PushResult } from '../shared/api'
 // window open blank ("No file for ..." in the log), so don't keep the web/shader caches on disk.
 app.commandLine.appendSwitch('disable-http-cache')
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+// The UI is flat panels and text, so software rendering is plenty and saves the GPU process.
+app.disableHardwareAcceleration()
 
 const LOGIN_DELAY_MS = 20000 // when started by Windows at login, wait this long before doing any work
 const device = new DeviceManager()
