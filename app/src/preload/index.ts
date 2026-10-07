@@ -21,6 +21,10 @@ const api: SnekApi = {
   programIcon: (proc) => ipcRenderer.invoke('programs:icon', proc),
   getStartup: () => ipcRenderer.invoke('startup:get'),
   setStartup: (on) => ipcRenderer.invoke('startup:set', on),
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  openReleasePage: () => ipcRenderer.invoke('update:open'),
+  getAutoUpdateCheck: () => ipcRenderer.invoke('update:getAuto'),
+  setAutoUpdateCheck: (on) => ipcRenderer.invoke('update:setAuto', on),
   onDeviceEvent: (cb) => {
     const handler = (_: unknown, e: Extract<PadEvent, { kind: 'key' }>): void => cb(e)
     ipcRenderer.on('device:event', handler)

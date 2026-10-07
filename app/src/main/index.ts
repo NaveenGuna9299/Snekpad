@@ -24,8 +24,11 @@ import {
   loadTemplates,
   saveTemplates,
   loadTheme,
-  saveTheme
+  saveTheme,
+  loadAutoUpdateCheck,
+  saveAutoUpdateCheck
 } from './store'
+import { checkForUpdate, openReleases } from './updater'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { validateConfig, type Config, type Template } from '../shared/config'
 import type { PushResult } from '../shared/api'
@@ -159,6 +162,11 @@ function registerIpc(): void {
     if (canAutoStart()) app.setLoginItemSettings({ openAtLogin: on, args: STARTUP_ARGS })
     return loginEnabled()
   })
+
+  ipcMain.handle('update:check', () => checkForUpdate())
+  ipcMain.handle('update:open', () => openReleases())
+  ipcMain.handle('update:getAuto', () => loadAutoUpdateCheck())
+  ipcMain.handle('update:setAuto', (_e, on: boolean) => saveAutoUpdateCheck(on === true))
 
   ipcMain.handle('programs:running', () => listRunning().catch(() => []))
   ipcMain.handle('programs:remember', (_e, proc: string) => rememberProgram(proc))

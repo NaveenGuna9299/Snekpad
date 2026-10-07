@@ -86,16 +86,34 @@ export function saveTemplates(list: Template[]): Template[] {
 }
 
 /** App-level preferences (not part of the pad config). Unreadable or unknown values fall back to defaults. */
-export function loadTheme(): ThemePref {
+function readSettings(): Record<string, unknown> {
   try {
     const raw = JSON.parse(readFileSync(join(dir(), 'settings.json'), 'utf8'))
-    const v = themePrefSchema.safeParse(raw?.theme)
-    return v.success ? v.data : 'system'
+    return raw && typeof raw === 'object' ? raw : {}
   } catch {
-    return 'system'
+    return {}
   }
 }
 
+function writeSetting(key: string, value: unknown): void {
+  const all = { ...readSettings(), [key]: value }
+  writeAtomic(join(dir(), 'settings.json'), JSON.stringify(all, null, 2))
+}
+
+export function loadTheme(): ThemePref {
+  const v = themePrefSchema.safeParse(readSettings().theme)
+  return v.success ? v.data : 'system'
+}
+
 export function saveTheme(theme: ThemePref): void {
-  writeAtomic(join(dir(), 'settings.json'), JSON.stringify({ theme }, null, 2))
+  writeSetting('theme', theme)
+}
+
+/** Whether to look for a newer release when the window opens (on by default). */
+export function loadAutoUpdateCheck(): boolean {
+  return readSettings().autoUpdateCheck !== false
+}
+
+export function saveAutoUpdateCheck(on: boolean): void {
+  writeSetting('autoUpdateCheck', on)
 }

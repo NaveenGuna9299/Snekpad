@@ -2,6 +2,7 @@
 
 import type { Config, Template, ValidationResult } from './config'
 import type { ThemePref } from './theme'
+import type { UpdateInfo } from './update'
 import type { LiveView, PadEvent } from './protocol'
 
 export type DeviceState = {
@@ -49,6 +50,11 @@ export interface SnekApi {
   /** Start with Windows (hidden in the tray). `supported` is false in dev builds and off Windows. */
   getStartup(): Promise<{ supported: boolean; enabled: boolean }>
   setStartup(on: boolean): Promise<boolean>
+  /** Asks GitHub whether a newer release exists. Never downloads or installs anything. */
+  checkForUpdate(): Promise<UpdateInfo>
+  openReleasePage(): Promise<void>
+  getAutoUpdateCheck(): Promise<boolean>
+  setAutoUpdateCheck(on: boolean): Promise<void>
   onDeviceState(cb: (s: DeviceState) => void): () => void
   /** Key presses reported by the pad (profile changes arrive as part of the device state). */
   onDeviceEvent(cb: (e: Extract<PadEvent, { kind: 'key' }>) => void): () => void
