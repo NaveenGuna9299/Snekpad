@@ -22,7 +22,6 @@ const device = new DeviceManager()
 const focus = new FocusWatcher((proc, title) => device.sendApp(proc, title))
 // Closing the window keeps the app running in the tray: profile switching needs it to stay alive.
 let tray: Tray | null = null
-let quitting = false
 
 function createWindow(onShown?: () => void): BrowserWindow {
   // Fit the window to the screen: tall enough to show the whole home page, never bigger than the
@@ -50,11 +49,8 @@ function createWindow(onShown?: () => void): BrowserWindow {
     }
   })
 
-  mainWindow.on('close', (e) => {
-    if (quitting || process.platform === 'darwin') return
-    e.preventDefault()
-    mainWindow.hide()
-  })
+  // Closing destroys the window (and its renderer process) instead of hiding it, so the tray-only
+  // state costs no web-page memory. Edits are auto-saved, and showWindow() rebuilds it on demand.
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -197,7 +193,6 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
-  quitting = true
   focus.stop()
   device.stop()
 })
