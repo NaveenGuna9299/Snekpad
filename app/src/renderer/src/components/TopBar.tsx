@@ -1,11 +1,8 @@
 import type { DeviceState } from '../../../shared/api'
-import { SettingsMenu } from './SettingsMenu'
 import type { SyncStatus } from '../../../shared/sync'
 
 type Props = {
   device: DeviceState
-  mock: boolean
-  onMock: (on: boolean) => void
   onPush: () => void
   pushing: boolean
   sync: SyncStatus
@@ -13,7 +10,6 @@ type Props = {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
-  onReset: () => void
   onHome: () => void
   sidebarOpen: boolean
   onToggleSidebar: () => void
@@ -24,16 +20,13 @@ export function TopBar({
   sidebarOpen,
   onToggleSidebar,
   device,
-  mock,
-  onMock,
   onPush,
   pushing,
   sync,
   canUndo,
   canRedo,
   onUndo,
-  onRedo,
-  onReset
+  onRedo
 }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
@@ -56,9 +49,7 @@ export function TopBar({
 
       <div className="flex items-center gap-2 text-sm" role="status" aria-live="polite">
         <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-ok' : 'bg-muted'}`} />
-        {connected
-          ? `Connected: ${device.label}`
-          : 'No pad found. Plug in your SnekPad, or use the mock pad.'}
+        {connected ? `Connected: ${device.label}` : 'No pad found. Plug in your SnekPad.'}
       </div>
       {device.error && !connected && <span className="text-xs text-danger">{device.error}</span>}
 
@@ -77,7 +68,6 @@ export function TopBar({
         >
           Redo
         </button>
-        <SettingsMenu mock={mock} onMock={onMock} onReset={onReset} />
         {sync === 'unsent' && (
           <span className="text-xs text-muted" role="status">
             Changes not on the pad yet

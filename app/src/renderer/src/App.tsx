@@ -163,6 +163,15 @@ function App(): React.JSX.Element {
   const padProfile =
     device.activeProfile === undefined ? undefined : config.profiles[device.activeProfile]
   const selectedProfileIndex = config.profiles.indexOf(profile)
+  const setMockPad = (on: boolean): void => {
+    setMock(on)
+    void window.api.useMock(on)
+  }
+  const restoreStarterProfiles = (): void => {
+    history.set(defaultConfig())
+    setSelectedProfile(0)
+    flash('Starter profiles restored.', false, true)
+  }
   const selectedKey = selection.kind === 'key' ? profile.keys[selection.index] : null
 
   return (
@@ -177,6 +186,9 @@ function App(): React.JSX.Element {
           device={device}
           profileCount={config.profiles.length}
           onOpen={() => setView('editor')}
+          mock={mock}
+          onMock={setMockPad}
+          onReset={restoreStarterProfiles}
         />
       ) : (
         <>
@@ -185,11 +197,6 @@ function App(): React.JSX.Element {
             sidebarOpen={sidebarOpen}
             onToggleSidebar={toggleSidebar}
             device={device}
-            mock={mock}
-            onMock={(on) => {
-              setMock(on)
-              void window.api.useMock(on)
-            }}
             onPush={push}
             pushing={pushing}
             sync={sync}
@@ -197,11 +204,6 @@ function App(): React.JSX.Element {
             canRedo={history.canRedo}
             onUndo={history.undo}
             onRedo={history.redo}
-            onReset={() => {
-              history.set(defaultConfig())
-              setSelectedProfile(0)
-              flash('Starter profiles restored.', false, true)
-            }}
           />
 
           <div className="flex min-h-0 flex-1">

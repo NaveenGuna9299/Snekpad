@@ -14,7 +14,7 @@ npm run build:win    # Windows installer (electron-builder)
 npm run build:mac    # macOS build (run on a Mac)
 ```
 
-Open **Settings** in the top bar and tick **Use a mock pad** to use the whole app without hardware.
+On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to use the whole app without hardware.
 
 ## Using the editor
 
@@ -22,7 +22,7 @@ Open **Settings** in the top bar and tick **Use a mock pad** to use the whole ap
   pad yet" until you press **Push to pad**, then "Pad is up to date". When a pad is plugged in, the app reads what the
   pad shows (key labels and colours) and adopts it only when that would not overwrite unsent edits (or when the app has
   no record of the pad yet), so it does not throw away your work.
-- **Settings** holds Start with Windows, Restore starter profiles, the theme (System, Dark, Light) and the mock pad. The
+- **Settings** (on the Home screen) holds Start with Windows, Restore starter profiles, the theme (System, Dark, Light) and the mock pad. The
   **Profiles** button hides the profile list to give the pad more room.
 - **Keys.** Pick the action type with the buttons in the inspector. A sequence lets you re-record a step and move steps
   up or down. Drag a key onto another to swap them (the FN key, bottom right, always stays put). Deleting a profile,

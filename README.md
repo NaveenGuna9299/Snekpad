@@ -44,7 +44,7 @@ The app only configures the pad. A new pad still needs its firmware set up by ha
 - Dark and light theme (or follow the system).
 - With the updated firmware, the app also shows which profile the pad is running ("On pad") and lights up keys on the
   pad drawing while you hold them on the real pad.
-- A **Mock pad** option in the app (Settings), so you can try everything without hardware.
+- A **Mock pad** option in the app (Settings, on the Home screen), so you can try everything without hardware.
 
 ## Quick start
 

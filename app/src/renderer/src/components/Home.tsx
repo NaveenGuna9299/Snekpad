@@ -1,6 +1,7 @@
 import type { Profile } from '../../../shared/config'
 import type { DeviceState } from '../../../shared/api'
 import { PadView } from './PadView'
+import { SettingsMenu } from './SettingsMenu'
 
 type Props = {
   profile: Profile
@@ -11,6 +12,9 @@ type Props = {
   /** Name of the profile the pad reports running; undefined if it does not report one. */
   padProfileName?: string
   pressed?: ReadonlySet<number>
+  mock: boolean
+  onMock: (on: boolean) => void
+  onReset: () => void
 }
 
 function greeting(): string {
@@ -26,12 +30,18 @@ export function Home({
   profileCount,
   onOpen,
   padProfileName,
-  pressed
+  pressed,
+  mock,
+  onMock,
+  onReset
 }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-10">
-      <h1 className="text-4xl font-bold tracking-tight">{greeting()}</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-4xl font-bold tracking-tight">{greeting()}</h1>
+        <SettingsMenu mock={mock} onMock={onMock} onReset={onReset} />
+      </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
         <button
