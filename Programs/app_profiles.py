@@ -29,6 +29,10 @@ from kmk.modules import Module
 CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/protocol.ts)
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
+PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
+EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
+EVENT_BACKLOG = 256     # if the host has left this many bytes unread, stop sending events
+
 
 class AppProfiles(Module):
     def __init__(self, profiles, general=0, timeout_s=5.0, view=None, leds=None):
@@ -63,6 +67,9 @@ class AppProfiles(Module):
         self._rx = None             # config_loader.Receiver while a config is arriving
         self._rx_t = 0
         self._reload_at = None      # reload the board once a new config is saved
+        self.events = False         # the app said HELLO, so tell it about profile changes and key presses
+        self._evq = []              # EVT lines waiting to be written
+        self._reported_layer = None # last profile reported to the app
 
     # ------------------------------------------------------------ matching
     def _clean(self, proc):
@@ -134,6 +141,45 @@ class AppProfiles(Module):
         except Exception as e:
             print("app_profiles LED error:", e)
             self._write("ERR\tcould not set LED\n")
+
+    # ------------------------------------------------------------ HELLO / events
+    def _hello(self):
+        # HELLO -> HELLO<TAB>version. From now on the pad reports, on its own:
+        #   EVT<TAB>layer<TAB>n          the profile it runs changed
+        #   EVT<TAB>key<TAB>n<TAB>1|0    key n (0-11, row by row) went down / up
+        # An older app never sends HELLO and so never gets events.
+        self._write("HELLO\t%d\n" % PROTOCOL_VERSION)
+        self.events = True
+        self._evq = []
+        self._reported_layer = None     # report the current profile right away
+
+    def _queue_event(self, line):
+        if len(self._evq) < EVENT_QUEUE_MAX:
+            self._evq.append(line)
+
+    def _send_events(self):
+        # events are a courtesy: if sending them ever fails, stop them without touching profile switching
+        try:
+            self._flush_events()
+        except Exception as e:
+            print("app_profiles events off:", e)
+            self.events = False
+            self._evq = []
+
+    def _flush_events(self):
+        # Never during a config transfer (replies must not be mixed with events), never to a host that
+        # closed the port, and never into a full buffer: events are dropped rather than ever blocking keys.
+        if not self._evq or self._rx is not None:
+            return
+        if not getattr(self.ser, "connected", True):
+            self.events = False         # the app is gone; it says HELLO again when it comes back
+            self._evq = []
+            return
+        for line in self._evq:
+            if getattr(self.ser, "out_waiting", 0) > EVENT_BACKLOG:
+                break
+            self._write(line)
+        self._evq = []
 
     # ------------------------------------------------------------ GET_CFG
     def _write(self, data):
@@ -273,6 +319,8 @@ class AppProfiles(Module):
             self._cfg_end()
         elif parts[0] == "GET_CFG":
             self._send_cfg()
+        elif parts[0] == "HELLO":
+            self._hello()
         elif parts[0] == "OS" and len(parts) >= 2:
             self.host_os = parts[1]
             print("app_profiles: host os", self.host_os)
@@ -321,6 +369,8 @@ class AppProfiles(Module):
                 self._held += 1
             elif self._held > 0:
                 self._held -= 1
+            if self.events and 0 <= int_coord < 12:
+                self._queue_event("EVT\tkey\t%d\t%d\n" % (int_coord, 1 if is_pressed else 0))
         return key
 
     def before_matrix_scan(self, keyboard):
@@ -329,6 +379,8 @@ class AppProfiles(Module):
         now = time.monotonic()
         if self._reload_at is not None and now >= self._reload_at:
             supervisor.reload()     # start again with the new config.json
+        if self._evq:
+            self._send_events()     # key events go out on the next scan, not on the 50 ms tick
         # poll every scan while a config is arriving (the port's buffer is small), else every 50 ms
         if self._rx is None and now - self._last_tick < 0.05:
             return None
@@ -347,6 +399,11 @@ class AppProfiles(Module):
 
             if self._pending is not None and self._held == 0:
                 self._apply(self._pending)
+
+            base = keyboard.active_layers[-1]
+            if self.events and base != self._reported_layer and 0 <= base < len(self.profiles):
+                self._reported_layer = base
+                self._queue_event("EVT\tlayer\t%d\n" % base)
 
             if self.connected and now - self.last_seen > self.timeout_s:
                 self.connected = False

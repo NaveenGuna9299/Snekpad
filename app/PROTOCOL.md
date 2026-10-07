@@ -18,6 +18,26 @@ One message per line, `\n` terminated, fields separated by TAB. ASCII only.
 
 The pad ignores unknown commands.
 
+## Version 2: `HELLO` and events from the pad
+
+Until now the pad only answered. Protocol 2 lets it also say what happens on the pad itself. It is opt-in, so an older app or an older pad keeps working exactly as before.
+
+| App sends | Pad replies / sends                                   | Notes                                                                                                                                                       |
+| --------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HELLO`   | `HELLO<TAB>2`                                         | The app sends it once after it connects. A pad that answers speaks protocol 2 and starts sending events. A pad without support ignores it (no reply).       |
+| (nothing) | `EVT<TAB>layer<TAB>n`                                 | The profile the pad runs is now `n` (0 = General). Sent right after `HELLO` for the current profile, then on every change (app focus, knob, utility layer). |
+| (nothing) | `EVT<TAB>key<TAB>n<TAB>1` / `EVT<TAB>key<TAB>n<TAB>0` | Key `n` (0-11, row \* 4 + column) went down / up.                                                                                                           |
+
+Rules both sides follow:
+
+- `EVT` and `HELLO` lines can arrive at any moment, even in the middle of a request. The app handles them before it matches replies, so they are never mistaken for an `OK` or `ERR`.
+- The pad sends events only after `HELLO`, never while a config transfer is running, and never to a host that has closed the port. It keeps at most 24 queued events and drops them (never blocks the keys) when the host has left more than 256 bytes unread.
+- Events are a courtesy: if sending one fails, the pad stops sending events and keeps switching profiles.
+- Lines the app cannot parse, or values out of range (`layer` above 3, `key` above 11), are dropped.
+- The app asks again with `HELLO` each time it connects, so a pad that stopped sending events starts again.
+
+The firmware part is `AppProfiles._hello` and `_flush_events` in `Programs/app_profiles.py`. `Programs/tests/test_app_profiles_events.py` runs it on a normal Python with fake modules. It does not replace trying a real pad.
+
 ## Knob settings in the config JSON
 
 Each profile has an `encoder` object. The pad turns it into the knob's three modes (idle, default, press):

@@ -57,3 +57,7 @@ jobs:
       - name: Python files still parse
         working-directory: Programs
         run: python -m py_compile boot.py code.py config_loader.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py focus_sender.py
+
+      - name: Test the pad's serial protocol
+        # runs app_profiles.py on a normal Python with fake CircuitPython / KMK modules (no hardware)
+        run: python -m unittest discover -s Programs/tests -v
