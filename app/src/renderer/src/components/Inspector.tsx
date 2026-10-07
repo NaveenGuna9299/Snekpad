@@ -50,7 +50,7 @@ export function KeyPanel({ profile, index, onKey, onApplyColorToAll }: { profile
         <p className="text-sm text-muted">This key opens the utility layer (bootloader, LED brightness, jump to profile) while held. It can only change colour.</p>
       ) : (
         <label className="flex flex-col gap-1 text-xs text-muted">
-          Label on the pad's screen (max {LABEL_MAX} characters)
+          Label on the pad&apos;s screen (max {LABEL_MAX} characters)
           <input value={key.label} maxLength={LABEL_MAX} onChange={(e) => onKey(index, { label: e.target.value })} className="rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg" />
         </label>
       )}
@@ -68,7 +68,7 @@ export function EncoderPanel({ profile, onEncoder }: { profile: Profile; onEncod
     <section className="flex flex-col gap-4">
       <h3 className="text-base font-semibold">Rotary encoder</h3>
       <label className="flex flex-col gap-1 text-xs text-muted">
-        Hint on the pad's screen (max 10 characters)
+        Hint on the pad&apos;s screen (max 10 characters)
         <input value={e.label} maxLength={10} onChange={(ev) => onEncoder({ label: ev.target.value.toUpperCase() })} className="rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg" />
       </label>
       <Group title="Turn right"><ActionEditor action={e.cw} allowed={ENC_ACTIONS} onChange={(cw) => onEncoder({ cw })} /></Group>

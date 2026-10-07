@@ -1,23 +1,18 @@
 import { useEffect, useState } from 'react'
+import { iconCache } from '../lib/iconCache'
 import { programForProc, visibleColor, type Program } from '../lib/programs'
 
-// icons read from the user's computer, asked for once per program
-const cache = new Map<string, string | null>()
-
 function useSavedIcon(proc: string, skip: boolean): string | null {
-  const [icon, setIcon] = useState<string | null>(cache.get(proc) ?? null)
+  const [icon, setIcon] = useState<string | null>(iconCache.get(proc) ?? null)
   useEffect(() => {
-    if (skip || cache.has(proc)) return
+    if (skip || iconCache.has(proc)) return
     window.api.programIcon(proc).then((i) => {
-      cache.set(proc, i)
+      iconCache.set(proc, i)
       setIcon(i)
     })
   }, [proc, skip])
   return icon
 }
-
-/** Drop a cached "no icon" so a freshly remembered icon is picked up. */
-export const forgetIcon = (proc: string): void => void cache.delete(proc)
 
 type Props = {
   proc: string // process name (used to look up the program and any saved icon)

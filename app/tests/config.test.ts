@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { blankProfile, defaultConfig, MAX_PROFILES, migrateConfig, resolveForOs, validateConfig } from '../src/shared/config'
+import { type Action, blankProfile, defaultConfig, MAX_PROFILES, migrateConfig, resolveForOs, validateConfig } from '../src/shared/config'
 
 describe('config validation', () => {
   it('accepts the starter config', () => {
@@ -44,7 +44,7 @@ describe('config validation', () => {
 
 
 describe('multi-key actions', () => {
-  const seq = (n: number, wait = 100) => ({
+  const seq = (n: number, wait = 100): Action => ({
     type: 'sequence' as const,
     steps: Array.from({ length: n }, (_, i) => ({ keys: i === 0 ? ['CTRL', 'K'] : ['A'], wait }))
   })

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import type { RunningProgram } from '../../../shared/api'
 import { PROGRAMS, programForProc, chipsFor } from '../lib/programs'
-import { ProgramIcon, forgetIcon } from './ProgramIcon'
+import { ProgramIcon } from './ProgramIcon'
+import { forgetIcon } from '../lib/iconCache'
 
 type Props = {
   windows: string[] // process names already in the profile
@@ -18,12 +19,13 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
 
   const loadRunning = useCallback(() => {
     setRunning(null)
-    window.api.runningPrograms().then(setRunning)
+    void window.api.runningPrograms().then(setRunning)
   }, [])
 
-  useEffect(() => {
-    if (open) loadRunning()
-  }, [open, loadRunning])
+  const toggle = (): void => {
+    if (!open) loadRunning()
+    setOpen(!open)
+  }
 
   const addProcs = (procs: string[], macIds: string[] = []): void => {
     onChange([...new Set([...windows, ...procs])], [...new Set([...macos, ...macIds])])
@@ -62,7 +64,7 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
         ))}
       </ul>
 
-      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="self-start rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">
+      <button onClick={toggle} aria-expanded={open} className="self-start rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">
         {open ? 'Close' : '+ Add program'}
       </button>
 
