@@ -36,7 +36,19 @@ export function saveConfig(config: Config): void {
   writeAtomic(join(dir(), 'config.json'), JSON.stringify(config, null, 2))
 }
 
-/** Keep a copy of the last config that was successfully pushed to the pad. */
+/** The config the pad is known to hold: the last successful push, or the last one adopted from the pad. */
+export function loadBaseline(): Config | null {
+  const file = join(dir(), 'last-pushed.json')
+  if (!existsSync(file)) return null
+  try {
+    const v = validateConfig(migrateConfig(JSON.parse(readFileSync(file, 'utf8'))))
+    return v.ok ? v.config : null
+  } catch {
+    return null
+  }
+}
+
+/** Keep a copy of the config the pad is known to hold (written after each successful push). */
 export function backupPushed(config: Config): void {
   writeAtomic(join(dir(), 'last-pushed.json'), JSON.stringify(config, null, 2))
 }

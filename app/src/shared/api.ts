@@ -22,6 +22,9 @@ export interface SnekApi {
   saveConfig(config: Config): Promise<ValidationResult>
   /** Validates, saves a backup of what was sent, then sends it to the pad. */
   push(config: Config): Promise<PushResult>
+  /** The config the pad is known to hold (last push, or last adopted from the pad); null if never. */
+  loadBaseline(): Promise<Config | null>
+  saveBaseline(config: Config): Promise<void>
   deviceState(): Promise<DeviceState>
   /** Reads the live config (keys, colours, OLED text) from the connected pad. */
   pull(): Promise<PullResult>

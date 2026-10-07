@@ -45,7 +45,7 @@ export function Home({ profile, oledHeight, device, profileCount, onOpen }: Prop
           </span>
         </div>
         <p className="text-sm text-muted">
-          {profileCount} profile{profileCount === 1 ? '' : 's'} · active: {profile.name}
+          {profileCount} profile{profileCount === 1 ? '' : 's'} · showing: {profile.name}
         </p>
       </div>
     </main>

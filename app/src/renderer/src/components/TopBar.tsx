@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
 import type { DeviceState } from '../../../shared/api'
+import { SettingsMenu } from './SettingsMenu'
+import type { SyncStatus } from '../../../shared/sync'
 
 type Props = {
   device: DeviceState
@@ -7,6 +8,7 @@ type Props = {
   onMock: (on: boolean) => void
   onPush: () => void
   pushing: boolean
+  sync: SyncStatus
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -15,12 +17,8 @@ type Props = {
   onHome: () => void
 }
 
-export function TopBar({ onHome, device, mock, onMock, onPush, pushing, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
+export function TopBar({ onHome, device, mock, onMock, onPush, pushing, sync, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
-  const [startup, setStartup] = useState<{ supported: boolean; enabled: boolean }>({ supported: false, enabled: false })
-  useEffect(() => {
-    void window.api.getStartup().then(setStartup)
-  }, [])
   return (
     <header className="flex items-center gap-3 border-b border-line bg-bg px-4 py-2.5 shadow-sm">
       <h1 className="sr-only">SnekPad Studio</h1>
@@ -32,33 +30,19 @@ export function TopBar({ onHome, device, mock, onMock, onPush, pushing, canUndo,
       </div>
       {device.error && !connected && <span className="text-xs text-danger">{device.error}</span>}
 
-      <label className="ml-2 flex items-center gap-1.5 text-xs text-muted">
-        <input type="checkbox" checked={mock} onChange={(e) => onMock(e.target.checked)} />
-        Mock pad
-      </label>
-
-      {startup.supported && (
-        <label className="flex items-center gap-1.5 text-xs text-muted" title="Starts hidden in the tray so profiles switch by themselves">
-          <input
-            type="checkbox"
-            checked={startup.enabled}
-            onChange={(e) => void window.api.setStartup(e.target.checked).then((enabled) => setStartup({ supported: true, enabled }))}
-          />
-          Start with Windows
-        </label>
-      )}
-
       <div className="ml-auto flex items-center gap-2">
         <button onClick={onUndo} disabled={!canUndo} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">Undo</button>
         <button onClick={onRedo} disabled={!canRedo} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">Redo</button>
-        <button onClick={onReset} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">Restore defaults</button>
+        <SettingsMenu mock={mock} onMock={onMock} onReset={onReset} />
+        {sync === 'unsent' && <span className="text-xs text-muted" role="status">Changes not on the pad yet</span>}
+        {sync === 'in-sync' && <span className="text-xs text-ok" role="status">Pad is up to date</span>}
         <button
           onClick={onPush}
           disabled={!connected || pushing}
-          className="rounded-md bg-accent px-4 py-1.5 text-sm font-semibold text-accentfg disabled:opacity-40"
+          className={`rounded-md px-4 py-1.5 text-sm font-semibold disabled:opacity-40 ${sync === 'in-sync' ? 'border border-line text-fg hover:bg-surface2' : 'bg-accent text-accentfg'}`}
           title={connected ? 'Send this setup to the pad' : 'Connect a pad first'}
         >
-          {pushing ? 'Sendingâ€¦' : 'Push to pad'}
+          {pushing ? 'Sending…' : 'Push to pad'}
         </button>
       </div>
     </header>

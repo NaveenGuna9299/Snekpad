@@ -6,7 +6,7 @@ import icon from '../../resources/icon.png?asset'
 import { showSplash } from './splash'
 import { DeviceManager } from './device/manager'
 import { FocusWatcher } from './focusWatcher'
-import { loadConfig, saveConfig, backupPushed, loadTemplates, saveTemplates } from './store'
+import { loadConfig, saveConfig, backupPushed, loadBaseline, loadTemplates, saveTemplates } from './store'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { validateConfig, type Config, type Template } from '../shared/config'
 import type { PushResult } from '../shared/api'
@@ -109,6 +109,12 @@ function registerIpc(): void {
     const r = await device.push(v.config)
     if (r.ok) backupPushed(v.config)
     return r
+  })
+
+  ipcMain.handle('baseline:load', () => loadBaseline())
+  ipcMain.handle('baseline:save', (_e, config: Config) => {
+    const v = validateConfig(config)
+    if (v.ok) backupPushed(v.config)
   })
 
   ipcMain.handle('templates:load', () => loadTemplates())

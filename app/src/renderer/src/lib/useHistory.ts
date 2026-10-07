@@ -1,7 +1,17 @@
 import { useCallback, useState } from 'react'
 
 /** State with undo / redo. `set` records a new step; `replace` swaps the value without history. */
-export function useHistory<T>(initial: T | null) {
+export type History<T> = {
+  value: T | null
+  set: (next: T) => void
+  replace: (next: T) => void
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
+}
+
+export function useHistory<T>(initial: T | null): History<T> {
   const [state, setState] = useState<{ past: T[]; present: T | null; future: T[] }>({
     past: [],
     present: initial,
