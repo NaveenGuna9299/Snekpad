@@ -1,4 +1,5 @@
-import { COLS, ROWS, type Profile } from '../../../shared/config'
+import { useRef, useState } from 'react'
+import { COLS, FN_KEY, ROWS, type Profile } from '../../../shared/config'
 import { describeAction } from '../lib/describe'
 
 export type Selection = { kind: 'key'; index: number } | { kind: 'encoder' }
@@ -8,6 +9,8 @@ type Props = {
   oledHeight: 32 | 64
   selection: Selection
   onSelect: (s: Selection) => void
+  /** Drag one key onto another to swap them (the FN key stays put). */
+  onSwap?: (from: number, to: number) => void
 }
 
 const KEY = 78
@@ -19,14 +22,49 @@ const W = GRID_W + PAD * 2
 const H = PAD + TOP_H + GAP + ROWS * KEY + (ROWS - 1) * GAP + PAD
 
 /** The pad drawn as SVG: OLED + encoder on top, 4 x 3 keys below. Key colour = its RGB colour. */
-export function PadView({ profile, oledHeight, selection, onSelect }: Props): React.JSX.Element {
+export function PadView({
+  profile,
+  oledHeight,
+  selection,
+  onSelect,
+  onSwap
+}: Props): React.JSX.Element {
   const gridTop = PAD + TOP_H + GAP
+  const [drag, setDrag] = useState<{ from: number; over: number | null } | null>(null)
+  const start = useRef<{ from: number; x: number; y: number; active: boolean } | null>(null)
+  const justDragged = useRef(false)
+
+  const keyAt = (x: number, y: number): number | null => {
+    const el = document.elementFromPoint(x, y)?.closest('[data-key]')
+    const n = el ? Number(el.getAttribute('data-key')) : NaN
+    return Number.isInteger(n) && n !== FN_KEY ? n : null
+  }
+  const onPointerMove = (e: React.PointerEvent): void => {
+    const s = start.current
+    if (!s || !(e.buttons & 1)) return
+    if (!s.active && Math.hypot(e.clientX - s.x, e.clientY - s.y) < 6) return
+    s.active = true
+    const over = keyAt(e.clientX, e.clientY)
+    setDrag({ from: s.from, over: over === s.from ? null : over })
+  }
+  const endDrag = (e: React.PointerEvent): void => {
+    const s = start.current
+    start.current = null
+    setDrag(null)
+    if (!s?.active) return
+    justDragged.current = true // the click that follows the release must not change the selection
+    const to = keyAt(e.clientX, e.clientY)
+    if (to !== null && to !== s.from) onSwap?.(s.from, to)
+  }
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
       className="w-full max-w-[460px]"
       role="group"
       aria-label="SnekPad"
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
     >
       <rect
         x="2"
@@ -91,7 +129,14 @@ export function PadView({ profile, oledHeight, selection, onSelect }: Props): Re
             aria-label={`Key ${i + 1}: ${k.label || 'empty'}`}
             aria-pressed={selected}
             className="padkey cursor-pointer"
-            onClick={() => onSelect({ kind: 'key', index: i })}
+            data-key={i}
+            opacity={drag?.from === i && drag.over !== null ? 0.5 : 1}
+            onPointerDown={(e) => {
+              justDragged.current = false // any click for the previous drag has already happened
+              if (onSwap && i !== FN_KEY && e.button === 0)
+                start.current = { from: i, x: e.clientX, y: e.clientY, active: false }
+            }}
+            onClick={() => !justDragged.current && onSelect({ kind: 'key', index: i })}
             onKeyDown={(e) =>
               (e.key === 'Enter' || e.key === ' ') && onSelect({ kind: 'key', index: i })
             }
@@ -104,8 +149,9 @@ export function PadView({ profile, oledHeight, selection, onSelect }: Props): Re
               height={KEY}
               rx="10"
               fill="var(--surface-2)"
-              stroke={selected ? 'var(--accent)' : 'var(--line)'}
-              strokeWidth={selected ? 4 : 2}
+              stroke={selected || drag?.over === i ? 'var(--accent)' : 'var(--line)'}
+              strokeWidth={selected || drag?.over === i ? 4 : 2}
+              strokeDasharray={drag?.over === i ? '8 5' : undefined}
             />
             <rect
               x={x + 8}

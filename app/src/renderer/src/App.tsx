@@ -1,10 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import {
   blankProfile,
-  COLS,
   defaultConfig,
   FN_KEY,
-  KEY_COUNT,
   MAX_PROFILES,
   type KeyConfig,
   type Profile
@@ -18,6 +16,7 @@ import { Home } from './components/Home'
 import { TitleBar } from './components/TitleBar'
 import { Toast } from './components/Toast'
 import { useShortcuts } from './lib/useShortcuts'
+import { neighbor } from './lib/grid'
 import { describeAction } from './lib/describe'
 import { PresetBrowser } from './components/PresetBrowser'
 import type { Preset } from './lib/presets'
@@ -42,6 +41,21 @@ function App(): React.JSX.Element {
 
   const clipboard = useRef<KeyConfig | null>(null)
   const sel = selection.kind === 'key' ? selection.index : -1
+  const swapKeys = (from: number, to: number): void => {
+    if (from === to || from === FN_KEY || to === FN_KEY) return
+    editProfile((p) => {
+      const keys = [...p.keys]
+      ;[keys[from], keys[to]] = [keys[to], keys[from]]
+      return { ...p, keys }
+    })
+    const keys = config?.profiles[selectedProfile]?.keys
+    if (keys) {
+      void window.api.previewLed(selectedProfile, from, keys[to].color)
+      void window.api.previewLed(selectedProfile, to, keys[from].color)
+    }
+    setSelection({ kind: 'key', index: to })
+    flash(`Swapped keys ${from + 1} and ${to + 1}.`, false, true)
+  }
   const copyKey = (): void => {
     const key = config?.profiles[selectedProfile]?.keys[sel]
     if (!key || sel === FN_KEY) return
@@ -85,12 +99,13 @@ function App(): React.JSX.Element {
       paste: pasteKey,
       move: (dCol, dRow) =>
         setSelection((s) => {
-          if (s.kind !== 'key') return s
-          const col = Math.min(COLS - 1, Math.max(0, (s.index % COLS) + dCol))
-          const row = Math.max(0, Math.floor(s.index / COLS) + dRow)
-          const index = row * COLS + col
-          return index < KEY_COUNT ? { kind: 'key', index } : s
-        })
+          const next = s.kind === 'key' ? neighbor(s.index, dCol, dRow) : null
+          return next === null ? s : { kind: 'key', index: next }
+        }),
+      swap: (dCol, dRow) => {
+        const to = sel >= 0 ? neighbor(sel, dCol, dRow) : null
+        if (to !== null) swapKeys(sel, to)
+      }
     },
     editing
   )
@@ -203,6 +218,7 @@ function App(): React.JSX.Element {
                 oledHeight={config.device.oled.height}
                 selection={selection}
                 onSelect={setSelection}
+                onSwap={swapKeys}
               />
               <p className="text-sm text-muted" aria-live="polite">
                 {selectedKey
