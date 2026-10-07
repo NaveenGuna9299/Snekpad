@@ -18,7 +18,7 @@ top-left key while plugging in to show the drive, or use `Programs/flash_pad.ps1
 
 ## In the desktop app (SnekPad Studio)
 
-The app's direct runtime dependencies are `@electron-toolkit/preload`, `@electron-toolkit/utils`, `serialport`,
+The app's direct runtime dependencies are `@electron-toolkit/preload`, `@electron-toolkit/utils`, `koffi` (MIT), `serialport`,
 `simple-icons` (CC0-1.0) and `zod`. Together with their dependencies they are almost all MIT, ISC, Apache-2.0 or BSD
 licensed. A scan of the installed packages (October 2026) found no GPL, LGPL or AGPL licenses. The build tooling
 `lightningcss` (MPL-2.0) and `caniuse-lite` (CC-BY-4.0) is only used to build the app. Electron and Chromium are

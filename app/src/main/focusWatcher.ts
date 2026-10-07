@@ -1,42 +1,49 @@
 // Watches which window has focus (Windows) and reports it, so the pad can switch to that program's
-// profile. A single long-lived PowerShell prints "process<TAB>title" whenever the focused window
-// changes; nothing is stored or sent anywhere except to the pad.
+// profile. It asks Windows directly (user32 / kernel32 through koffi) from this process, so there
+// is no helper process to keep alive; nothing is stored or sent anywhere except to the pad.
 
-import { spawn, type ChildProcess } from 'child_process'
+import { basename, extname } from 'path'
+import koffi from 'koffi'
 
-const SCRIPT = `
-$ErrorActionPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -Namespace W -Name U -MemberDefinition @'
-[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-[DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
-'@
-$last = ''
-while ($true) {
-  $h = [W.U]::GetForegroundWindow()
-  if ($h -ne [IntPtr]::Zero) {
-    $procId = 0
-    [void][W.U]::GetWindowThreadProcessId($h, [ref]$procId)
-    $sb = New-Object System.Text.StringBuilder 256
-    [void][W.U]::GetWindowText($h, $sb, 256)
-    $p = (Get-Process -Id $procId).ProcessName
-    $line = "$p\`t$($sb.ToString())"
-    if ($line -ne $last) { $last = $line; [Console]::Out.WriteLine($line); [Console]::Out.Flush() }
-  }
-  Start-Sleep -Milliseconds 400
-}
-`
+const POLL_MS = 400
+const HEARTBEAT_MS = 1500 // the pad drops back to "no helper" after 5 s of silence
+const PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 
 // our own window must not count as "the app in focus", or opening Studio would switch to General
-const SELF = new Set(['electron', 'snekpad-studio'])
-const HEARTBEAT_MS = 1500 // the pad drops back to "no helper" after 5 s of silence
+const SELF = new Set(['electron', 'snekpad-studio', 'snekpad studio'])
+
+type Win32 = {
+  GetForegroundWindow: () => unknown
+  GetWindowThreadProcessId: (hwnd: unknown, pid: number[]) => number
+  GetWindowTextW: (hwnd: unknown, buf: Buffer, max: number) => number
+  OpenProcess: (access: number, inherit: boolean, pid: number) => unknown
+  QueryFullProcessImageNameW: (h: unknown, flags: number, buf: Buffer, size: number[]) => boolean
+  CloseHandle: (h: unknown) => boolean
+}
+
+function loadWin32(): Win32 {
+  const user32 = koffi.load('user32.dll')
+  const kernel32 = koffi.load('kernel32.dll')
+  return {
+    GetForegroundWindow: user32.func('void *GetForegroundWindow()'),
+    GetWindowThreadProcessId: user32.func(
+      'uint32 GetWindowThreadProcessId(void *hwnd, _Out_ uint32 *pid)'
+    ),
+    GetWindowTextW: user32.func('int GetWindowTextW(void *hwnd, _Out_ uint8_t *buf, int max)'),
+    OpenProcess: kernel32.func('void *OpenProcess(uint32 access, bool inherit, uint32 pid)'),
+    QueryFullProcessImageNameW: kernel32.func(
+      'bool QueryFullProcessImageNameW(void *h, uint32 flags, _Out_ uint8_t *buf, _Inout_ uint32 *size)'
+    ),
+    CloseHandle: kernel32.func('bool CloseHandle(void *h)')
+  }
+}
 
 export class FocusWatcher {
-  private child: ChildProcess | null = null
+  private win32: Win32 | null = null
+  private poll: NodeJS.Timeout | null = null
   private beat: NodeJS.Timeout | null = null
   private current: { proc: string; title: string } | null = null
-  private stopped = false
+  private last = ''
 
   constructor(private readonly send: (proc: string, title: string) => void) {}
 
@@ -46,42 +53,64 @@ export class FocusWatcher {
   }
 
   start(): void {
-    if (process.platform !== 'win32') return
-    this.stopped = false
-    this.spawnShell()
+    if (process.platform !== 'win32' || this.poll) return
+    try {
+      this.win32 ??= loadWin32()
+    } catch (e) {
+      console.error('[focus] could not load the Windows API; profile switching is off:', e)
+      return
+    }
+    this.check()
+    this.poll = setInterval(() => this.check(), POLL_MS)
     this.beat = setInterval(() => this.resend(), HEARTBEAT_MS)
   }
 
   stop(): void {
-    this.stopped = true
+    if (this.poll) clearInterval(this.poll)
     if (this.beat) clearInterval(this.beat)
-    this.child?.kill()
+    this.poll = this.beat = null
   }
 
-  private spawnShell(): void {
-    const encoded = Buffer.from(SCRIPT, 'utf16le').toString('base64')
-    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
-      windowsHide: true
-    })
-    this.child = child
-    let buf = ''
-    child.stdout?.setEncoding('utf8')
-    child.stdout?.on('data', (d: string) => {
-      buf += d
-      let i: number
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i).replace(/\r$/, '')
-        buf = buf.slice(i + 1)
-        const tab = line.indexOf('\t')
-        const proc = tab < 0 ? line : line.slice(0, tab)
-        const title = tab < 0 ? '' : line.slice(tab + 1)
-        if (!proc || SELF.has(proc.toLowerCase())) continue
-        this.current = { proc, title }
-        this.send(proc, title)
-      }
-    })
-    child.on('exit', () => {
-      if (!this.stopped) setTimeout(() => this.spawnShell(), 2000)
-    })
+  private check(): void {
+    try {
+      const w = this.win32
+      if (!w) return
+      const hwnd = w.GetForegroundWindow()
+      if (!hwnd) return
+      const pidOut = [0]
+      w.GetWindowThreadProcessId(hwnd, pidOut)
+      const pid = pidOut[0]
+      if (!pid || pid === process.pid) return
+
+      const proc = this.processName(w, pid)
+      if (!proc || SELF.has(proc.toLowerCase())) return
+
+      const titleBuf = Buffer.alloc(512)
+      const n = w.GetWindowTextW(hwnd, titleBuf, 256)
+      const title = n > 0 ? titleBuf.toString('utf16le', 0, n * 2) : ''
+
+      const line = `${proc}\t${title}`
+      if (line === this.last) return
+      this.last = line
+      this.current = { proc, title }
+      this.send(proc, title)
+    } catch (e) {
+      console.error('[focus] check failed:', e)
+    }
+  }
+
+  /** The program's name as the pad's rules know it: file name without the folder or ".exe". */
+  private processName(w: Win32, pid: number): string {
+    const h = w.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+    if (!h) return ''
+    try {
+      const buf = Buffer.alloc(1040) // 520 UTF-16 characters
+      const size = [520]
+      if (!w.QueryFullProcessImageNameW(h, 0, buf, size)) return ''
+      const path = buf.toString('utf16le', 0, size[0] * 2)
+      return basename(path, extname(path))
+    } finally {
+      w.CloseHandle(h)
+    }
   }
 }

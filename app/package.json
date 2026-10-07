@@ -25,6 +25,7 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "koffi": "^3.3.2",
     "serialport": "^13.0.0",
     "simple-icons": "^16.34.0",
     "zod": "^4.6.5"
