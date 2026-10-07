@@ -1,0 +1,59 @@
+name: Firmware
+
+# Compiles the pad's firmware with the same mpy-cross that the pad's CircuitPython needs, so a syntax
+# error or a file the build script no longer finds is caught before it reaches a pad.
+# It cannot run the firmware: that needs the hardware (see Programs/flash_pad.ps1).
+
+on:
+  pull_request:
+    paths:
+      - 'Programs/**'
+      - '.github/workflows/firmware.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Programs/**'
+      - '.github/workflows/firmware.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # must match the CircuitPython version on the pads (boot_out.txt)
+  CIRCUITPYTHON_VERSION: '10.3.1'
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - name: Download mpy-cross for CircuitPython ${{ env.CIRCUITPYTHON_VERSION }}
+        run: |
+          curl -fsSL -o mpy-cross \
+            "https://adafruit-circuit-python.s3.amazonaws.com/bin/mpy-cross/linux-amd64/mpy-cross-linux-amd64-${CIRCUITPYTHON_VERSION}.static"
+          chmod +x mpy-cross
+          ./mpy-cross --version | tee version.txt
+          grep -q "CircuitPython ${CIRCUITPYTHON_VERSION}" version.txt
+
+      - name: Compile the firmware
+        working-directory: Programs
+        run: python build_mpy.py --mpy-cross ../mpy-cross
+
+      - name: Check the build output
+        working-directory: Programs/build
+        run: |
+          for f in firmware.mpy config_loader.mpy rgb_keys.mpy encoder_modes.mpy app_profiles.mpy oled_ui.mpy code.py boot.py; do
+            test -s "$f" || { echo "missing or empty: $f"; exit 1; }
+          done
+          # the pad's code.py is plain source: it must at least parse
+          python -m py_compile code.py
+          ls -l
+
+      - name: Python files still parse
+        working-directory: Programs
+        run: python -m py_compile boot.py code.py config_loader.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py focus_sender.py
