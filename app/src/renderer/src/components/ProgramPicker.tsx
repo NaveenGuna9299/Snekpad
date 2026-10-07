@@ -54,17 +54,28 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
       <ul className="flex flex-wrap gap-1.5" aria-label="Programs">
         {chips.length === 0 && <li className="text-sm text-muted">No program set yet.</li>}
         {chips.map((c) => (
-          <li key={c.key} className="flex items-center gap-1.5 rounded-md border border-line bg-input py-1 pl-1.5 pr-1 text-sm">
+          <li
+            key={c.key}
+            className="flex items-center gap-1.5 rounded-md border border-line bg-input py-1 pl-1.5 pr-1 text-sm"
+          >
             <ProgramIcon proc={c.procs[0]} program={c.program} size={20} />
             <span>{c.name}</span>
-            <button onClick={() => remove(c.procs)} aria-label={`Remove ${c.name}`} className="rounded px-1 text-muted hover:bg-surface2 hover:text-danger">
+            <button
+              onClick={() => remove(c.procs)}
+              aria-label={`Remove ${c.name}`}
+              className="rounded px-1 text-muted hover:bg-surface2 hover:text-danger"
+            >
               ✕
             </button>
           </li>
         ))}
       </ul>
 
-      <button onClick={toggle} aria-expanded={open} className="self-start rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">
+      <button
+        onClick={toggle}
+        aria-expanded={open}
+        className="self-start rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+      >
         {open ? 'Close' : '+ Add program'}
       </button>
 
@@ -73,12 +84,16 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
           <section>
             <div className="mb-1.5 flex items-center justify-between">
               <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Open now</h4>
-              <button onClick={loadRunning} className="text-xs text-muted hover:text-fg">Refresh</button>
+              <button onClick={loadRunning} className="text-xs text-muted hover:text-fg">
+                Refresh
+              </button>
             </div>
             {running === null ? (
               <p className="text-sm text-muted">Looking…</p>
             ) : running.length === 0 ? (
-              <p className="text-sm text-muted">No open programs found (this list needs Windows).</p>
+              <p className="text-sm text-muted">
+                No open programs found (this list needs Windows).
+              </p>
             ) : (
               <ul className="flex max-h-44 flex-col gap-0.5 overflow-y-auto">
                 {running.map((r) => (
@@ -90,7 +105,9 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
                     >
                       <ProgramIcon proc={r.proc} icon={r.icon} size={22} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate">{programForProc(r.proc)?.name ?? r.proc}</span>
+                        <span className="block truncate">
+                          {programForProc(r.proc)?.name ?? r.proc}
+                        </span>
                         <span className="block truncate text-xs text-muted">{r.title}</span>
                       </span>
                     </button>
@@ -101,7 +118,9 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
           </section>
 
           <section>
-            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">Popular</h4>
+            <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
+              Popular
+            </h4>
             <ul className="grid grid-cols-5 gap-1">
               {PROGRAMS.map((p) => {
                 const used = p.windows.some(inProfile)
@@ -126,7 +145,10 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault()
-              const proc = custom.trim().toLowerCase().replace(/\.exe$/, '')
+              const proc = custom
+                .trim()
+                .toLowerCase()
+                .replace(/\.exe$/, '')
               if (proc) addProgram(proc)
               setCustom('')
             }}
@@ -138,7 +160,12 @@ export function ProgramPicker({ windows, macos, onChange }: Props): React.JSX.El
               aria-label="Program name"
               className="min-w-0 flex-1 rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
             />
-            <button type="submit" className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface">Add</button>
+            <button
+              type="submit"
+              className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface"
+            >
+              Add
+            </button>
           </form>
         </div>
       )}

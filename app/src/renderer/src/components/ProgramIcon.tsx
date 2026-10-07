@@ -29,21 +29,43 @@ export function ProgramIcon({ proc, program, icon, size = 22 }: Props): React.JS
 
   if (p?.icon) {
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" role="img" aria-label={p.name} className="shrink-0">
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        role="img"
+        aria-label={p.name}
+        className="shrink-0"
+      >
         <path d={p.icon.path} fill={visibleColor(p.icon.hex)} />
       </svg>
     )
   }
   const src = icon ?? saved
   if (src) {
-    return <img src={src} width={size} height={size} alt={p?.name ?? proc} className="shrink-0" style={{ borderRadius: radius }} />
+    return (
+      <img
+        src={src}
+        width={size}
+        height={size}
+        alt={p?.name ?? proc}
+        className="shrink-0"
+        style={{ borderRadius: radius }}
+      />
+    )
   }
   const label = (p?.name ?? proc).trim()
   return (
     <span
       aria-label={label}
       className="inline-flex shrink-0 items-center justify-center font-semibold text-white"
-      style={{ width: size, height: size, borderRadius: radius, background: p?.color ?? '#5865f2', fontSize: size * 0.5 }}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        background: p?.color ?? '#5865f2',
+        fontSize: size * 0.5
+      }}
     >
       {label.charAt(0).toUpperCase()}
     </span>

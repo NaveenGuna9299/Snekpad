@@ -46,7 +46,12 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
-  font-family: 'gg sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-family:
+    'gg sans',
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
   font-size: 14px;
   user-select: none;
 }

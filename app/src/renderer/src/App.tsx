@@ -1,5 +1,14 @@
 import { useCallback, useRef, useState } from 'react'
-import { blankProfile, COLS, defaultConfig, FN_KEY, KEY_COUNT, MAX_PROFILES, type KeyConfig, type Profile } from '../../shared/config'
+import {
+  blankProfile,
+  COLS,
+  defaultConfig,
+  FN_KEY,
+  KEY_COUNT,
+  MAX_PROFILES,
+  type KeyConfig,
+  type Profile
+} from '../../shared/config'
 import { useStudio } from './lib/useStudio'
 import { PadView, type Selection } from './components/PadView'
 import { Sidebar } from './components/Sidebar'
@@ -14,7 +23,8 @@ import { PresetBrowser } from './components/PresetBrowser'
 import type { Preset } from './lib/presets'
 
 function App(): React.JSX.Element {
-  const { config, update, history, device, sync, push, pushing, message, flash, dismiss } = useStudio()
+  const { config, update, history, device, sync, push, pushing, message, flash, dismiss } =
+    useStudio()
   const [selectedProfile, setSelectedProfile] = useState(0)
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
   const [mock, setMock] = useState(false)
@@ -22,7 +32,11 @@ function App(): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
 
   const editProfile = useCallback(
-    (fn: (p: Profile) => Profile) => update((c) => ({ ...c, profiles: c.profiles.map((p, i) => (i === selectedProfile ? fn(p) : p)) })),
+    (fn: (p: Profile) => Profile) =>
+      update((c) => ({
+        ...c,
+        profiles: c.profiles.map((p, i) => (i === selectedProfile ? fn(p) : p))
+      })),
     [update, selectedProfile]
   )
 
@@ -37,7 +51,10 @@ function App(): React.JSX.Element {
   const pasteKey = (): void => {
     const key = clipboard.current
     if (!key || sel < 0 || sel === FN_KEY) return
-    editProfile((p) => ({ ...p, keys: p.keys.map((k, i) => (i === sel ? structuredClone(key) : k)) }))
+    editProfile((p) => ({
+      ...p,
+      keys: p.keys.map((k, i) => (i === sel ? structuredClone(key) : k))
+    }))
     void window.api.previewLed(selectedProfile, sel, key.color)
     flash(`Pasted onto key ${sel + 1}.`, false, true)
   }
@@ -85,7 +102,9 @@ function App(): React.JSX.Element {
     if (config.profiles.length >= MAX_PROFILES) return
     const n = config.profiles.length
     const id = `profile${Date.now().toString(36)}`
-    const next = source ? { ...structuredClone(source), id, name: `${source.name} 2`.slice(0, 12) } : blankProfile(id, `Profile ${n}`)
+    const next = source
+      ? { ...structuredClone(source), id, name: `${source.name} 2`.slice(0, 12) }
+      : blankProfile(id, `Profile ${n}`)
     update((c) => ({ ...c, profiles: [...c.profiles, next] }))
     setSelectedProfile(n)
   }
@@ -100,7 +119,13 @@ function App(): React.JSX.Element {
   const addPreset = (preset: Preset): void => {
     if (config.profiles.length >= MAX_PROFILES) return
     const n = config.profiles.length
-    update((c) => ({ ...c, profiles: [...c.profiles, { ...structuredClone(preset.profile), id: `profile${Date.now().toString(36)}` }] }))
+    update((c) => ({
+      ...c,
+      profiles: [
+        ...c.profiles,
+        { ...structuredClone(preset.profile), id: `profile${Date.now().toString(36)}` }
+      ]
+    }))
     setSelectedProfile(n)
     setBrowsing(false)
   }
@@ -112,7 +137,10 @@ function App(): React.JSX.Element {
   }
 
   const setKey = (index: number, patch: Partial<KeyConfig>): void => {
-    editProfile((p) => ({ ...p, keys: p.keys.map((k, i) => (i === index ? { ...k, ...patch } : k)) }))
+    editProfile((p) => ({
+      ...p,
+      keys: p.keys.map((k, i) => (i === index ? { ...k, ...patch } : k))
+    }))
     if (patch.color) void window.api.previewLed(selectedProfile, index, patch.color)
   }
 
@@ -131,60 +159,73 @@ function App(): React.JSX.Element {
         />
       ) : (
         <>
-      <TopBar
-        onHome={() => setView('home')}
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={toggleSidebar}
-        device={device}
-        mock={mock}
-        onMock={(on) => {
-          setMock(on)
-          void window.api.useMock(on)
-        }}
-        onPush={push}
-        pushing={pushing}
-        sync={sync}
-        canUndo={history.canUndo}
-        canRedo={history.canRedo}
-        onUndo={history.undo}
-        onRedo={history.redo}
-        onReset={() => {
-          history.set(defaultConfig())
-          setSelectedProfile(0)
-          flash('Starter profiles restored.', false, true)
-        }}
-      />
+          <TopBar
+            onHome={() => setView('home')}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={toggleSidebar}
+            device={device}
+            mock={mock}
+            onMock={(on) => {
+              setMock(on)
+              void window.api.useMock(on)
+            }}
+            onPush={push}
+            pushing={pushing}
+            sync={sync}
+            canUndo={history.canUndo}
+            canRedo={history.canRedo}
+            onUndo={history.undo}
+            onRedo={history.redo}
+            onReset={() => {
+              history.set(defaultConfig())
+              setSelectedProfile(0)
+              flash('Starter profiles restored.', false, true)
+            }}
+          />
 
-      <div className="flex min-h-0 flex-1">
-        {sidebarOpen && (
-        <Sidebar
-          profiles={config.profiles}
-          selected={config.profiles.indexOf(profile)}
-          onSelect={setSelectedProfile}
-          onAdd={() => addProfile()}
-          onDuplicate={() => addProfile(profile)}
-          onDelete={deleteProfile}
-          onRename={(name) => editProfile((p) => ({ ...p, name }))}
-          onMore={() => setBrowsing(true)}
-        />
-        )}
+          <div className="flex min-h-0 flex-1">
+            {sidebarOpen && (
+              <Sidebar
+                profiles={config.profiles}
+                selected={config.profiles.indexOf(profile)}
+                onSelect={setSelectedProfile}
+                onAdd={() => addProfile()}
+                onDuplicate={() => addProfile(profile)}
+                onDelete={deleteProfile}
+                onRename={(name) => editProfile((p) => ({ ...p, name }))}
+                onMore={() => setBrowsing(true)}
+              />
+            )}
 
-        <main className="flex min-w-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
-          <PadView profile={profile} oledHeight={config.device.oled.height} selection={selection} onSelect={setSelection} />
-          <p className="text-sm text-muted" aria-live="polite">
-            {selectedKey ? `Key ${(selection as { index: number }).index + 1}: ${describeAction(selectedKey.action)}` : 'Rotary encoder'}
-          </p>
-        </main>
+            <main className="flex min-w-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
+              <PadView
+                profile={profile}
+                oledHeight={config.device.oled.height}
+                selection={selection}
+                onSelect={setSelection}
+              />
+              <p className="text-sm text-muted" aria-live="polite">
+                {selectedKey
+                  ? `Key ${(selection as { index: number }).index + 1}: ${describeAction(selectedKey.action)}`
+                  : 'Rotary encoder'}
+              </p>
+            </main>
 
-        <Inspector
-          profile={profile}
-          selection={selection}
-          onKey={setKey}
-          onEncoder={(patch) => editProfile((p) => ({ ...p, encoder: { ...p.encoder, ...patch } }))}
-          onMatch={(windows, macos) => editProfile((p) => ({ ...p, match: { ...p.match, windows, macos } }))}
-          onApplyColorToAll={(color) => editProfile((p) => ({ ...p, keys: p.keys.map((k) => ({ ...k, color })) }))}
-        />
-      </div>
+            <Inspector
+              profile={profile}
+              selection={selection}
+              onKey={setKey}
+              onEncoder={(patch) =>
+                editProfile((p) => ({ ...p, encoder: { ...p.encoder, ...patch } }))
+              }
+              onMatch={(windows, macos) =>
+                editProfile((p) => ({ ...p, match: { ...p.match, windows, macos } }))
+              }
+              onApplyColorToAll={(color) =>
+                editProfile((p) => ({ ...p, keys: p.keys.map((k) => ({ ...k, color })) }))
+              }
+            />
+          </div>
         </>
       )}
       <Toast message={message} onUndo={history.undo} onDismiss={dismiss} />

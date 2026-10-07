@@ -10,7 +10,8 @@ export type Shortcuts = {
   paste: () => void
 }
 
-const typing = (t: EventTarget | null): boolean => t instanceof HTMLElement && t.matches('input, textarea, select, [contenteditable]')
+const typing = (t: EventTarget | null): boolean =>
+  t instanceof HTMLElement && t.matches('input, textarea, select, [contenteditable]')
 
 /**
  * Editor shortcuts: Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z or Ctrl+Y redo, Ctrl/Cmd+Enter push, arrows move
@@ -43,7 +44,9 @@ export function useShortcuts(handlers: Shortcuts, enabled: boolean): void {
       } else if (mod && k === 'v') {
         h.paste()
       } else if (!mod && !e.altKey && e.key.startsWith('Arrow')) {
-        const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]
+        const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[
+          e.key
+        ]
         if (d) {
           e.preventDefault()
           h.move(d[0], d[1])

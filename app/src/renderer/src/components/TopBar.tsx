@@ -19,26 +19,75 @@ type Props = {
   onToggleSidebar: () => void
 }
 
-export function TopBar({ onHome, sidebarOpen, onToggleSidebar, device, mock, onMock, onPush, pushing, sync, canUndo, canRedo, onUndo, onRedo, onReset }: Props): React.JSX.Element {
+export function TopBar({
+  onHome,
+  sidebarOpen,
+  onToggleSidebar,
+  device,
+  mock,
+  onMock,
+  onPush,
+  pushing,
+  sync,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
+  onReset
+}: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
     <header className="flex items-center gap-3 border-b border-line bg-bg px-4 py-2.5 shadow-sm">
       <h1 className="sr-only">SnekPad Studio</h1>
-      <button onClick={onHome} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">Home</button>
-      <button onClick={onToggleSidebar} aria-pressed={sidebarOpen} title="Show or hide the profile list" className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">Profiles</button>
+      <button
+        onClick={onHome}
+        className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+      >
+        Home
+      </button>
+      <button
+        onClick={onToggleSidebar}
+        aria-pressed={sidebarOpen}
+        title="Show or hide the profile list"
+        className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+      >
+        Profiles
+      </button>
 
       <div className="flex items-center gap-2 text-sm" role="status" aria-live="polite">
         <span className={`h-2.5 w-2.5 rounded-full ${connected ? 'bg-ok' : 'bg-muted'}`} />
-        {connected ? `Connected: ${device.label}` : 'No pad found. Plug in your SnekPad, or use the mock pad.'}
+        {connected
+          ? `Connected: ${device.label}`
+          : 'No pad found. Plug in your SnekPad, or use the mock pad.'}
       </div>
       {device.error && !connected && <span className="text-xs text-danger">{device.error}</span>}
 
       <div className="ml-auto flex items-center gap-2">
-        <button onClick={onUndo} disabled={!canUndo} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">Undo</button>
-        <button onClick={onRedo} disabled={!canRedo} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">Redo</button>
+        <button
+          onClick={onUndo}
+          disabled={!canUndo}
+          className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40"
+        >
+          Undo
+        </button>
+        <button
+          onClick={onRedo}
+          disabled={!canRedo}
+          className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40"
+        >
+          Redo
+        </button>
         <SettingsMenu mock={mock} onMock={onMock} onReset={onReset} />
-        {sync === 'unsent' && <span className="text-xs text-muted" role="status">Changes not on the pad yet</span>}
-        {sync === 'in-sync' && <span className="text-xs text-ok" role="status">Pad is up to date</span>}
+        {sync === 'unsent' && (
+          <span className="text-xs text-muted" role="status">
+            Changes not on the pad yet
+          </span>
+        )}
+        {sync === 'in-sync' && (
+          <span className="text-xs text-ok" role="status">
+            Pad is up to date
+          </span>
+        )}
         <button
           onClick={onPush}
           disabled={!connected || pushing}

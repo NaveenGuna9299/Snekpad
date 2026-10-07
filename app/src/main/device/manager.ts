@@ -76,7 +76,7 @@ export class DeviceManager extends EventEmitter {
     }
   }
 
-    async push(config: Config): Promise<PushResult> {
+  async push(config: Config): Promise<PushResult> {
     if (!this.session) return NOT_CONNECTED
     return this.session.push(JSON.stringify(resolveForOs(config, this.os)))
   }

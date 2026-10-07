@@ -1,19 +1,43 @@
 // Browser key events -> KMK key names (the names stored in the config).
 
 const MODS: Record<string, string> = {
-  ControlLeft: 'CTRL', ControlRight: 'CTRL',
-  ShiftLeft: 'SHIFT', ShiftRight: 'SHIFT',
-  AltLeft: 'ALT', AltRight: 'ALT',
-  MetaLeft: 'GUI', MetaRight: 'GUI'
+  ControlLeft: 'CTRL',
+  ControlRight: 'CTRL',
+  ShiftLeft: 'SHIFT',
+  ShiftRight: 'SHIFT',
+  AltLeft: 'ALT',
+  AltRight: 'ALT',
+  MetaLeft: 'GUI',
+  MetaRight: 'GUI'
 }
 
 const NAMED: Record<string, string> = {
-  Enter: 'ENTER', Escape: 'ESC', Space: 'SPACE', Tab: 'TAB', Backspace: 'BSPC', Delete: 'DEL',
-  ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT',
-  PageUp: 'PGUP', PageDown: 'PGDN', Home: 'HOME', End: 'END', Insert: 'INS',
-  Backquote: 'GRV', Slash: 'SLSH', Minus: 'MINUS', Equal: 'EQL', Backslash: 'BSLS',
-  BracketLeft: 'LBRC', BracketRight: 'RBRC', Semicolon: 'SCLN', Quote: 'QUOT',
-  Comma: 'COMM', Period: 'DOT'
+  Enter: 'ENTER',
+  Escape: 'ESC',
+  Space: 'SPACE',
+  Tab: 'TAB',
+  Backspace: 'BSPC',
+  Delete: 'DEL',
+  ArrowUp: 'UP',
+  ArrowDown: 'DOWN',
+  ArrowLeft: 'LEFT',
+  ArrowRight: 'RIGHT',
+  PageUp: 'PGUP',
+  PageDown: 'PGDN',
+  Home: 'HOME',
+  End: 'END',
+  Insert: 'INS',
+  Backquote: 'GRV',
+  Slash: 'SLSH',
+  Minus: 'MINUS',
+  Equal: 'EQL',
+  Backslash: 'BSLS',
+  BracketLeft: 'LBRC',
+  BracketRight: 'RBRC',
+  Semicolon: 'SCLN',
+  Quote: 'QUOT',
+  Comma: 'COMM',
+  Period: 'DOT'
 }
 
 export const isModifierCode = (code: string): boolean => code in MODS
@@ -51,6 +75,15 @@ export const CONSUMER_CODES: { code: string; label: string }[] = [
 ]
 
 export const COLOR_PRESETS = [
-  '#FF2020', '#FF7000', '#FFC000', '#00E060', '#00C8C8', '#2060FF',
-  '#A040FF', '#FF40A0', '#C0C0C0', '#303030', '#000000'
+  '#FF2020',
+  '#FF7000',
+  '#FFC000',
+  '#00E060',
+  '#00C8C8',
+  '#2060FF',
+  '#A040FF',
+  '#FF40A0',
+  '#C0C0C0',
+  '#303030',
+  '#000000'
 ]

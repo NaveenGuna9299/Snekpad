@@ -70,9 +70,17 @@ describe('host OS', () => {
     const c = defaultConfig()
     c.profiles[0].keys[0].action = { type: 'hotkey', keys: ['CTRL', 'C'], cmdOnMac: true }
     const mac = resolveForOs(c, 'macos')
-    expect(mac.profiles[0].keys[0].action).toEqual({ type: 'hotkey', keys: ['GUI', 'C'], cmdOnMac: true })
+    expect(mac.profiles[0].keys[0].action).toEqual({
+      type: 'hotkey',
+      keys: ['GUI', 'C'],
+      cmdOnMac: true
+    })
     expect(mac.profiles[0].keys[1].action).toEqual(c.profiles[0].keys[1].action) // not marked, unchanged
     expect(resolveForOs(c, 'windows')).toBe(c)
-    expect(c.profiles[0].keys[0].action).toEqual({ type: 'hotkey', keys: ['CTRL', 'C'], cmdOnMac: true }) // original untouched
+    expect(c.profiles[0].keys[0].action).toEqual({
+      type: 'hotkey',
+      keys: ['CTRL', 'C'],
+      cmdOnMac: true
+    }) // original untouched
   })
 })

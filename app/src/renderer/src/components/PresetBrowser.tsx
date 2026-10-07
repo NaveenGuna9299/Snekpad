@@ -20,7 +20,15 @@ type Props = {
 const newId = (): string => `mine${Date.now().toString(36)}`
 
 /** A window of ready-made profiles: pick an app, preview its keys, add it or swap it in. */
-export function PresetBrowser({ current, profileCount, currentName, canReplace, onAdd, onReplace, onClose }: Props): React.JSX.Element {
+export function PresetBrowser({
+  current,
+  profileCount,
+  currentName,
+  canReplace,
+  onAdd,
+  onReplace,
+  onClose
+}: Props): React.JSX.Element {
   const [picked, setPicked] = useState<Preset>(PRESETS[0])
   const [draft, setDraft] = useState<Preset>(PRESETS[0]) // picked, plus the user's edits
   const [sel, setSel] = useState<Selection | null>(null)
@@ -43,7 +51,12 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
     if (!name) return
     const copy: Partial<Profile> = structuredClone(current)
     delete copy.id
-    const t: Preset = { id: newId(), name, note: 'Saved by you', profile: { ...(copy as Omit<Profile, 'id'>), name } }
+    const t: Preset = {
+      id: newId(),
+      name,
+      note: 'Saved by you',
+      profile: { ...(copy as Omit<Profile, 'id'>), name }
+    }
     persist([...mine, t])
     pick(t)
   }
@@ -55,7 +68,13 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
   }
 
   const editKey = (index: number, patch: Partial<KeyConfig>): void =>
-    setDraft((d) => ({ ...d, profile: { ...d.profile, keys: d.profile.keys.map((k, i) => (i === index ? { ...k, ...patch } : k)) } }))
+    setDraft((d) => ({
+      ...d,
+      profile: {
+        ...d.profile,
+        keys: d.profile.keys.map((k, i) => (i === index ? { ...k, ...patch } : k))
+      }
+    }))
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(picked)
 
@@ -86,7 +105,10 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6" onMouseDown={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+      onMouseDown={onClose}
+    >
       <div
         role="dialog"
         aria-modal="true"
@@ -96,13 +118,25 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
       >
         <header className="flex items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold">More profiles</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded px-2 py-1 text-muted hover:bg-surface2 hover:text-fg">✕</button>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded px-2 py-1 text-muted hover:bg-surface2 hover:text-fg"
+          >
+            ✕
+          </button>
         </header>
 
         <div className="flex min-h-0 flex-1">
           <div className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-4">
             <Tiles title="Ready-made" items={PRESETS} picked={picked} onPick={pick} />
-            <Tiles title="My profiles" items={mine} picked={picked} onPick={pick} empty="Nothing saved yet." />
+            <Tiles
+              title="My profiles"
+              items={mine}
+              picked={picked}
+              onPick={pick}
+              empty="Nothing saved yet."
+            />
 
             <form
               className="mt-auto flex flex-col gap-1.5 border-t border-line pt-3"
@@ -113,12 +147,25 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
             >
               <label className="flex flex-col gap-1 text-xs text-muted">
                 Save “{currentName}” for later
-                <input value={saveName} maxLength={12} onChange={(e) => setSaveName(e.target.value)} className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg" />
+                <input
+                  value={saveName}
+                  maxLength={12}
+                  onChange={(e) => setSaveName(e.target.value)}
+                  className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
+                />
               </label>
-              <button type="submit" disabled={!saveName.trim()} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40">
+              <button
+                type="submit"
+                disabled={!saveName.trim()}
+                className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:opacity-40"
+              >
                 Save to My profiles
               </button>
-              {error && <p role="alert" className="text-xs text-danger">{error}</p>}
+              {error && (
+                <p role="alert" className="text-xs text-danger">
+                  {error}
+                </p>
+              )}
             </form>
           </div>
 
@@ -133,7 +180,13 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
                 <input
                   value={draft.name}
                   maxLength={12}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value, profile: { ...d.profile, name: e.target.value } }))}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      name: e.target.value,
+                      profile: { ...d.profile, name: e.target.value }
+                    }))
+                  }
                   className="w-32 rounded-md border border-line bg-input px-2 py-1 text-sm text-fg"
                 />
               </label>
@@ -160,9 +213,12 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
                   aria-pressed={sel?.kind === 'encoder'}
                   className={`mt-2 rounded-md border px-2 py-1 text-xs text-muted hover:bg-surface2 ${sel?.kind === 'encoder' ? 'border-accent' : 'border-line'}`}
                 >
-                  Knob: {draft.profile.encoder.label.replace('KNOB:', '').toLowerCase()} on turn, {draft.profile.encoder.pressLabel.toLowerCase() || 'nothing'} on press
+                  Knob: {draft.profile.encoder.label.replace('KNOB:', '').toLowerCase()} on turn,{' '}
+                  {draft.profile.encoder.pressLabel.toLowerCase() || 'nothing'} on press
                 </button>
-                <p className="mt-1 text-xs text-muted">{COLS} keys per row. Click a key or the knob to edit it.</p>
+                <p className="mt-1 text-xs text-muted">
+                  {COLS} keys per row. Click a key or the knob to edit it.
+                </p>
               </div>
 
               {sel && (
@@ -172,12 +228,25 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
                       profile={{ ...draft.profile, id: 'draft' }}
                       index={sel.index}
                       onKey={editKey}
-                      onApplyColorToAll={(color) => setDraft((d) => ({ ...d, profile: { ...d.profile, keys: d.profile.keys.map((k) => ({ ...k, color })) } }))}
+                      onApplyColorToAll={(color) =>
+                        setDraft((d) => ({
+                          ...d,
+                          profile: {
+                            ...d.profile,
+                            keys: d.profile.keys.map((k) => ({ ...k, color }))
+                          }
+                        }))
+                      }
                     />
                   ) : (
                     <EncoderPanel
                       profile={{ ...draft.profile, id: 'draft' }}
-                      onEncoder={(patch) => setDraft((d) => ({ ...d, profile: { ...d.profile, encoder: { ...d.profile.encoder, ...patch } } }))}
+                      onEncoder={(patch) =>
+                        setDraft((d) => ({
+                          ...d,
+                          profile: { ...d.profile, encoder: { ...d.profile.encoder, ...patch } }
+                        }))
+                      }
                     />
                   )}
                 </div>
@@ -202,18 +271,28 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
               <button
                 disabled={!canReplace}
                 onClick={() => onReplace(draft)}
-                title={canReplace ? undefined : 'General cannot be replaced. Select another profile first.'}
+                title={
+                  canReplace
+                    ? undefined
+                    : 'General cannot be replaced. Select another profile first.'
+                }
                 className="rounded-md border border-line px-3 py-2 text-sm hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Replace “{currentName}”
               </button>
               {dirty && (
-                <button onClick={saveDraft} className="rounded-md border border-line px-3 py-2 text-sm hover:bg-surface2">
+                <button
+                  onClick={saveDraft}
+                  className="rounded-md border border-line px-3 py-2 text-sm hover:bg-surface2"
+                >
                   {isMine ? 'Save changes' : 'Save to My profiles'}
                 </button>
               )}
               {isMine && (
-                <button onClick={() => remove(picked)} className="ml-auto rounded-md border border-line px-3 py-2 text-sm text-danger hover:bg-surface2">
+                <button
+                  onClick={() => remove(picked)}
+                  className="ml-auto rounded-md border border-line px-3 py-2 text-sm text-danger hover:bg-surface2"
+                >
                   Delete
                 </button>
               )}
@@ -225,7 +304,19 @@ export function PresetBrowser({ current, profileCount, currentName, canReplace, 
   )
 }
 
-function Tiles({ title, items, picked, onPick, empty }: { title: string; items: Preset[]; picked: Preset; onPick: (p: Preset) => void; empty?: string }): React.JSX.Element {
+function Tiles({
+  title,
+  items,
+  picked,
+  onPick,
+  empty
+}: {
+  title: string
+  items: Preset[]
+  picked: Preset
+  onPick: (p: Preset) => void
+  empty?: string
+}): React.JSX.Element {
   return (
     <section>
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
@@ -243,7 +334,11 @@ function Tiles({ title, items, picked, onPick, empty }: { title: string; items: 
                   title={p.note}
                   className={`flex h-20 w-full flex-col items-center justify-center gap-1.5 rounded-lg px-1 ${picked.id === p.id ? 'bg-selected outline outline-2 outline-accent' : 'hover:bg-surface2'}`}
                 >
-                  <ProgramIcon proc={chip?.procs[0] ?? p.name.toLowerCase()} program={chip?.program} size={30} />
+                  <ProgramIcon
+                    proc={chip?.procs[0] ?? p.name.toLowerCase()}
+                    program={chip?.program}
+                    size={30}
+                  />
                   <span className="w-full truncate text-center text-xs">{p.name}</span>
                 </button>
               </li>

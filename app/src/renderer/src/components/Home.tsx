@@ -16,7 +16,13 @@ function greeting(): string {
 }
 
 /** The start screen: a greeting and the pad with its status, like Logi Options+. */
-export function Home({ profile, oledHeight, device, profileCount, onOpen }: Props): React.JSX.Element {
+export function Home({
+  profile,
+  oledHeight,
+  device,
+  profileCount,
+  onOpen
+}: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-10">
@@ -30,7 +36,12 @@ export function Home({ profile, oledHeight, device, profileCount, onOpen }: Prop
           className="w-full max-w-[460px] cursor-pointer rounded-3xl drop-shadow-[0_18px_40px_rgba(0,0,0,0.55)] transition-transform duration-150 hover:scale-[1.03] active:scale-100"
         >
           <span className="pointer-events-none block" aria-hidden="true">
-            <PadView profile={profile} oledHeight={oledHeight} selection={{ kind: 'key', index: -1 }} onSelect={() => {}} />
+            <PadView
+              profile={profile}
+              oledHeight={oledHeight}
+              selection={{ kind: 'key', index: -1 }}
+              onSelect={() => {}}
+            />
           </span>
         </button>
 

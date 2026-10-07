@@ -10,8 +10,17 @@ import type { RunningProgram } from '../shared/api'
 
 // windows that are not "programs" a user would want a profile for
 const IGNORE = new Set([
-  'electron', 'snekpad-studio', 'applicationframehost', 'textinputhost', 'systemsettings',
-  'searchhost', 'startmenuexperiencehost', 'shellexperiencehost', 'lockapp', 'widgets', 'explorer'
+  'electron',
+  'snekpad-studio',
+  'applicationframehost',
+  'textinputhost',
+  'systemsettings',
+  'searchhost',
+  'startmenuexperiencehost',
+  'shellexperiencehost',
+  'lockapp',
+  'widgets',
+  'explorer'
 ])
 
 const lastPaths = new Map<string, string>() // process name -> .exe path, from the latest listing
@@ -61,7 +70,9 @@ export async function listRunning(): Promise<RunningProgram[]> {
       'Select-Object ProcessName,Path,MainWindowTitle | ConvertTo-Json -Compress'
   )
   if (!out.trim()) return []
-  const raw = JSON.parse(out) as { ProcessName: string; Path: string; MainWindowTitle: string }[] | { ProcessName: string; Path: string; MainWindowTitle: string }
+  const raw = JSON.parse(out) as
+    | { ProcessName: string; Path: string; MainWindowTitle: string }[]
+    | { ProcessName: string; Path: string; MainWindowTitle: string }
   const rows = Array.isArray(raw) ? raw : [raw]
 
   const seen = new Set<string>()

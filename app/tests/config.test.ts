@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { type Action, blankProfile, defaultConfig, MAX_PROFILES, migrateConfig, resolveForOs, validateConfig } from '../src/shared/config'
+import {
+  type Action,
+  blankProfile,
+  defaultConfig,
+  MAX_PROFILES,
+  migrateConfig,
+  resolveForOs,
+  validateConfig
+} from '../src/shared/config'
 
 describe('config validation', () => {
   it('accepts the starter config', () => {
@@ -42,7 +50,6 @@ describe('config validation', () => {
   })
 })
 
-
 describe('multi-key actions', () => {
   const seq = (n: number, wait = 100): Action => ({
     type: 'sequence' as const,
@@ -51,9 +58,15 @@ describe('multi-key actions', () => {
 
   it('allows up to 6 keys in one shortcut', () => {
     const c = defaultConfig()
-    c.profiles[0].keys[0].action = { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'ALT', 'GUI', 'K', 'L'] }
+    c.profiles[0].keys[0].action = {
+      type: 'hotkey',
+      keys: ['CTRL', 'SHIFT', 'ALT', 'GUI', 'K', 'L']
+    }
     expect(validateConfig(c).ok).toBe(true)
-    c.profiles[0].keys[0].action = { type: 'hotkey', keys: ['CTRL', 'SHIFT', 'ALT', 'GUI', 'A', 'B', 'C'] }
+    c.profiles[0].keys[0].action = {
+      type: 'hotkey',
+      keys: ['CTRL', 'SHIFT', 'ALT', 'GUI', 'A', 'B', 'C']
+    }
     expect(validateConfig(c).ok).toBe(false)
   })
 
@@ -74,13 +87,22 @@ describe('multi-key actions', () => {
   it('migrates old macro actions to sequences with a default pause', () => {
     const old = JSON.parse(JSON.stringify(defaultConfig()))
     old.profiles[2].keys[2].action = { type: 'macro', steps: ['UP', 'ENTER'] }
-    old.profiles[2].keys[3].action = { type: 'macro', steps: [['CTRL', 'K'], ['CTRL', 'C']] }
+    old.profiles[2].keys[3].action = {
+      type: 'macro',
+      steps: [
+        ['CTRL', 'K'],
+        ['CTRL', 'C']
+      ]
+    }
     const v = validateConfig(migrateConfig(old))
     expect(v.ok).toBe(true)
     if (v.ok) {
       expect(v.config.profiles[2].keys[2].action).toEqual({
         type: 'sequence',
-        steps: [{ keys: ['UP'], wait: 100 }, { keys: ['ENTER'], wait: 0 }]
+        steps: [
+          { keys: ['UP'], wait: 100 },
+          { keys: ['ENTER'], wait: 0 }
+        ]
       })
     }
   })
@@ -112,6 +134,8 @@ describe('multi-key actions', () => {
     const c = defaultConfig()
     c.profiles[0].keys[0].action = { ...seq(2), cmdOnMac: true }
     const mac = resolveForOs(c, 'macos')
-    expect(mac.profiles[0].keys[0].action).toMatchObject({ steps: [{ keys: ['GUI', 'K'] }, { keys: ['A'] }] })
+    expect(mac.profiles[0].keys[0].action).toMatchObject({
+      steps: [{ keys: ['GUI', 'K'] }, { keys: ['A'] }]
+    })
   })
 })

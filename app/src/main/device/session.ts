@@ -5,7 +5,16 @@
 // exchange that is running. Without this, an LED preview sent while a push waits for CFG_END would
 // steal that reply.
 
-import { ConfigReceiver, configFrames, crcHex, getCfgLine, ledLine, liveViewSchema, parseReply, type Reply } from '../../shared/protocol'
+import {
+  ConfigReceiver,
+  configFrames,
+  crcHex,
+  getCfgLine,
+  ledLine,
+  liveViewSchema,
+  parseReply,
+  type Reply
+} from '../../shared/protocol'
 import type { PullResult, PushResult } from '../../shared/api'
 import type { Link } from './link'
 
@@ -134,10 +143,15 @@ export class DeviceSession {
         rx.handle(line)
         if (cmd !== 'CFG_END') return
         const json = rx.received
-        if (json.length !== length || crcHex(json) !== crc) return finish({ ok: false, error: 'pad config was damaged in transit' })
+        if (json.length !== length || crcHex(json) !== crc)
+          return finish({ ok: false, error: 'pad config was damaged in transit' })
         try {
           const v = liveViewSchema.safeParse(JSON.parse(json))
-          finish(v.success ? { ok: true, view: v.data } : { ok: false, error: 'pad config not understood' })
+          finish(
+            v.success
+              ? { ok: true, view: v.data }
+              : { ok: false, error: 'pad config not understood' }
+          )
         } catch {
           finish({ ok: false, error: 'pad config not understood' })
         }

@@ -19,7 +19,9 @@ export class MockLink implements Link {
     const cmd = line.split('\t')[0]
     let reply: string | null = null
     if (cmd === 'GET_CFG') {
-      const frames = this.config ? configFrames(JSON.stringify(liveViewOf(JSON.parse(this.config)))) : ['ERR\tno config on pad']
+      const frames = this.config
+        ? configFrames(JSON.stringify(liveViewOf(JSON.parse(this.config))))
+        : ['ERR\tno config on pad']
       frames.forEach((f, i) => setTimeout(() => this.lineCb(f), 5 + i))
       return
     }

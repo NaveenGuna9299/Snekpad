@@ -4,7 +4,14 @@ import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { z } from 'zod'
-import { defaultConfig, migrateConfig, templateSchema, validateConfig, type Config, type Template } from '../shared/config'
+import {
+  defaultConfig,
+  migrateConfig,
+  templateSchema,
+  validateConfig,
+  type Config,
+  type Template
+} from '../shared/config'
 
 const dir = (): string => {
   const d = join(app.getPath('userData'), 'snekpad')
@@ -59,7 +66,12 @@ export function loadTemplates(): Template[] {
   if (!existsSync(file)) return []
   try {
     const raw = JSON.parse(readFileSync(file, 'utf8'))
-    return Array.isArray(raw) ? raw.flatMap((t) => { const r = templateSchema.safeParse(t); return r.success ? [r.data] : [] }) : []
+    return Array.isArray(raw)
+      ? raw.flatMap((t) => {
+          const r = templateSchema.safeParse(t)
+          return r.success ? [r.data] : []
+        })
+      : []
   } catch (e) {
     console.warn('could not read saved profiles:', e)
     return []

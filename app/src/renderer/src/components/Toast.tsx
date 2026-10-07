@@ -24,7 +24,9 @@ export function Toast({ message, onUndo, onDismiss }: Props): React.JSX.Element 
             Undo
           </button>
         )}
-        <button onClick={onDismiss} aria-label="Dismiss" className="text-muted hover:text-fg">✕</button>
+        <button onClick={onDismiss} aria-label="Dismiss" className="text-muted hover:text-fg">
+          ✕
+        </button>
       </div>
     </div>
   )

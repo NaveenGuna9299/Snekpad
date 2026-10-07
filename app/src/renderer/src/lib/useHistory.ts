@@ -19,7 +19,11 @@ export function useHistory<T>(initial: T | null): History<T> {
   })
 
   const set = useCallback((next: T) => {
-    setState((s) => ({ past: s.present ? [...s.past, s.present].slice(-100) : s.past, present: next, future: [] }))
+    setState((s) => ({
+      past: s.present ? [...s.past, s.present].slice(-100) : s.past,
+      present: next,
+      future: []
+    }))
   }, [])
 
   const replace = useCallback((next: T) => setState({ past: [], present: next, future: [] }), [])
@@ -27,7 +31,11 @@ export function useHistory<T>(initial: T | null): History<T> {
   const undo = useCallback(() => {
     setState((s) => {
       if (!s.past.length || !s.present) return s
-      return { past: s.past.slice(0, -1), present: s.past[s.past.length - 1], future: [s.present, ...s.future] }
+      return {
+        past: s.past.slice(0, -1),
+        present: s.past[s.past.length - 1],
+        future: [s.present, ...s.future]
+      }
     })
   }, [])
 
@@ -38,5 +46,13 @@ export function useHistory<T>(initial: T | null): History<T> {
     })
   }, [])
 
-  return { value: state.present, set, replace, undo, redo, canUndo: state.past.length > 0, canRedo: state.future.length > 0 }
+  return {
+    value: state.present,
+    set,
+    replace,
+    undo,
+    redo,
+    canUndo: state.past.length > 0,
+    canRedo: state.future.length > 0
+  }
 }

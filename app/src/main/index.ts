@@ -6,7 +6,14 @@ import icon from '../../resources/icon.png?asset'
 import { showSplash } from './splash'
 import { DeviceManager } from './device/manager'
 import { FocusWatcher } from './focusWatcher'
-import { loadConfig, saveConfig, backupPushed, loadBaseline, loadTemplates, saveTemplates } from './store'
+import {
+  loadConfig,
+  saveConfig,
+  backupPushed,
+  loadBaseline,
+  loadTemplates,
+  saveTemplates
+} from './store'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { validateConfig, type Config, type Template } from '../shared/config'
 import type { PushResult } from '../shared/api'
@@ -175,7 +182,11 @@ app.whenReady().then(() => {
     const marker = join(app.getPath('userData'), 'startup-offered')
     if (!existsSync(marker)) {
       app.setLoginItemSettings({ openAtLogin: true, args: STARTUP_ARGS })
-      try { writeFileSync(marker, '1') } catch { /* will just offer again next launch */ }
+      try {
+        writeFileSync(marker, '1')
+      } catch {
+        /* will just offer again next launch */
+      }
     }
   }
 

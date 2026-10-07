@@ -13,7 +13,16 @@ type Props = {
   onMore: () => void
 }
 
-export function Sidebar({ profiles, selected, onSelect, onAdd, onDuplicate, onDelete, onRename, onMore }: Props): React.JSX.Element {
+export function Sidebar({
+  profiles,
+  selected,
+  onSelect,
+  onAdd,
+  onDuplicate,
+  onDelete,
+  onRename,
+  onMore
+}: Props): React.JSX.Element {
   const full = profiles.length >= MAX_PROFILES
   const current = profiles[selected]
   const isGeneral = current.id === 'general'
@@ -42,10 +51,14 @@ export function Sidebar({ profiles, selected, onSelect, onAdd, onDuplicate, onDe
                   'No app set'
                 ) : (
                   <>
-                    {chipsFor(p.match.windows).slice(0, 5).map((c) => (
-                      <ProgramIcon key={c.key} proc={c.procs[0]} program={c.program} size={16} />
-                    ))}
-                    {chipsFor(p.match.windows).length > 5 && <span>+{chipsFor(p.match.windows).length - 5}</span>}
+                    {chipsFor(p.match.windows)
+                      .slice(0, 5)
+                      .map((c) => (
+                        <ProgramIcon key={c.key} proc={c.procs[0]} program={c.program} size={16} />
+                      ))}
+                    {chipsFor(p.match.windows).length > 5 && (
+                      <span>+{chipsFor(p.match.windows).length - 5}</span>
+                    )}
                   </>
                 )}
               </span>
@@ -55,9 +68,27 @@ export function Sidebar({ profiles, selected, onSelect, onAdd, onDuplicate, onDe
       </ul>
 
       <div className="flex gap-2">
-        <SmallButton onClick={onAdd} disabled={full} title={full ? 'The pad holds at most 4 profiles' : 'New profile'}>New</SmallButton>
-        <SmallButton onClick={onDuplicate} disabled={full} title={full ? 'The pad holds at most 4 profiles' : 'Duplicate'}>Copy</SmallButton>
-        <SmallButton onClick={onDelete} disabled={isGeneral} title={isGeneral ? 'General cannot be deleted' : 'Delete profile'}>Delete</SmallButton>
+        <SmallButton
+          onClick={onAdd}
+          disabled={full}
+          title={full ? 'The pad holds at most 4 profiles' : 'New profile'}
+        >
+          New
+        </SmallButton>
+        <SmallButton
+          onClick={onDuplicate}
+          disabled={full}
+          title={full ? 'The pad holds at most 4 profiles' : 'Duplicate'}
+        >
+          Copy
+        </SmallButton>
+        <SmallButton
+          onClick={onDelete}
+          disabled={isGeneral}
+          title={isGeneral ? 'General cannot be deleted' : 'Delete profile'}
+        >
+          Delete
+        </SmallButton>
       </div>
 
       <label className="mt-2 flex flex-col gap-1 text-xs text-muted">
@@ -71,16 +102,25 @@ export function Sidebar({ profiles, selected, onSelect, onAdd, onDuplicate, onDe
         />
       </label>
 
-      <button onClick={onMore} className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2">
+      <button
+        onClick={onMore}
+        className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+      >
         More profiles…
       </button>
     </aside>
   )
 }
 
-function SmallButton({ children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
+function SmallButton({
+  children,
+  ...rest
+}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
   return (
-    <button {...rest} className="flex-1 rounded-md border border-line px-2 py-1.5 text-xs hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40">
+    <button
+      {...rest}
+      className="flex-1 rounded-md border border-line px-2 py-1.5 text-xs hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
+    >
       {children}
     </button>
   )

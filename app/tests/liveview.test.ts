@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { defaultConfig } from '../src/shared/config'
-import { applyLiveView, liveViewOf, liveViewSchema, ConfigReceiver, configFrames } from '../src/shared/protocol'
+import {
+  applyLiveView,
+  liveViewOf,
+  liveViewSchema,
+  ConfigReceiver,
+  configFrames
+} from '../src/shared/protocol'
 
 describe('live view (GET_CFG)', () => {
   it('survives the CFG_* framing the firmware uses', () => {

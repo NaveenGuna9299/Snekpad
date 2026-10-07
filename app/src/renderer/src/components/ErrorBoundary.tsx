@@ -17,8 +17,13 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     return (
       <div className="p-6 text-fg">
         <p className="mb-2 text-lg font-semibold">Something went wrong</p>
-        <pre className="mb-4 whitespace-pre-wrap text-xs text-muted">{this.state.error.message}</pre>
-        <button className="rounded bg-accent px-3 py-1.5 text-accentfg" onClick={() => location.reload()}>
+        <pre className="mb-4 whitespace-pre-wrap text-xs text-muted">
+          {this.state.error.message}
+        </pre>
+        <button
+          className="rounded bg-accent px-3 py-1.5 text-accentfg"
+          onClick={() => location.reload()}
+        >
           Reload
         </button>
       </div>

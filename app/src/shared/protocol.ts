@@ -47,19 +47,26 @@ export function hostOsFrom(platform: string): HostOs {
 
 export const pingLine = (): string => 'PING'
 export const osLine = (os: HostOs): string => `OS\t${os}`
-export const appLine = (proc: string, title: string): string => `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
+export const appLine = (proc: string, title: string): string =>
+  `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
 export const getCfgLine = (): string => 'GET_CFG'
-export const ledLine = (layer: number, key: number, color: string): string => `LED\t${layer}\t${key}\t${color}`
+export const ledLine = (layer: number, key: number, color: string): string =>
+  `LED\t${layer}\t${key}\t${color}`
 
 /** All lines needed to send a config (compact JSON, chunked, length + CRC checked). */
 export function configFrames(json: string): string[] {
   const lines = [`CFG_BEGIN\t${json.length}\t${crcHex(json)}`]
-  for (let i = 0; i < json.length; i += CFG_CHUNK) lines.push(`CFG_LINE\t${json.slice(i, i + CFG_CHUNK)}`)
+  for (let i = 0; i < json.length; i += CFG_CHUNK)
+    lines.push(`CFG_LINE\t${json.slice(i, i + CFG_CHUNK)}`)
   lines.push('CFG_END')
   return lines
 }
 
-export type Reply = { kind: 'pong' } | { kind: 'ok' } | { kind: 'err'; reason: string } | { kind: 'other'; line: string }
+export type Reply =
+  | { kind: 'pong' }
+  | { kind: 'ok' }
+  | { kind: 'err'; reason: string }
+  | { kind: 'other'; line: string }
 
 export function parseReply(line: string): Reply {
   const l = line.replace(/\r$/, '')
@@ -125,7 +132,12 @@ export type LiveView = z.infer<typeof liveViewSchema>
 export function liveViewOf(config: Config): LiveView {
   return {
     h: config.device.oled.height,
-    p: config.profiles.map((p) => ({ n: p.name, k: p.encoder.label, l: p.keys.map((k) => k.label), c: p.keys.map((k) => k.color) }))
+    p: config.profiles.map((p) => ({
+      n: p.name,
+      k: p.encoder.label,
+      l: p.keys.map((k) => k.label),
+      c: p.keys.map((k) => k.color)
+    }))
   }
 }
 
@@ -141,7 +153,11 @@ export function applyLiveView(config: Config, view: LiveView): Config {
         ...profile,
         name: live.n.slice(0, 12) || profile.name,
         encoder: { ...profile.encoder, label: live.k.slice(0, 10) },
-        keys: profile.keys.map((key, j) => (j === FN_KEY ? { ...key, color: live.c[j] } : { ...key, label: live.l[j].slice(0, LABEL_MAX), color: live.c[j] }))
+        keys: profile.keys.map((key, j) =>
+          j === FN_KEY
+            ? { ...key, color: live.c[j] }
+            : { ...key, label: live.l[j].slice(0, LABEL_MAX), color: live.c[j] }
+        )
       }
     })
   }

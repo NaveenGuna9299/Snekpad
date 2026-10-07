@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { DEFAULT_WAIT_MS, MAX_COMBO, MAX_STEPS, MAX_WAIT_MS, type Action } from '../../../shared/config'
+import {
+  DEFAULT_WAIT_MS,
+  MAX_COMBO,
+  MAX_STEPS,
+  MAX_WAIT_MS,
+  type Action
+} from '../../../shared/config'
 import { CONSUMER_CODES, orderCombo, tokenFromCode } from '../lib/keys'
 
 type Kind = Action['type']
@@ -62,14 +68,29 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
       )}
 
       {action.type === 'key' && (
-        <TextField label="Key name (e.g. F5, ENTER, ESC)" value={action.key} onChange={(v) => onChange({ type: 'key', key: v.toUpperCase().replace(/[^A-Z0-9_]/g, '') })} />
+        <TextField
+          label="Key name (e.g. F5, ENTER, ESC)"
+          value={action.key}
+          onChange={(v) =>
+            onChange({ type: 'key', key: v.toUpperCase().replace(/[^A-Z0-9_]/g, '') })
+          }
+        />
       )}
 
       {action.type === 'text' && (
         <>
-          <TextField label="Text to type (max 80 characters)" value={action.text} maxLength={80} onChange={(text) => onChange({ ...action, text })} />
+          <TextField
+            label="Text to type (max 80 characters)"
+            value={action.text}
+            maxLength={80}
+            onChange={(text) => onChange({ ...action, text })}
+          />
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={!!action.enter} onChange={(e) => onChange({ ...action, enter: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={!!action.enter}
+              onChange={(e) => onChange({ ...action, enter: e.target.checked })}
+            />
             Press Enter afterwards
           </label>
         </>
@@ -82,9 +103,15 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
       {action.type === 'consumer' && (
         <label className="flex flex-col gap-1 text-xs text-muted">
           Control
-          <select value={action.code} onChange={(e) => onChange({ type: 'consumer', code: e.target.value })} className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg">
+          <select
+            value={action.code}
+            onChange={(e) => onChange({ type: 'consumer', code: e.target.value })}
+            className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
+          >
             {CONSUMER_CODES.map((c) => (
-              <option key={c.code} value={c.code}>{c.label}</option>
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
             ))}
           </select>
         </label>
@@ -92,7 +119,11 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
 
       {(action.type === 'hotkey' || action.type === 'sequence') && (
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!action.cmdOnMac} onChange={(e) => onChange({ ...action, cmdOnMac: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={!!action.cmdOnMac}
+            onChange={(e) => onChange({ ...action, cmdOnMac: e.target.checked })}
+          />
           Use Cmd instead of Ctrl on macOS
         </label>
       )}
@@ -100,11 +131,26 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
   )
 }
 
-function TextField({ label, value, onChange, maxLength }: { label: string; value: string; onChange: (v: string) => void; maxLength?: number }): React.JSX.Element {
+function TextField({
+  label,
+  value,
+  onChange,
+  maxLength
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  maxLength?: number
+}): React.JSX.Element {
   return (
     <label className="flex flex-col gap-1 text-xs text-muted">
       {label}
-      <input value={value} maxLength={maxLength} onChange={(e) => onChange(e.target.value)} className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg" />
+      <input
+        value={value}
+        maxLength={maxLength}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
+      />
     </label>
   )
 }
@@ -113,7 +159,19 @@ function TextField({ label, value, onChange, maxLength }: { label: string; value
  * Press and hold any number of keys (up to MAX_COMBO) and let go: everything held at the same
  * time is recorded. This allows Ctrl+Shift+Alt+K, two normal keys together, or modifiers only.
  */
-function ComboRecorder({ display, idle, button, onRecord, bare = false }: { display: string; idle: string; button: string; onRecord: (keys: string[]) => void; bare?: boolean }): React.JSX.Element {
+function ComboRecorder({
+  display,
+  idle,
+  button,
+  onRecord,
+  bare = false
+}: {
+  display: string
+  idle: string
+  button: string
+  onRecord: (keys: string[]) => void
+  bare?: boolean
+}): React.JSX.Element {
   const [recording, setRecording] = useState(false)
   const [live, setLive] = useState<string[]>([])
 
@@ -121,7 +179,8 @@ function ComboRecorder({ display, idle, button, onRecord, bare = false }: { disp
     if (!recording) return
     const order: string[] = []
     const held = new Set<string>()
-    const typing = (e: KeyboardEvent): boolean => e.target instanceof HTMLElement && e.target.matches('input, textarea, select')
+    const typing = (e: KeyboardEvent): boolean =>
+      e.target instanceof HTMLElement && e.target.matches('input, textarea, select')
     const down = (e: KeyboardEvent): void => {
       if (typing(e)) return // never swallow keys meant for a text field
       e.preventDefault()
@@ -152,10 +211,19 @@ function ComboRecorder({ display, idle, button, onRecord, bare = false }: { disp
 
   return (
     <div className="flex items-center gap-2">
-      <div className={`flex-1 font-mono text-sm ${bare ? '' : 'rounded-md border border-line bg-input px-3 py-1.5'}`} aria-live="polite">
+      <div
+        className={`flex-1 font-mono text-sm ${bare ? '' : 'rounded-md border border-line bg-input px-3 py-1.5'}`}
+        aria-live="polite"
+      >
         {recording ? (live.length ? live.join(' + ') : idle) : display}
       </div>
-      <button onClick={() => { setRecording((r) => !r); setLive([]) }} className={`rounded-md border border-line text-sm hover:bg-surface2 ${bare ? 'px-2 py-0.5 text-xs' : 'px-3 py-1.5'}`}>
+      <button
+        onClick={() => {
+          setRecording((r) => !r)
+          setLive([])
+        }}
+        className={`rounded-md border border-line text-sm hover:bg-surface2 ${bare ? 'px-2 py-0.5 text-xs' : 'px-3 py-1.5'}`}
+      >
         {recording ? 'Cancel' : button}
       </button>
     </div>
@@ -168,15 +236,23 @@ type Step = Extract<Action, { type: 'sequence' }>['steps'][number]
  * Up to MAX_STEPS keys or shortcuts pressed one after the other. Between two steps there is a
  * slider for the pause (in ms) before the next step starts.
  */
-function SequenceEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step[]) => void }): React.JSX.Element {
-  const setKeys = (i: number, keys: string[]): void => onChange(steps.map((s, j) => (j === i ? { ...s, keys } : s)))
+function SequenceEditor({
+  steps,
+  onChange
+}: {
+  steps: Step[]
+  onChange: (s: Step[]) => void
+}): React.JSX.Element {
+  const setKeys = (i: number, keys: string[]): void =>
+    onChange(steps.map((s, j) => (j === i ? { ...s, keys } : s)))
   // moving a step moves its own pause with it
   const move = (i: number, d: number): void => {
     const next = [...steps]
     ;[next[i], next[i + d]] = [next[i + d], next[i]]
     onChange(next)
   }
-  const setWait = (i: number, wait: number): void => onChange(steps.map((s, j) => (j === i ? { ...s, wait } : s)))
+  const setWait = (i: number, wait: number): void =>
+    onChange(steps.map((s, j) => (j === i ? { ...s, wait } : s)))
   return (
     <div className="flex flex-col gap-1">
       <ol className="flex flex-col">
@@ -184,9 +260,29 @@ function SequenceEditor({ steps, onChange }: { steps: Step[]; onChange: (s: Step
           <li key={i} className="flex flex-col">
             <div className="flex items-center gap-2 rounded-md border border-line bg-input px-3 py-1.5 font-mono text-sm">
               <span className="w-4 text-muted">{i + 1}</span>
-              <ComboRecorder bare display={s.keys.join(' + ')} idle="Press the keys…" button="Re-record" onRecord={(keys) => setKeys(i, keys)} />
-              <button onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move step ${i + 1} up`} className="text-muted hover:text-fg disabled:opacity-30">▲</button>
-              <button onClick={() => move(i, 1)} disabled={i === steps.length - 1} aria-label={`Move step ${i + 1} down`} className="text-muted hover:text-fg disabled:opacity-30">▼</button>
+              <ComboRecorder
+                bare
+                display={s.keys.join(' + ')}
+                idle="Press the keys…"
+                button="Re-record"
+                onRecord={(keys) => setKeys(i, keys)}
+              />
+              <button
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                aria-label={`Move step ${i + 1} up`}
+                className="text-muted hover:text-fg disabled:opacity-30"
+              >
+                ▲
+              </button>
+              <button
+                onClick={() => move(i, 1)}
+                disabled={i === steps.length - 1}
+                aria-label={`Move step ${i + 1} down`}
+                className="text-muted hover:text-fg disabled:opacity-30"
+              >
+                ▼
+              </button>
               <button
                 onClick={() => onChange(steps.filter((_, j) => j !== i))}
                 disabled={steps.length === 1}

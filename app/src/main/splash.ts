@@ -4,7 +4,10 @@ import { BrowserWindow } from 'electron'
 
 const MIN_VISIBLE_MS = 1300 // long enough for the key animation to read as intentional, not a flash
 
-const keys = Array.from({ length: 12 }, (_, i) => `<i style="animation-delay:${i * 0.1}s"></i>`).join('')
+const keys = Array.from(
+  { length: 12 },
+  (_, i) => `<i style="animation-delay:${i * 0.1}s"></i>`
+).join('')
 
 const html = `<!doctype html><meta charset="utf-8"><style>
   html,body{margin:0;height:100%;background:#011339;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;-webkit-app-region:drag;user-select:none}

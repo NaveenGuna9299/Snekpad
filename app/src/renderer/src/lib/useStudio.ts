@@ -103,7 +103,10 @@ export function useStudio(): Studio {
   const flash = useCallback((text: string, error = false, undoable = false) => {
     window.clearTimeout(messageTimer.current)
     setMessage({ text, error, undoable })
-    messageTimer.current = window.setTimeout(() => setMessage(null), undoable ? UNDO_MESSAGE_MS : MESSAGE_MS)
+    messageTimer.current = window.setTimeout(
+      () => setMessage(null),
+      undoable ? UNDO_MESSAGE_MS : MESSAGE_MS
+    )
   }, [])
 
   const push = useCallback(async () => {
@@ -120,5 +123,17 @@ export function useStudio(): Studio {
 
   const dismiss = useCallback(() => setMessage(null), [])
 
-  return { config, update, history, device, connected, sync, push, pushing, message, flash, dismiss }
+  return {
+    config,
+    update,
+    history,
+    device,
+    connected,
+    sync,
+    push,
+    pushing,
+    message,
+    flash,
+    dismiss
+  }
 }
