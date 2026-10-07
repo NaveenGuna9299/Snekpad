@@ -1,6 +1,7 @@
 // The typed bridge between the renderer and the main process (exposed by the preload script).
 
 import type { Config, Template, ValidationResult } from './config'
+import type { ThemePref } from './theme'
 import type { LiveView } from './protocol'
 
 export type DeviceState = {
@@ -31,6 +32,9 @@ export interface SnekApi {
   /** The user's own saved profiles. */
   loadTemplates(): Promise<Template[]>
   saveTemplates(list: Template[]): Promise<Template[]>
+  /** The colour theme choice; `system` follows the OS. */
+  getTheme(): Promise<ThemePref>
+  setTheme(theme: ThemePref): Promise<void>
   useMock(on: boolean): Promise<void>
   previewLed(layer: number, key: number, color: string): Promise<void>
   /** Programs with a window right now, with their own icons (Windows). */

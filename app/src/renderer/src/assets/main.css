@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
-/* Colour tokens: a dark, Discord-style palette. */
+/* Colour tokens: a dark, Discord-style palette, with a light one when the app's theme resolves to light
+   (the main process sets nativeTheme, so this media query follows the Settings choice). */
 :root {
   --bg: #1a1b1e; /* main area */
   --surface: #141518; /* side panels */
@@ -18,6 +19,29 @@
   --oled-bg: #05080a;
   --oled-fg: #e8f6ff;
   color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --surface: #f2f3f5;
+    --surface-2: #e3e5e8;
+    --selected: #d7dade;
+    --input: #ffffff;
+    --line: #c9cdd2;
+    --fg: #2e3338;
+    --muted: #5c6570;
+    --accent: #4752c4;
+    --ok: #167a3f;
+    --danger: #b52a26;
+    color-scheme: light;
+  }
+}
+
+/* a little larger than Tailwind's 12px, for the many small captions */
+@theme {
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
 }
 
 @theme inline {
@@ -70,6 +94,11 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
+input[type='checkbox'],
+input[type='range'] {
+  accent-color: var(--accent);
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -84,7 +113,7 @@ textarea:focus-visible,
   width: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1a1b1e;
+  background: var(--selected);
   border: 2px solid transparent;
   background-clip: padding-box;
   border-radius: 8px;

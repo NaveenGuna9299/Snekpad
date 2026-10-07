@@ -4,6 +4,7 @@ import { app } from 'electron'
 import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { z } from 'zod'
+import { themePrefSchema, type ThemePref } from '../shared/theme'
 import {
   defaultConfig,
   migrateConfig,
@@ -82,4 +83,19 @@ export function saveTemplates(list: Template[]): Template[] {
   const clean = z.array(templateSchema).max(100).parse(list)
   writeAtomic(join(dir(), 'templates.json'), JSON.stringify(clean, null, 2))
   return clean
+}
+
+/** App-level preferences (not part of the pad config). Unreadable or unknown values fall back to defaults. */
+export function loadTheme(): ThemePref {
+  try {
+    const raw = JSON.parse(readFileSync(join(dir(), 'settings.json'), 'utf8'))
+    const v = themePrefSchema.safeParse(raw?.theme)
+    return v.success ? v.data : 'system'
+  } catch {
+    return 'system'
+  }
+}
+
+export function saveTheme(theme: ThemePref): void {
+  writeAtomic(join(dir(), 'settings.json'), JSON.stringify({ theme }, null, 2))
 }

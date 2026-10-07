@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ThemePref } from '../../../shared/theme'
 
 type Props = {
   mock: boolean
@@ -13,10 +14,12 @@ export function SettingsMenu({ mock, onMock, onReset }: Props): React.JSX.Elemen
     supported: false,
     enabled: false
   })
+  const [theme, setTheme] = useState<ThemePref>('system')
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void window.api.getStartup().then(setStartup)
+    void window.api.getTheme().then(setTheme)
   }, [])
 
   useEffect(() => {
@@ -70,6 +73,25 @@ export function SettingsMenu({ mock, onMock, onReset }: Props): React.JSX.Elemen
               </span>
             </label>
           )}
+          <div role="radiogroup" aria-label="Theme" className="flex flex-col gap-1">
+            <span className="text-xs text-muted">Theme</span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {(['system', 'dark', 'light'] as const).map((t) => (
+                <button
+                  key={t}
+                  role="radio"
+                  aria-checked={theme === t}
+                  onClick={() => {
+                    setTheme(t)
+                    void window.api.setTheme(t)
+                  }}
+                  className={`rounded-md border px-2 py-1.5 text-xs capitalize ${theme === t ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
             onClick={() => {
               setOpen(false)

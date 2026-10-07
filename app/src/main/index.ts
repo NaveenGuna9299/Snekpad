@@ -1,4 +1,14 @@
-import { app, shell, screen, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron'
+import {
+  app,
+  shell,
+  screen,
+  nativeTheme,
+  BrowserWindow,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage
+} from 'electron'
 import { join } from 'path'
 import { existsSync, writeFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -12,11 +22,14 @@ import {
   backupPushed,
   loadBaseline,
   loadTemplates,
-  saveTemplates
+  saveTemplates,
+  loadTheme,
+  saveTheme
 } from './store'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { validateConfig, type Config, type Template } from '../shared/config'
 import type { PushResult } from '../shared/api'
+import { chromeColors, themePrefSchema } from '../shared/theme'
 
 // A local app has nothing worth caching. A cache left half-written by a killed process made the
 // window open blank ("No file for ..." in the log), so don't keep the web/shader caches on disk.
@@ -32,6 +45,12 @@ const focus = new FocusWatcher((proc, title) => device.sendApp(proc, title))
 // Closing the window keeps the app running in the tray: profile switching needs it to stay alive.
 let tray: Tray | null = null
 
+/** The native window buttons are drawn by the OS over our title bar, so they must match the theme. */
+const overlay = (): { color: string; symbolColor: string; height: number } => {
+  const c = chromeColors(nativeTheme.shouldUseDarkColors)
+  return { color: c.background, symbolColor: c.symbol, height: 36 }
+}
+
 function createWindow(onShown?: () => void): BrowserWindow {
   // Fit the window to the screen: tall enough to show the whole home page, never bigger than the
   // usable area (taskbar excluded), and centred.
@@ -45,10 +64,10 @@ function createWindow(onShown?: () => void): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     title: 'SnekPad Studio',
-    backgroundColor: '#1a1b1e',
+    backgroundColor: chromeColors(nativeTheme.shouldUseDarkColors).background,
     // Discord-style window: our own title bar, with the OS drawing the window buttons over it
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#1a1b1e', symbolColor: '#b5bac1', height: 36 },
+    titleBarOverlay: overlay(),
     icon,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -124,6 +143,14 @@ function registerIpc(): void {
     if (v.ok) backupPushed(v.config)
   })
 
+  ipcMain.handle('theme:get', () => loadTheme())
+  ipcMain.handle('theme:set', (_e, theme: unknown) => {
+    const v = themePrefSchema.safeParse(theme)
+    if (!v.success) return
+    saveTheme(v.data)
+    nativeTheme.themeSource = v.data // the renderer's prefers-color-scheme follows this
+  })
+
   ipcMain.handle('templates:load', () => loadTemplates())
   ipcMain.handle('templates:save', (_e, list: Template[]) => saveTemplates(list))
 
@@ -164,6 +191,19 @@ app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.snekpad.studio')
 
   app.on('browser-window-created', (_, window) => optimizer.watchWindowShortcuts(window))
+
+  nativeTheme.themeSource = loadTheme()
+  nativeTheme.on('updated', () => {
+    if (process.platform === 'darwin') return // macOS draws its own window buttons
+    for (const w of BrowserWindow.getAllWindows()) {
+      try {
+        w.setTitleBarOverlay(overlay())
+        w.setBackgroundColor(overlay().color)
+      } catch {
+        /* window closing */
+      }
+    }
+  })
 
   registerIpc()
   const startHidden = process.argv.includes('--hidden')
