@@ -11,12 +11,16 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   body{display:flex;flex-direction:column;align-items:center;justify-content:center}
   .pad{display:grid;grid-template-columns:repeat(4,38px);gap:9px;padding:13px;border:3px solid #1fd98a;border-radius:18px}
   .pad i{height:38px;border-radius:8px;background:#12254f;animation:key 2.4s infinite}
+  .pad .oled{grid-column:span 3;height:38px;border-radius:8px;background:#05080a;border:2px solid #12254f;box-sizing:border-box;animation:none}
+  .pad .knob{width:38px;height:38px;border-radius:50%;background:#12254f;position:relative;animation:none}
+  .pad .knob:after{content:'';position:absolute;left:50%;top:5px;width:3px;height:12px;margin-left:-1.5px;border-radius:2px;background:#b8f5d6;transform-origin:50% 14px;animation:turn 2.4s ease-in-out infinite}
+  @keyframes turn{0%,100%{transform:rotate(-40deg)}50%{transform:rotate(40deg)}}
   @keyframes key{0%,8%{background:#12254f}16%,34%{background:#b8f5d6}50%,100%{background:#12254f}}
   .wm{margin-top:24px;font-weight:600;letter-spacing:3px;font-size:17px;color:#fff}
   .wm b{color:#1fd98a;font-weight:600}
   .st{margin-top:8px;font-size:12px;color:#8fa3cc}
 </style>
-<div class="pad">${keys}</div>
+<div class="pad"><i class="oled"></i><i class="knob"></i>${keys}</div>
 <div class="wm">SNEK<b>PAD</b> STUDIO</div>
 <div class="st">Starting…</div>`
 
