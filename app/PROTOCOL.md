@@ -20,18 +20,16 @@ The pad ignores unknown commands.
 
 ## Knob settings in the config JSON
 
-Each profile has an `encoder` object. The pad turns it into the knob's four modes (idle, default, short press, profile switcher):
+Each profile has an `encoder` object. The pad turns it into the knob's three modes (idle, default, press):
 
 | Field | Meaning |
 |---|---|
 | `label` | Top-bar hint on the pad's screen, up to 10 characters (for example `KNOB:VOL`). |
 | `cw`, `ccw` | Action when the knob is turned right / left. |
-| `press` | Action for a **short press** (released in under 0.5 s). Allowed types: `consumer`, `hotkey` (one key plus modifiers), `key`, `none`. |
-| `pressLabel` | Up to 5 characters, shown on the pad's screen while the knob is held (`REL:<pressLabel>`). Missing = empty. |
+| `press` | Action when the knob is pressed. Allowed types: `consumer`, `hotkey` (one key plus modifiers), `key`, `none`. |
+| `pressLabel` | Up to 5 characters. Kept in the config but no longer shown on the pad. Missing = empty. |
 
-Holding the knob opens the profile switcher on the pad. That is not configurable and has no message: choosing a
-profile there changes the pad's active layer, nothing is sent to the app. The hold time (0.5 s), the switcher timeout
-(5 s), the direction and the clicks-per-step are settings in the firmware's `code.py`, not in the config.
+The direction and the clicks-per-step are settings in the firmware's `code.py`, not in the config.
 
 The old `{ "type": "layer_next" }` press action (a press stepped to the next profile) is no longer used. The app converts
 it when it loads an old config, and the pad treats it as "nothing" if it still receives one.

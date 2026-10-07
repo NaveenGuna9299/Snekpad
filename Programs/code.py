@@ -15,15 +15,18 @@
 # How the layers work: each PROFILE is one layer of 12 keys for one application.
 # With the laptop helper running, the board switches to the profile of the
 # focused window; anything it doesn't know gets "General".
-# Holding the knob opens the profile switcher to pick a layer by hand until you change app.
 # At most MAX_PROFILES profiles are kept in memory (General is always the first).
 
 import gc
+import os
+import time
 
 import board
+import microcontroller
 
 from kmk.kmk_keyboard import KMKKeyboard
 from kmk.keys import KC
+from kmk.modules import Module
 from kmk.scanners import DiodeOrientation
 from kmk.modules.layers import Layers
 from kmk.modules.macros import Macros, Tap
@@ -58,13 +61,13 @@ MAX_PROFILES = 4               # memory limit: General + up to 3 more (a 5th is 
 
 ENCODER_REVERSE = False        # True if the knob turns the wrong way
 ENCODER_DIVISOR = 4            # raw pulses per click; 2 if a click needs two turns, 1 if it skips
-KNOB_HOLD_S = 0.5              # hold the knob this long for the profile switcher
-KNOB_SWITCH_TIMEOUT_S = 5.0    # the switcher cancels itself after this long with no input
 
 ENABLE_ENCODER = True
 ENABLE_OLED = True
 ENABLE_RGB = True
 ENABLE_APP_PROFILES = True     # needs boot.py + the SnekPad desktop app (or focus_sender.py) running
+ENABLE_WATCHDOG = True         # reset the pad if the main loop stops for WATCHDOG_S seconds
+WATCHDOG_S = 5.0               # the RP2040 allows up to about 8 s
 
 if CFG:   # owner screen from the app (the OLED size stays a hardware setting below)
     try:
@@ -164,9 +167,8 @@ DIM = 0x303030
 #   keys    12 keys, row by row (3 rows x 4 columns). "FN" = hold for the utility layer
 #   labels  12 short labels (5 characters max) for the on-screen legend
 #   colors  12 key colours, 0xRRGGBB, same order as keys
-#   knob    (turn left, turn right, short press, top-bar text, press label)
-#           the press label (5 characters max) is shown while the knob is held.
-#           Holding the knob (not a short press) opens the profile switcher.
+#   knob    (turn left, turn right, press, top-bar text, press label)
+#           the press label is kept for the app's config but no longer shown on the pad.
 # Profile 0 must be General: it has no matches and is used for every other app.
 
 def p_general():
@@ -276,17 +278,15 @@ LABELS = []
 LAYER_NAMES = []
 KNOB_TEXT = []
 ENC_MAP = []
-PRESS_LABELS = []
 COLORS = []
 for i, p in enumerate(PROFILES):
     keymap.append([FN if k == "FN" else k for k in p["keys"]])
     LABELS.append(p["labels"])
     COLORS.append(p["colors"])
     LAYER_NAMES.append(p["name"])
-    left, right, press, text, press_label = p["knob"]
+    left, right, press, text, _ = p["knob"]   # the press label is no longer shown on the pad
     KNOB_TEXT.append(text)
     ENC_MAP.append((left, right, press))
-    PRESS_LABELS.append(press_label)
 
 keymap.append(UTILITY_KEYS)
 LABELS.append(UTILITY_LABELS)
@@ -294,14 +294,12 @@ COLORS.append(UTILITY_COLORS)
 LAYER_NAMES.append("UTILITY")
 KNOB_TEXT.append("KNOB:-")
 ENC_MAP.append((KC.NO, KC.NO, KC.NO))
-PRESS_LABELS.append("-")
 
 keyboard.keymap = keymap
 
 # ---------------------------------------------------------------- encoder
-# Four modes: idle (first touch only wakes the screen), default (turn = the profile's
-# knob action), short press (the profile's press action), hold = profile switcher.
-# Per layer: (turn left, turn right, short press). See encoder_modes.py.
+# Idle (first touch only wakes the screen), then turn = the profile's knob action and
+# press = the profile's press action. Per layer: (turn left, turn right, press). See encoder_modes.py.
 encoder = None
 if ENABLE_ENCODER:
     from encoder_modes import EncoderModes
@@ -309,12 +307,8 @@ if ENABLE_ENCODER:
     encoder = EncoderModes(
         board.GP7, board.GP8, board.GP9,
         actions=ENC_MAP,
-        press_labels=PRESS_LABELS,
-        n_profiles=N,
         reverse=ENCODER_REVERSE,
         divisor=ENCODER_DIVISOR,
-        hold_s=KNOB_HOLD_S,
-        switch_timeout_s=KNOB_SWITCH_TIMEOUT_S,
     )
     keyboard.modules.append(encoder)
 
@@ -363,8 +357,6 @@ if ENABLE_OLED:
         compact=True if OLED_COMPACT else None,   # None = automatic from the height
         rotation=OLED_ROTATION,
         app=apps,
-        enc=encoder,
-        n_profiles=N,
         notice=("CONFIG: " + CONFIG_ERROR) if CONFIG_ERROR else None,
     )
     keyboard.modules.append(oled)
@@ -372,6 +364,81 @@ if ENABLE_OLED:
         encoder.ui = oled
     if apps is not None:
         apps.ui = oled      # refused config pushes show up on the screen
+
+# ---------------------------------------------------------------- watchdog
+class Heartbeat(Module):
+    """Feeds the hardware watchdog on every pass of the main loop, so a frozen pad resets itself.
+    After a minute of running normally it also clears the crash counter the code.py stub keeps in nvm.
+
+    Off while developing: the watchdog can't be stopped once it is on, and it would reset the pad
+    while you are at the console. It stays off if the file /nowatchdog exists or the drive is visible."""
+
+    def __init__(self, timeout):
+        self._timeout = timeout
+        self._wdt = None
+        self._t0 = time.monotonic()
+        self._stable = False
+
+    def _dev_mode(self):
+        try:
+            os.stat("/nowatchdog")
+            return True
+        except OSError:
+            pass
+        try:
+            import storage
+
+            return storage.getmount("/").readonly   # the computer owns the drive
+        except Exception:
+            return False
+
+    def during_bootup(self, keyboard):
+        try:
+            if self._dev_mode():
+                print("watchdog off (dev mode)")
+                return
+            import watchdog
+
+            w = microcontroller.watchdog
+            w.timeout = self._timeout
+            w.mode = watchdog.WatchDogMode.RESET
+            self._wdt = w
+            print("watchdog on:", self._timeout, "s")
+        except Exception as e:
+            print("watchdog error:", e)
+
+    def before_matrix_scan(self, keyboard):
+        if self._wdt is not None:
+            self._wdt.feed()
+        if not self._stable and time.monotonic() - self._t0 > 60:
+            self._stable = True
+            try:
+                microcontroller.nvm[0] = 0
+            except Exception:
+                pass
+        return None
+
+    def process_key(self, keyboard, key, is_pressed, int_coord):
+        return key
+
+    def after_matrix_scan(self, keyboard):
+        return None
+
+    def before_hid_send(self, keyboard):
+        return None
+
+    def after_hid_send(self, keyboard):
+        return None
+
+    def on_powersave_enable(self, keyboard):
+        return None
+
+    def on_powersave_disable(self, keyboard):
+        return None
+
+
+if ENABLE_WATCHDOG:
+    keyboard.modules.append(Heartbeat(WATCHDOG_S))    # last, so it arms once everything else is up
 
 # ---------------------------------------------------------------- go
 gc.collect()

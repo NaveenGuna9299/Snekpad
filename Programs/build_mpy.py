@@ -33,8 +33,36 @@ OUT = os.path.join(HERE, "build")
 # modules imported by code.py that get their own .mpy
 MODULES = ("config_loader", "rgb_keys", "encoder_modes", "app_profiles", "oled_ui")
 
-# code.py can't be .mpy itself, so the pad's code.py just imports the compiled firmware
-STUB = "import firmware\nfirmware.keyboard.go()\n"
+# code.py can't be .mpy itself, so the pad's code.py just imports the compiled firmware.
+# If the firmware stops with an error (for example a MemoryError) the stub resets the pad, up to
+# 3 times in a row. After that it stays up, so the pad can be inspected, and unplugging it starts over.
+# The Heartbeat module in code.py clears the count after a minute of normal running.
+# nvm[0] = crashes in a row, nvm[1] = 0xA5 when the stub itself asked for the reset: the pad reports
+# "power on" after microcontroller.reset() too, so that marker is how a real power-on is told apart.
+STUB = '''import microcontroller
+import supervisor
+import time
+
+nvm = microcontroller.nvm
+if supervisor.runtime.run_reason == supervisor.RunReason.STARTUP and nvm[1] != 0xA5:
+    nvm[0] = 0
+nvm[1] = 0
+try:
+    import firmware
+    firmware.keyboard.go()
+except Exception as e:
+    n = nvm[0]
+    n = (n if n < 10 else 0) + 1
+    nvm[0] = n
+    print("firmware stopped:", repr(e), "(crash", n, "of 3)")
+    if n <= 3:
+        nvm[1] = 0xA5
+        time.sleep(1)
+        microcontroller.reset()
+    while True:
+        microcontroller.watchdog.feed()
+        time.sleep(1)
+'''
 
 
 def compile_one(mpy_cross, src, dst, name):

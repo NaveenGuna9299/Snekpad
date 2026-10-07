@@ -15,10 +15,6 @@
 #   (compact: also a big date screen) and the logo, then dims and switches off.
 #   Any key press or knob turn goes straight back to the main screen.
 #
-#   Knob (encoder_modes.py): while it is held, the top band becomes a press
-#   indicator (what releasing does + a bar and countdown to the profile
-#   switcher). The switcher is its own page: one row per profile.
-#
 # Needs in CIRCUITPY/lib: adafruit_display_text, adafruit_displayio_ssd1306
 # (10.x library bundle). Optional logo image: /snekpad.bmp (128x64) or
 # /snekpad32.bmp (128x32), 1-bit BMP.
@@ -105,8 +101,6 @@ class OledUI(Module):
         logo_bmp="/snekpad.bmp",
         logo_bmp_compact="/snekpad32.bmp",
         app=None,            # an AppProfiles instance, or None
-        enc=None,            # an EncoderModes instance, or None
-        n_profiles=None,     # profiles listed in the switcher (default: all layer names)
         notice=None,         # short error text to show after the boot logo (e.g. a config problem)
         notice_s=8,          # seconds it stays up; any key press dismisses it
     ):
@@ -115,8 +109,6 @@ class OledUI(Module):
         self._notice_footer = "using built-in keys"
         self._notice_s = notice_s
         self._notice_until = 0
-        self.enc = enc
-        self._n_prof = n_profiles if n_profiles is not None else len(layer_names)
         self.labels = labels
         self.layer_names = layer_names
         self.knob_text = knob_text
@@ -171,10 +163,9 @@ class OledUI(Module):
         # dropped again when the display goes back to main (_show), because the RP2040 has too little
         # RAM to keep all of them next to KMK.
         self._pages["main"] = self._build_main()
-        # root = [current page, knob-press overlay]; _show swaps item 0
+        # root = [current page]; _show swaps item 0
         self._root = displayio.Group()
         self._root.append(displayio.Group())
-        self._root.append(self._build_overlay())
         self.display.root_group = self._root
         # the owner screen (two names + date) is only shown if names were given
         has_owner = bool(self._names[0] or self._names[1])
@@ -189,15 +180,11 @@ class OledUI(Module):
             return self._build_owner()
         if page == "logo":
             return self._build_logo()
-        if page == "switch":
-            return self._build_switch()
         if page == "notice":
             return self._build_notice()
         return self._build_date()
 
     def _drop_page(self, page):
-        if page == "switch":    # these hold the widgets alive otherwise
-            self.sw_tiles = self.sw_labels = self.sw_title = self.sw_time = None
         self._pages.pop(page, None)
         gc.collect()
 
@@ -209,7 +196,6 @@ class OledUI(Module):
         try:
             self._suspended = True
             self.hl_tiles = self.cell_labels = self.lbl_layer = self.lbl_knob = None
-            self.sw_tiles = self.sw_labels = self.sw_title = self.sw_time = None
             self._pages = {}
             self.page = None
             self.hl_idx = None
@@ -300,106 +286,6 @@ class OledUI(Module):
         g.append(self.lbl_knob)
         return g
 
-    def _build_switch(self):
-        # profile switcher: one row per profile, the chosen row is inverted
-        g = displayio.Group()
-        pal = _white_palette()
-        if self._compact:
-            top, rh = 0, 8
-        else:
-            top, rh = 16, 12
-            self.sw_title = _text("PROFILE", 3, 8, ax=0.0)
-            self.sw_time = _text(" ", self._w - 3, 8, ax=1.0)
-            g.append(self.sw_title)
-            g.append(self.sw_time)
-        fill = displayio.Bitmap(self._w, rh, 2)
-        fill.fill(1)
-        self.sw_tiles = []
-        self.sw_labels = []
-        for i in range(self._n_prof):
-            tile = displayio.TileGrid(fill, pixel_shader=pal, x=0, y=top + i * rh)
-            tile.hidden = True
-            g.append(tile)
-            self.sw_tiles.append(tile)
-            lab = _text(self.layer_names[i], 6, top + i * rh + rh // 2, ax=0.0)
-            g.append(lab)
-            self.sw_labels.append(lab)
-        self._sw_sel = -1
-        self._sw_secs = -1
-        return g
-
-    def _build_overlay(self):
-        # shown over any page while the knob is held: what releasing does,
-        # a progress bar and a countdown to the next mode
-        g = displayio.Group()
-        g.hidden = True
-        pal = displayio.Palette(2)
-        pal[0] = BLACK
-        pal[1] = WHITE
-        band_h = 8 if self._compact else 16
-        g.append(displayio.TileGrid(displayio.Bitmap(self._w, band_h, 2), pixel_shader=pal))
-        if self._compact:
-            bx, by, bw, bh = 62, 1, 64, 6
-        else:
-            bx, by, bw, bh = 3, 9, 122, 5
-        bar = displayio.Bitmap(bw, bh, 2)
-        for x in range(bw):
-            bar[x, 0] = 1
-            bar[x, bh - 1] = 1
-        for y in range(bh):
-            bar[0, y] = 1
-            bar[bw - 1, y] = 1
-        g.append(displayio.TileGrid(bar, pixel_shader=pal, x=bx, y=by))
-        self._bar = bar
-        self._bar_inner = bw - 2
-        self._bar_h = bh
-        self._bar_cols = 0
-        self.ov_left = _text(" ", 3, 4, ax=0.0)
-        self.ov_right = _text(" ", self._w - 3, 4, ax=1.0)
-        g.append(self.ov_left)
-        if not self._compact:
-            g.append(self.ov_right)
-        self._ovl = g
-        return g
-
-    def _set_bar(self, frac):
-        cols = int(frac * self._bar_inner + 0.5)
-        cols = max(0, min(self._bar_inner, cols))
-        old = self._bar_cols
-        if cols == old:
-            return
-        v = 1 if cols > old else 0
-        for x in range(min(cols, old), max(cols, old)):
-            for y in range(1, self._bar_h - 1):
-                self._bar[x + 1, y] = v
-        self._bar_cols = cols
-
-    def _update_overlay(self):
-        enc = self.enc
-        if enc is not None and enc.held:
-            if self._ovl.hidden:
-                self._ovl.hidden = False
-            self._set_bar(enc.progress)
-            if self.ov_left.text != enc.left_text:
-                self.ov_left.text = enc.left_text or " "
-            if not self._compact and self.ov_right.text != enc.right_text:
-                self.ov_right.text = enc.right_text or " "
-        elif not self._ovl.hidden:
-            self._ovl.hidden = True
-            self._set_bar(0)
-
-    def _update_switch(self):
-        enc = self.enc
-        if enc.sel != self._sw_sel:
-            self._sw_sel = enc.sel
-            for i in range(self._n_prof):
-                on = i == enc.sel
-                self.sw_tiles[i].hidden = not on
-                self.sw_labels[i].color = BLACK if on else WHITE
-        if not self._compact and enc.switch_left != self._sw_secs:
-            self._sw_secs = enc.switch_left
-            self.sw_time.text = "%ds" % enc.switch_left
-
     def _build_owner(self):
         g = displayio.Group()
         cx = self._w // 2
@@ -484,6 +370,7 @@ class OledUI(Module):
             return
         old = self.page
         if page not in self._pages:
+            gc.collect()    # build into a compacted heap
             self._pages[page] = self._build_page(page)
         self._root[0] = self._pages[page]
         self.page = page
@@ -493,8 +380,10 @@ class OledUI(Module):
     def _top_text(self, layer):
         app = self.app
         if app is not None and app.connected and app.app_label:
-            # '*' = layer was chosen by hand (knob press), not by the focused app
-            return app.app_label + ("*" if app.manual else "")
+            # '*' = layer was chosen by hand (a layer key), not by the focused app: show that profile
+            if app.manual:
+                return self.layer_names[layer][:9] + "*"
+            return app.app_label
         return self.layer_names[layer]
 
     def _refresh_top(self):
@@ -524,13 +413,10 @@ class OledUI(Module):
             self.display.brightness = level
             self._level = level
 
-    def _switching(self):
-        return self.enc is not None and self.enc.mode == "switch"
-
     def _wake(self, now):
         self.last_activity = now
         self._set_level(1.0)
-        self._show("switch" if self._switching() else "main")
+        self._show("main")
 
     # used by EncoderModes: knob events count as activity, and the first one
     # after the idle screens only wakes the display
@@ -606,16 +492,9 @@ class OledUI(Module):
             elif idle >= self._dim_s:
                 self._set_level(0.25)
 
-            if self._switching():
-                self.last_activity = now
-                self._show("switch")
-                self._update_switch()
-            elif self.page == "switch":
-                self._show("main")
-            elif idle >= self._idle_s:
+            if idle >= self._idle_s:
                 n = int((idle - self._idle_s) // self._page_s)
                 self._show(self._idle_pages[n % len(self._idle_pages)])
-            self._update_overlay()
         except Exception as e:
             self._fail("before_matrix_scan", e)
         return None

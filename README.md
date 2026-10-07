@@ -32,7 +32,7 @@ The app only configures the pad. A new pad still needs its firmware set up by ha
 ## Features
 
 - 3 x 4 keys, up to 4 profiles, each with its own key actions, labels and per-key RGB colours.
-- Rotary knob with four modes (idle, default, short press, profile switcher). Each profile sets its own turn and press actions.
+- Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
 - Automatic profile switching based on the focused app.
 - Config is pushed from the app over USB serial with a length and CRC check, then saved on the pad as `config.json`.
