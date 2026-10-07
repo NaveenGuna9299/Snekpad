@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # boot.py - makes the macropad act like a plain keyboard when it is plugged in:
 #   * the CIRCUITPY drive is hidden, so nothing pops up on the computer
 #   * the second USB serial port for focus_sender.py is on

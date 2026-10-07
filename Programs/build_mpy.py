@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """Precompile the SnekPad firmware to .mpy so it fits in the RP2040's RAM.
 
 Why: with everything left as .py source, CircuitPython compiles it in RAM on every boot, and on the

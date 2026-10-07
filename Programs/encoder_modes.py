@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # encoder_modes.py - rotary encoder with a push button, as a KMK module.
 # Copy this file to the root of CIRCUITPY (next to code.py).
 # Replaces KMK's EncoderHandler so the first touch can wake the OLED without doing anything.

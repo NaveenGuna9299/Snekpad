@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # oled_ui.py - OLED screens for the macropad, as a KMK module.
 # Copy this file to the root of CIRCUITPY (next to code.py).
 #

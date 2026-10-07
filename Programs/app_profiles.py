@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # app_profiles.py - switches the macropad layer to match the focused window.
 # Copy this file to the root of CIRCUITPY (next to code.py).
 #

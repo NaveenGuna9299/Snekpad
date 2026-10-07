@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 # config_loader.py - loads, checks and saves the pad's config.json (sent by SnekPad Studio).
 # Copy this file to the root of CIRCUITPY (next to code.py).
 #

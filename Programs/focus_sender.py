@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-3.0-only
 """focus_sender.py - tells the macropad which window is in focus (Windows).
 
 Every half second it reads the focused window (program name + window title) and
