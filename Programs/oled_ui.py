@@ -2,23 +2,18 @@
 # oled_ui.py - OLED screens for the macropad, as a KMK module.
 # Copy this file to the root of CIRCUITPY (next to code.py).
 #
-# Two layouts, same behaviour:
+# Layout for the 128x32 screen (0.91" HS91L02W2C01 on the PCB):
+#   main     top line: focused app (or layer name) + knob mode,
+#            three lines below: the 3x4 key legend, 4 keys per line
 #
-#   128x64 (GME12864-13 test screen)
-#       main     yellow band: focused app (or layer name) + knob mode,
-#                3x4 key legend below with a box round each key
-#   128x32 (0.91" HS91L02W2C01 on the PCB)  - "compact"
-#       main     top line: focused app (or layer name) + knob mode,
-#                three lines below: the 3x4 key legend, 4 keys per line
-#
-#   In both, the key you press is highlighted (inverted) while held and for a
-#   moment after. After the board has been idle it shows the owner screen (if set),
-#   (compact: also a big date screen) and the logo, then dims and switches off.
+#   The key you press is highlighted (inverted) while held and for a moment
+#   after. After the board has been idle it shows the owner screen (if set),
+#   a big date screen and the logo, then dims and switches off.
 #   Any key press or knob turn goes straight back to the main screen.
 #
 # Needs in CIRCUITPY/lib: adafruit_display_text, adafruit_displayio_ssd1306
-# (10.x library bundle). Optional logo image: /snekpad.bmp (128x64) or
-# /snekpad32.bmp (128x32), 1-bit BMP.
+# (10.x library bundle). Optional logo image: /snekpad32.bmp
+# (128x32, 1-bit BMP).
 #
 # If anything in here fails, the error is printed and the screens switch off;
 # the keyboard itself keeps working.
@@ -90,8 +85,7 @@ class OledUI(Module):
         date="",
         address=0x3C,
         width=128,
-        height=64,
-        compact=None,        # None = automatic: compact layout on a 128x32 screen
+        height=32,
         rotation=0,          # 180 if the screen is mounted upside down
         highlight_s=0.25,    # how long the highlight stays after you let go
         boot_splash_s=2.0,
@@ -99,8 +93,7 @@ class OledUI(Module):
         page_s=6,            # seconds per idle screen
         dim_s=120,           # seconds idle before dimming
         off_s=600,           # seconds idle before the screen switches off
-        logo_bmp="/snekpad.bmp",
-        logo_bmp_compact="/snekpad32.bmp",
+        logo_bmp="/snekpad32.bmp",
         app=None,            # an AppProfiles instance, or None
         notice=None,         # short error text to show after the boot logo (e.g. a config problem)
         notice_s=8,          # seconds it stays up; any key press dismisses it
@@ -120,7 +113,6 @@ class OledUI(Module):
         self._addr = address
         self._w = width
         self._h = height
-        self._compact = (height == 32) if compact is None else compact
         self._rotation = rotation
         self._hl_s = highlight_s
         self._splash_s = boot_splash_s
@@ -128,7 +120,7 @@ class OledUI(Module):
         self._page_s = page_s
         self._dim_s = dim_s
         self._off_s = off_s
-        self._logo_bmp = logo_bmp_compact if self._compact else logo_bmp
+        self._logo_bmp = logo_bmp
         self.app = app
         self._top = None
 
@@ -151,8 +143,8 @@ class OledUI(Module):
         self.enabled = False
 
     def _setup(self):
-        if self._w != 128 or self._h not in (32, 64):
-            raise ValueError("oled_ui supports 128x64 and 128x32 screens")
+        if self._w != 128 or self._h != 32:
+            raise ValueError("oled_ui supports 128x32 screens")
 
         displayio.release_displays()
         i2c = busio.I2C(scl=self._scl, sda=self._sda, frequency=400000)
@@ -170,10 +162,7 @@ class OledUI(Module):
         self.display.root_group = self._root
         # the owner screen (two names + date) is only shown if names were given
         has_owner = bool(self._names[0] or self._names[1])
-        if self._compact:
-            self._idle_pages = ["owner", "date", "logo"] if has_owner else ["logo"]
-        else:
-            self._idle_pages = ["owner", "logo"] if has_owner else ["logo"]
+        self._idle_pages = ["owner", "date", "logo"] if has_owner else ["logo"]
         gc.collect()
 
     def _build_page(self, page):
@@ -232,35 +221,12 @@ class OledUI(Module):
         pal = _white_palette()
 
         cw = self._w // COLS
-        if self._compact:
-            band_h = 8                    # one text line
-            ch = 8                        # three more text lines for the legend
-        else:
-            band_h = 16                   # the yellow band
-            ch = (self._h - band_h) // ROWS
+        band_h = 8                        # one text line
+        ch = 8                            # three more text lines for the legend
 
         # a solid block shared by every highlight
-        if self._compact:
-            fill = displayio.Bitmap(cw - 2, ch, 2)
-        else:
-            fill = displayio.Bitmap(cw - 2, ch - 2, 2)
+        fill = displayio.Bitmap(cw - 2, ch, 2)
         fill.fill(1)
-
-        if not self._compact:
-            # 1-pixel outline round every key (no room for this on 32 rows)
-            outline = displayio.Bitmap(cw - 2, ch - 2, 2)
-            for x in range(cw - 2):
-                outline[x, 0] = 1
-                outline[x, ch - 3] = 1
-            for y in range(ch - 2):
-                outline[0, y] = 1
-                outline[cw - 3, y] = 1
-            for i in range(KEYS):
-                col = i % COLS
-                row = i // COLS
-                g.append(displayio.TileGrid(
-                    outline, pixel_shader=pal,
-                    x=col * cw + 1, y=band_h + row * ch + 1))
 
         self.hl_tiles = []
         for i in range(KEYS):
@@ -268,7 +234,7 @@ class OledUI(Module):
             row = i // COLS
             tile = displayio.TileGrid(
                 fill, pixel_shader=pal,
-                x=col * cw + 1, y=band_h + row * ch + (0 if self._compact else 1))
+                x=col * cw + 1, y=band_h + row * ch)
             tile.hidden = True
             g.append(tile)
             self.hl_tiles.append(tile)
@@ -290,30 +256,19 @@ class OledUI(Module):
     def _build_owner(self):
         g = displayio.Group()
         cx = self._w // 2
-        if self._compact:
-            # line 1: first name. line 2: heart + second name (both text size 2)
-            g.append(_text(self._names[0], cx, 8, scale=2))
-            w2 = len(self._names[1]) * 12
-            start = max(0, (self._w - (9 + 5 + w2)) // 2)
-            g.append(_heart(start, 20))
-            g.append(_text(self._names[1], start + 14, 24, scale=2, ax=0.0))
-        else:
-            g.append(_text(self._names[0], cx, 8, scale=2))
-            g.append(_heart(cx - 4, 21))
-            g.append(_text(self._names[1], cx, 40, scale=2))
-            g.append(_text(self._date, cx, 57))
+        # line 1: first name. line 2: heart + second name (both text size 2)
+        g.append(_text(self._names[0], cx, 8, scale=2))
+        w2 = len(self._names[1]) * 12
+        start = max(0, (self._w - (9 + 5 + w2)) // 2)
+        g.append(_heart(start, 20))
+        g.append(_text(self._names[1], start + 14, 24, scale=2, ax=0.0))
         return g
 
     def _build_notice(self):
         """Error screen: a title, what went wrong, and a footer saying what the pad is doing about it."""
         text = "".join(c if " " <= c <= "~" else "?" for c in self._notice)
         width = 21      # characters per line (6 px each on 128 px)
-        if self._compact:
-            lines = [self._notice_title, text[:width], self._notice_footer]
-        else:
-            lines = [self._notice_title, ""]
-            lines += [text[i:i + width] for i in range(0, min(len(text), 3 * width), width)]
-            lines += ["", self._notice_footer, "(press a key)"]
+        lines = [self._notice_title, text[:width], self._notice_footer]
         g = displayio.Group()
         for i, s in enumerate(lines):
             if s:
@@ -340,7 +295,7 @@ class OledUI(Module):
             self._fail("show_notice", e)
 
     def _build_date(self):
-        # compact only: the date in big letters
+        # the date in big letters
         g = displayio.Group()
         g.append(_text(self._date, self._w // 2, 16, scale=2))
         return g
@@ -358,11 +313,7 @@ class OledUI(Module):
             pass
         if not done:
             # text logo until the BMP is on the board
-            if self._compact:
-                g.append(_text("SNEKPAD", self._w // 2, 16, scale=3))
-            else:
-                g.append(_text("SNEKPAD", self._w // 2, 30, scale=3))
-                g.append(_text("macropad", self._w // 2, 54))
+            g.append(_text("SNEKPAD", self._w // 2, 16, scale=3))
         return g
 
     # ------------------------------------------------------------ drawing
@@ -445,7 +396,7 @@ class OledUI(Module):
                 self._show("notice")
                 self._notice_until = self.last_activity + self._notice_s
             self.enabled = True
-            print("oled_ui ready (%s layout)" % ("compact" if self._compact else "full"))
+            print("oled_ui ready (128x32)")
         except Exception as e:
             self._fail("setup", e)
 

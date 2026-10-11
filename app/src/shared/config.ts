@@ -97,7 +97,7 @@ export const configSchema = z
         line2: z.string().max(10),
         date: z.string().max(10)
       }),
-      oled: z.object({ width: z.literal(128), height: z.union([z.literal(32), z.literal(64)]) })
+      oled: z.object({ width: z.literal(128), height: z.literal(32).catch(32) })
     }),
     settings: z.object({ brightness: z.number().min(0.05).max(0.5) }),
     profiles: z.array(profileSchema).min(1).max(MAX_PROFILES)

@@ -120,7 +120,7 @@ export class ConfigReceiver {
 
 const liveColor = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 export const liveViewSchema = z.object({
-  h: z.union([z.literal(32), z.literal(64)]), // OLED height
+  h: z.literal(32).catch(32), // OLED height
   p: z
     .array(
       z.object({

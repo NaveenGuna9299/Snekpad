@@ -6,7 +6,6 @@ export type Selection = { kind: 'key'; index: number } | { kind: 'encoder' }
 
 type Props = {
   profile: Profile
-  oledHeight: 32 | 64
   selection: Selection
   onSelect: (s: Selection) => void
   /** Keys the pad reports as held right now. */
@@ -26,7 +25,6 @@ const H = PAD + TOP_H + GAP + ROWS * KEY + (ROWS - 1) * GAP + PAD
 /** The pad drawn as SVG: OLED + encoder on top, 4 x 3 keys below. Key colour = its RGB colour. */
 export function PadView({
   profile,
-  oledHeight,
   selection,
   onSelect,
   onSwap,
@@ -80,7 +78,7 @@ export function PadView({
         strokeWidth="2"
       />
 
-      <Oled profile={profile} x={PAD} y={PAD} w={GRID_W - 96} h={TOP_H} height={oledHeight} />
+      <Oled profile={profile} x={PAD} y={PAD} w={GRID_W - 96} h={TOP_H} />
 
       <g
         role="button"
@@ -200,15 +198,13 @@ function Oled({
   x,
   y,
   w,
-  h,
-  height
+  h
 }: {
   profile: Profile
   x: number
   y: number
   w: number
   h: number
-  height: 32 | 64
 }): React.JSX.Element {
   // 128 px wide; text is 6 px per character, so a 4-column legend cell is 32 px (5 chars)
   const scale = (w - 12) / 128
@@ -246,11 +242,6 @@ function Oled({
           </text>
         ))}
       </g>
-      {height === 64 && (
-        <text x={x + w - 6} y={y + h - 4} textAnchor="end" fontSize="8" fill="var(--muted)">
-          128×64
-        </text>
-      )}
     </g>
   )
 }

@@ -182,7 +182,6 @@ function App(): React.JSX.Element {
           profile={padProfile ?? profile}
           padProfileName={padProfile?.name}
           pressed={pressed}
-          oledHeight={config.device.oled.height}
           device={device}
           profileCount={config.profiles.length}
           onOpen={() => setView('editor')}
@@ -224,7 +223,6 @@ function App(): React.JSX.Element {
             <main className="flex min-w-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
               <PadView
                 profile={profile}
-                oledHeight={config.device.oled.height}
                 selection={selection}
                 onSelect={setSelection}
                 onSwap={swapKeys}

@@ -141,6 +141,8 @@ for n in os.listdir('/'):
 
     Write-Host "Writing..."
     foreach ($f in $files) { Pad-Put (Join-Path $build $f) "/$f" }
+    $logo = Join-Path $here 'snekpad32.bmp'      # startup logo, 128x32 1-bit BMP
+    if (Test-Path $logo) { Pad-Put $logo '/snekpad32.bmp' }
 
     if ($Dev) {
         Pad-Exec "open('/nowatchdog', 'w').close()`n" | Out-Null

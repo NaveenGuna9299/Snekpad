@@ -78,8 +78,7 @@ if CFG:   # owner screen from the app (the OLED size stays a hardware setting be
     except Exception as e:
         print("config owner screen ignored:", e)
 
-OLED_HEIGHT = 64               # 64 = GME12864-13 test screen, 32 = the 0.91" screen on the PCB
-OLED_COMPACT = False           # True shows the 128x32 layout on a 128x64 test screen
+OLED_HEIGHT = 32               # the 0.91" 128x32 screen on the PCB
 OLED_ROTATION = 0              # 180 if the screen turns out to be upside down
 RGB_START_LEVEL = 3            # 0-4 index into LEVELS in rgb_keys.py (3 = 40% brightness)
 
@@ -340,7 +339,7 @@ if ENABLE_APP_PROFILES:
     keyboard.modules.append(apps)
 
 # ---------------------------------------------------------------- OLED
-# Screens live in oled_ui.py (128x64 or the compact 128x32 layout). Needs adafruit_display_text and
+# Screens live in oled_ui.py (128x32). Needs adafruit_display_text and
 # adafruit_displayio_ssd1306 in CIRCUITPY/lib (10.x bundle).
 if ENABLE_OLED:
     from oled_ui import OledUI
@@ -355,7 +354,6 @@ if ENABLE_OLED:
         date=OWNER_DATE,
         width=128,
         height=OLED_HEIGHT,
-        compact=True if OLED_COMPACT else None,   # None = automatic from the height
         rotation=OLED_ROTATION,
         app=apps,
         notice=("CONFIG: " + CONFIG_ERROR) if CONFIG_ERROR else None,

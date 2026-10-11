@@ -5,7 +5,6 @@ import { SettingsMenu } from './SettingsMenu'
 
 type Props = {
   profile: Profile
-  oledHeight: 32 | 64
   device: DeviceState
   profileCount: number
   onOpen: () => void
@@ -25,7 +24,6 @@ function greeting(): string {
 /** The start screen: a greeting and the pad with its status, like Logi Options+. */
 export function Home({
   profile,
-  oledHeight,
   device,
   profileCount,
   onOpen,
@@ -53,7 +51,6 @@ export function Home({
           <span className="pointer-events-none block" aria-hidden="true">
             <PadView
               profile={profile}
-              oledHeight={oledHeight}
               selection={{ kind: 'key', index: -1 }}
               onSelect={() => {}}
               pressed={pressed}
