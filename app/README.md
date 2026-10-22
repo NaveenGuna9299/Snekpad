@@ -78,14 +78,43 @@ of silencing anything, and a production Studio has no key test at all. The pad-s
 
 ## Setting up a new pad
 
-A new pad (Waveshare RP2040-Zero) is set up by hand once, in this order. After that, firmware updates run from
-the app (see [below](#updating-the-pads-firmware-from-studio)).
+A new pad (Waveshare RP2040-Zero) is set up by hand once, on Windows, in the order below. After that, firmware updates
+run from the app (see [below](#updating-the-pads-firmware-from-studio)). You need Python 3 (from python.org: on Windows
+the `python` command of the Microsoft Store is only a stub and does not work, use `py -3` or the real install) and the
+`Programs/` folder of this repository.
 
-1. **CircuitPython 10.x.** Download the `.uf2` from circuitpython.org/board/waveshare_rp2040_zero. Hold BOOT while
-   plugging in USB, then drag the `.uf2` onto the `RPI-RP2` drive. The board restarts as `CIRCUITPY`.
-2. **KMK firmware.** Download github.com/KMKfw/kmk_firmware and copy its `kmk/` folder to the root of `CIRCUITPY`.
-3. **Libraries.** Download the Adafruit CircuitPython library bundle (10.x) from circuitpython.org/libraries and copy
-   only these into `CIRCUITPY/lib/`:
+The pad's `CIRCUITPY` drive is only 1 MB. Only the files named below go on it.
+
+1. **CircuitPython 10.3.1.** Download the `.uf2` for the board from circuitpython.org/board/waveshare_rp2040_zero.
+   Hold BOOT while plugging in USB, release it, and drag the `.uf2` onto the **`RPI-RP2`** drive (not `CIRCUITPY`: the
+   `.uf2` is 1.8 MB and cannot fit there). The board restarts by itself and a `CIRCUITPY` drive appears. A pad that was
+   used before can be wiped first with Raspberry Pi's `flash_nuke.uf2` (the same BOOT steps), then step 1 again.
+2. **Download three things** (none of them is stored in this repository):
+   - **KMK:** github.com/KMKfw/kmk_firmware. Unzip it; you need the folder named `kmk` inside.
+   - **The Adafruit libraries:** the 10.x bundle from circuitpython.org/libraries (the `.mpy` one). Unzip it; you need
+     three items from its `lib` folder, see step 5.
+   - **mpy-cross:** the build for your computer that matches CircuitPython exactly, from
+     `adafruit-circuit-python.s3.amazonaws.com/index.html?prefix=bin/mpy-cross/` (on Windows
+     `mpy-cross-windows-10.3.1.static.exe`).
+3. **Compile the firmware.** Left as plain `.py` source, KMK and the firmware use so much RAM on the RP2040 that the OLED
+   fails with `MemoryError` (seen on CircuitPython 10.3.1), so everything is compiled to `.mpy` first. In PowerShell:
+
+   ```powershell
+   cd "G:\SnekPad\Programs"
+   py -3 build_mpy.py --mpy-cross "C:\Downloads\mpy-cross-windows-10.3.1.static.exe" --kmk "C:\Downloads\kmk_firmware-main\kmk"
+   ```
+
+   Use your own paths, in quotes. Do not type the `<` `>` of a placeholder: PowerShell reads `>` as "write to a file".
+   `--kmk` must point at the folder named `kmk`. The result is in `Programs/build/`, and the output ends with
+   `built into ...\Programs\build` and `71 kmk files` (the number can differ).
+
+4. **Copy the build to the pad.** Copy everything in `Programs/build/` to the root of `CIRCUITPY`, **except the `ota`
+   folder** (that is the update bundle for the app, it does not belong on the pad) and **except `boot.py`**, which goes
+   in last (step 6). This brings the compiled `kmk/` folder, `firmware.mpy`, the other `.mpy` files and a two-line
+   `code.py` that starts the firmware. Never copy KMK's own `kmk` folder from the zip: it is source code, it uses too
+   much RAM, and because CircuitPython loads a `.py` before a `.mpy` of the same name, a leftover `.py` would win.
+   Delete such a folder (and any `.py` that has a `.mpy` twin) from `CIRCUITPY`.
+5. **Copy the three libraries.** Create a folder `lib` on `CIRCUITPY` and copy only these into it, not the whole bundle:
 
    | Library                           | Used by                      |
    | --------------------------------- | ---------------------------- |
@@ -93,25 +122,34 @@ the app (see [below](#updating-the-pads-firmware-from-studio)).
    | `adafruit_displayio_ssd1306.mpy`  | `oled_ui.py` (OLED driver)   |
    | `adafruit_display_text/` (folder) | `oled_ui.py` (text labels)   |
 
-4. **Pad programs, precompiled.** Left as plain `.py` source, KMK and the firmware use so much RAM on the RP2040 that
-   the OLED fails with `MemoryError` (seen on CircuitPython 10.3.1). So compile them to `.mpy` first:
+6. **`boot.py` last, then a full power cycle.** Copy `Programs/build/boot.py` to `CIRCUITPY`. It hides the drive and turns
+   on the second serial port the app talks to, but only after a real power-up: eject the drive in Explorer, unplug the
+   pad, wait 5 seconds, and plug it in again **without holding a key**. The drive must not appear again. (To get the drive
+   back later, hold the top-left key while plugging in.)
+7. **Check and finish with `flash_pad.ps1`.** With the drive hidden, run, in `Programs`:
 
-   1. Download the `mpy-cross` build that matches your CircuitPython version from
-      `adafruit-circuit-python.s3.amazonaws.com/index.html?prefix=bin/mpy-cross/` (for example
-      `mpy-cross-windows-10.3.1.static.exe`).
-   2. Run, in `../Programs`: `python build_mpy.py --mpy-cross <path to mpy-cross> --kmk <path to your kmk folder>`
-   3. Copy everything in `Programs/build/` to the root of `CIRCUITPY` (it replaces `code.py` with a two-line stub
-      that runs the compiled `firmware.mpy`, and includes `kmk/`).
-   4. Delete the `.py` files that now have a `.mpy` twin from `CIRCUITPY` (the old `kmk/` `.py` files,
-      `config_loader.py`, `rgb_keys.py`, `encoder_modes.py`, `app_profiles.py`, `oled_ui.py`), because CircuitPython
-      loads a `.py` before a `.mpy` of the same name.
+   ```powershell
+   .\flash_pad.ps1 -MpyCross "C:\Downloads\mpy-cross-windows-10.3.1.static.exe"
+   ```
 
-   Do not copy `focus_sender.py`: it runs on the PC as an alternative to this app. Edit the files in `../Programs`,
-   never on the pad, and run `build_mpy.py` again after every change.
+   It writes the start-up logo (`snekpad32.bmp`), checks every file, restarts the pad and prints `PASS` or `FAIL` for the
+   firmware, OLED, knob, LEDs, crashes, watchdog and development tools. Expect `PASS: the pad is flashed and running`.
+   Close SnekPad Studio first (it holds the pad's serial port) and do not unplug the pad while it runs. Without the logo
+   file the screen shows the text SNEKPAD instead of the image.
 
-5. **Check it works** (keys, LEDs and screen respond) while the drive is still visible.
-6. **`boot.py` last.** Copy `boot.py`, then unplug and replug the pad. It hides the drive and turns on the second serial
-   port this app talks to. To get the drive back later, hold the top-left key while plugging in USB.
+Do not copy `focus_sender.py`: it runs on the PC as an alternative to this app. Edit the files in `../Programs`, never on
+the pad, and run `build_mpy.py` and `flash_pad.ps1` again after every change.
+
+**If something goes wrong**
+
+| What you see                                    | Why, and what to do                                                                                                 |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The `.uf2` will not copy ("not enough space")   | You are on `CIRCUITPY`. It goes on `RPI-RP2` (hold BOOT while plugging in).                                         |
+| No lights, no logo, the drive is visible        | Something is missing, usually the compiled `kmk/` folder (the firmware imports it first). Check the list in step 4. |
+| `flash_pad.ps1`: `Read-only filesystem`         | The drive is still visible to the computer. Redo the power cycle of step 6, without holding a key.                  |
+| `flash_pad.ps1`: `No SnekPad console found`     | The computer does not see the pad: try another USB port or cable, and close SnekPad Studio.                         |
+| The screen shows the text SNEKPAD, not the logo | `snekpad32.bmp` is not on the pad yet: run `flash_pad.ps1`.                                                         |
+| `MemoryError` on the pad's console              | KMK or the firmware is on the pad as `.py`: use the compiled `Programs/build` output only.                          |
 
 ### Updating the pad's firmware from Studio
 
