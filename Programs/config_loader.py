@@ -33,6 +33,8 @@ SCHEMA_VERSION = 1
 MAX_PROFILES = 4
 KEYS = 12
 MAX_BYTES = 24000              # bigger than any real config; guards RAM
+DEFAULT_SLEEP_MINUTES = 2      # settings.sleepMinutes when the config has none (an older app)
+MAX_SLEEP_MINUTES = 60
 
 MODS = {"CTRL": "LCTL", "SHIFT": "LSFT", "ALT": "LALT", "GUI": "LGUI"}
 
@@ -171,6 +173,14 @@ def load():
 
 
 # ---------------------------------------------------------------- checking
+def sleep_minutes(cfg):
+    """Minutes of idle time before the screen and key LEDs switch off (0 = never). Missing = the default."""
+    v = cfg["settings"].get("sleepMinutes", DEFAULT_SLEEP_MINUTES)
+    if isinstance(v, bool) or not isinstance(v, int) or not 0 <= v <= MAX_SLEEP_MINUTES:
+        raise ValueError("sleepMinutes must be 0 to %d" % MAX_SLEEP_MINUTES)
+    return v
+
+
 def check(cfg):
     """Raises ValueError (or KeyError/TypeError) if the structure is not what the firmware needs."""
     if cfg["schema_version"] != SCHEMA_VERSION:
@@ -187,6 +197,7 @@ def check(cfg):
             raise ValueError("profile without a name")
         p["match"]["windows"], p["match"]["macos"], p["match"]["titles"], p["encoder"]["cw"]
     cfg["settings"]["brightness"], cfg["device"]["owner_screen"]
+    sleep_minutes(cfg)
 
 
 # ---------------------------------------------------------------- building

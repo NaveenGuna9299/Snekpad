@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   type Action,
   blankProfile,
+  DEFAULT_SLEEP_MINUTES,
   defaultConfig,
   MAX_PROFILES,
+  MAX_SLEEP_MINUTES,
   migrateConfig,
   resolveForOs,
   validateConfig
@@ -137,5 +139,46 @@ describe('multi-key actions', () => {
     expect(mac.profiles[0].keys[0].action).toMatchObject({
       steps: [{ keys: ['GUI', 'K'] }, { keys: ['A'] }]
     })
+  })
+})
+
+describe('sleep time setting', () => {
+  const withSleep = (value: unknown): unknown => {
+    const c = JSON.parse(JSON.stringify(defaultConfig()))
+    c.settings.sleepMinutes = value
+    return c
+  }
+
+  it('is 2 minutes by default', () => {
+    expect(DEFAULT_SLEEP_MINUTES).toBe(2)
+    expect(defaultConfig().settings.sleepMinutes).toBe(2)
+  })
+
+  it('accepts whole minutes from 0 (never) to the maximum', () => {
+    for (const minutes of [0, 1, 2, 30, MAX_SLEEP_MINUTES]) {
+      const r = validateConfig(withSleep(minutes))
+      expect(r.ok).toBe(true)
+      if (r.ok) expect(r.config.settings.sleepMinutes).toBe(minutes)
+    }
+  })
+
+  it('rejects negative, too large, fractional and non-numeric values', () => {
+    for (const bad of [-1, MAX_SLEEP_MINUTES + 1, 1.5, '2', null, true, NaN])
+      expect(validateConfig(withSleep(bad)).ok, String(bad)).toBe(false)
+  })
+
+  it('gives a config saved before the setting existed the default', () => {
+    const old = JSON.parse(JSON.stringify(defaultConfig()))
+    delete old.settings.sleepMinutes
+    const r = validateConfig(old)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.config.settings.sleepMinutes).toBe(DEFAULT_SLEEP_MINUTES)
+  })
+
+  it('is part of what is sent to the pad', () => {
+    const c = defaultConfig()
+    c.settings.sleepMinutes = 7
+    expect(JSON.parse(JSON.stringify(resolveForOs(c, 'windows'))).settings.sleepMinutes).toBe(7)
+    expect(JSON.parse(JSON.stringify(resolveForOs(c, 'macos'))).settings.sleepMinutes).toBe(7)
   })
 })

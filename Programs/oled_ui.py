@@ -133,6 +133,8 @@ class OledUI(Module):
         self.last_activity = time.monotonic()
         self._last_tick = 0
         self._level = 1.0
+        self._bus = None            # the display bus, for switching the panel off (see _panel)
+        self._panel_on = True
         self._pages = {}
         self._idle_pages = []
         self._suspended = False
@@ -149,6 +151,8 @@ class OledUI(Module):
         displayio.release_displays()
         i2c = busio.I2C(scl=self._scl, sda=self._sda, frequency=400000)
         bus = i2cdisplaybus.I2CDisplayBus(i2c, device_address=self._addr)
+        self._bus = bus
+        self._panel_on = True
         self.display = adafruit_displayio_ssd1306.SSD1306(
             bus, width=self._w, height=self._h, rotation=self._rotation)
 
@@ -275,8 +279,17 @@ class OledUI(Module):
                 g.append(_text(s, 2, i * 8 + 4, ax=0.0))
         return g
 
-    def show_notice(self, text, title="CONFIG ERROR", footer="config not changed"):
-        """Pop up an error while the pad is running (e.g. a push that was refused). A key press dismisses it."""
+    def clear_notice(self):
+        """Take a pop-up away again (the firmware update prompt, when it is answered or gives up)."""
+        if self.enabled and self.page == "notice":
+            try:
+                self._show("main")
+            except Exception as e:
+                self._fail("clear_notice", e)
+
+    def show_notice(self, text, title="CONFIG ERROR", footer="config not changed", seconds=None):
+        """Pop up a message while the pad is running (e.g. a push that was refused). A key press dismisses it.
+        It stays for notice_s seconds unless seconds says otherwise."""
         if not self.enabled:
             return
         try:
@@ -289,7 +302,7 @@ class OledUI(Module):
             self._show("notice")
             now = time.monotonic()
             self.last_activity = now
-            self._notice_until = now + self._notice_s
+            self._notice_until = now + (self._notice_s if seconds is None else seconds)
             self._set_level(1.0)
         except Exception as e:
             self._fail("show_notice", e)
@@ -360,9 +373,24 @@ class OledUI(Module):
         self.hl_tiles[i].hidden = not on
         self.cell_labels[i].color = BLACK if on else WHITE
 
+    def _panel(self, on):
+        # Switch the panel itself off / on (SSD1306 commands 0xAE / 0xAF). Brightness 0.0 is only the lowest
+        # contrast, and the logo stays faintly visible; this really turns the screen off.
+        if on == self._panel_on:
+            return
+        try:
+            self._bus.send(0xAF if on else 0xAE, b"")
+            self._panel_on = on
+        except Exception as e:
+            print("oled_ui panel", "on" if on else "off", "error:", e)   # the screen just stays at its lowest contrast
+
     def _set_level(self, level):
         if level != self._level:
+            if level > 0:
+                self._panel(True)
             self.display.brightness = level
+            if level == 0:
+                self._panel(False)
             self._level = level
 
     def _wake(self, now):
@@ -382,6 +410,18 @@ class OledUI(Module):
     @property
     def asleep(self):
         return self.enabled and time.monotonic() - self.last_activity >= self._idle_s
+
+    def idle_level(self):
+        # 0 = in use, 1 = dimmed, 2 = switched off: the same steps the screen itself takes (dim_s, off_s),
+        # so the key LEDs (rgb_keys.py) can follow it instead of staying lit after the screen has gone dark
+        if not self.enabled:
+            return 0
+        idle = time.monotonic() - self.last_activity
+        if idle >= self._off_s:
+            return 2
+        if idle >= self._dim_s:
+            return 1
+        return 0
 
     # ------------------------------------------------------------ KMK hooks
     def during_bootup(self, keyboard):

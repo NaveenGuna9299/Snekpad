@@ -35,12 +35,22 @@ LED_FOR_KEY = (0, 1, 2, 3,
 # brightness steps for the DIM / BRT keys (0.5 max keeps 12 LEDs inside USB limits)
 LEVELS = (0.05, 0.12, 0.25, 0.4, 0.5)
 
+# When the profile changes, all keys show the new profile's main colour for this long (seconds), then the
+# per-key colours return. Only between profiles: holding FN (the utility layer) does not flash.
+SWITCH_FLASH_S = 0.3
+
 
 class RgbKeys(Module):
     def __init__(self, pin, level=3, press_flash=True):
         self._pin = pin
         self._level = max(0, min(level, len(LEVELS) - 1))
         self._flash = press_flash
+
+        self.ui = None          # the OledUI: the LEDs dim and switch off with the screen (set by code.py)
+        self.profile_layers = 0 # layers below this number are profiles; 0 = no flash on profile change
+        self._idle = 0          # 0 in use, 1 dimmed, 2 off (follows the screen)
+        self._flash_until = 0
+        self._flash_color = 0
 
         self.px = None
         self.enabled = False
@@ -67,9 +77,23 @@ class RgbKeys(Module):
         if layer == self.layer:
             self._paint()
 
+    def _accent(self, layer):
+        # the colour most keys of a layer have, ignoring dark keys: the profile's main colour
+        row = self.colors[layer] if 0 <= layer < len(self.colors) else ()
+        counts = {}
+        best = 0
+        for c in row:
+            if c:
+                counts[c] = counts.get(c, 0) + 1
+                if counts[c] > counts.get(best, 0):
+                    best = c
+        return best
+
     def _color(self, i):
-        if not self.on:
+        if not self.on or self._idle == 2:
             return 0
+        if self._flash_until and self._flash_color:
+            return self._flash_color
         if i in self._down and self._flash:
             return WHITE
         layer = self.layer if 0 <= self.layer < len(self.colors) else 0
@@ -96,10 +120,21 @@ class RgbKeys(Module):
         self._level = min(len(LEVELS) - 1, self._level + 1)
         self._apply_level()
 
+    def _brightness(self):
+        # while the screen is dimmed the LEDs drop to the lowest step (never up: a lower setting stays)
+        b = LEVELS[self._level]
+        return min(b, LEVELS[0]) if self._idle == 1 else b
+
     def _apply_level(self):
         if self.px is not None:
-            self.px.brightness = LEVELS[self._level]
+            self.px.brightness = self._brightness()
             self._paint()
+
+    def _apply_idle(self, idle):
+        self._idle = idle
+        if idle == 2:
+            self._flash_until = 0
+        self._apply_level()
 
     # ------------------------------------------------------------ KMK hooks
     def during_bootup(self, keyboard):
@@ -138,9 +173,22 @@ class RgbKeys(Module):
             return None
         self._last_tick = now
         try:
+            if self.ui is not None:
+                idle = self.ui.idle_level()
+                if idle != self._idle:
+                    self._apply_idle(idle)
             layer = keyboard.active_layers[0]
             if layer != self.layer:
+                old = self.layer
                 self.layer = layer
+                # a flash tells you the profile changed (by app focus, or by hand): only profile to profile,
+                # never for the utility layer, and not while the LEDs are off
+                if 0 <= old < self.profile_layers and layer < self.profile_layers and self._idle != 2:
+                    self._flash_color = self._accent(layer)
+                    self._flash_until = now + SWITCH_FLASH_S
+                self._paint()
+            elif self._flash_until and now >= self._flash_until:
+                self._flash_until = 0
                 self._paint()
         except Exception as e:
             print("rgb_keys error:", e)

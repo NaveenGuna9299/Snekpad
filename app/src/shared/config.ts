@@ -17,6 +17,8 @@ export const MAX_STEPS = 6 // keys / shortcuts in one sequence
 export const MAX_WAIT_MS = 2000 // longest pause between two steps
 export const DEFAULT_WAIT_MS = 100
 export const FN_KEY = 11 // bottom-right key is always the utility (FN) layer key
+export const DEFAULT_SLEEP_MINUTES = 2 // idle minutes before the pad's screen and key LEDs switch off
+export const MAX_SLEEP_MINUTES = 60 // 0 = never sleep
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'colour must look like #RRGGBB')
 const keyName = z.string().regex(/^[A-Z0-9_]{1,12}$/, 'key names are upper case, e.g. CTRL, C, F12')
@@ -99,7 +101,12 @@ export const configSchema = z
       }),
       oled: z.object({ width: z.literal(128), height: z.literal(32).catch(32) })
     }),
-    settings: z.object({ brightness: z.number().min(0.05).max(0.5) }),
+    settings: z.object({
+      brightness: z.number().min(0.05).max(0.5),
+      // idle minutes before the screen and key LEDs switch off (they dim at half that time); 0 = never.
+      // A config saved before this setting existed gets the default.
+      sleepMinutes: z.number().int().min(0).max(MAX_SLEEP_MINUTES).default(DEFAULT_SLEEP_MINUTES)
+    }),
     profiles: z.array(profileSchema).min(1).max(MAX_PROFILES)
   })
   .superRefine((cfg, ctx) => {
@@ -350,7 +357,7 @@ export function defaultConfig(): Config {
       owner_screen: { line1: '', line2: '', date: '' },
       oled: { width: 128, height: 32 }
     },
-    settings: { brightness: 0.4 },
+    settings: { brightness: 0.4, sleepMinutes: DEFAULT_SLEEP_MINUTES },
     profiles: [general(), vscode(), terminal(), browser()]
   }
 }
