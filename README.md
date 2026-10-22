@@ -10,15 +10,17 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 SnekPad Studio v1.0.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
-| OS                      | Download                                                                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Windows                 | [SnekPad-Studio-Setup-1.0.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/SnekPad-Studio-Setup-1.0.0.exe) |
-| macOS                   | [snekpad-studio-1.0.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.dmg)             |
-| Linux (any distro)      | [snekpad-studio-1.0.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.AppImage)   |
-| Linux (Debian / Ubuntu) | [snekpad-studio_1.0.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio_1.0.0_amd64.deb) |
+| OS                      | Download                                                                                                                                                  |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Windows                 | [SnekPad-Studio-Setup-1.0.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/SnekPad-Studio-Setup-1.0.0.exe)                       |
+| Windows (portable)      | [SnekPad-Studio-1.0.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/SnekPad-Studio-1.0.0-windows-portable.zip) |
+| macOS                   | [snekpad-studio-1.0.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.dmg)                                   |
+| Linux (any distro)      | [snekpad-studio-1.0.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.AppImage)                         |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.0.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio_1.0.0_amd64.deb)                       |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
+The Windows portable zip needs no installer: unzip it anywhere and run `SnekPad Studio.exe`.
 
 The app configures the pad and updates its firmware. A new pad needs its firmware set up by hand once, see
 [Quick start](#quick-start); after that, new firmware arrives with a new Studio (**Update pad**, with a knob press on

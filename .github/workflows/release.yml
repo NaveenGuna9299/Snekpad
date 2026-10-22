@@ -86,11 +86,20 @@ jobs:
               exit 1
             fi
           done
+      - name: Windows portable zip (the unpacked app, no installer needed)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json | ConvertFrom-Json).version
+          $dir = "dist/SnekPad-Studio-$v"
+          Copy-Item dist/win-unpacked $dir -Recurse
+          Compress-Archive -Path $dir -DestinationPath "dist/SnekPad-Studio-$v-windows-portable.zip" -CompressionLevel Optimal
       - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.os }}
           path: |
             app/dist/installer/*.exe
+            app/dist/*-windows-portable.zip
             app/dist/*.dmg
             app/dist/*.AppImage
             app/dist/*.deb
