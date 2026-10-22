@@ -17,10 +17,29 @@ import {
   parseHello,
   parseReply,
   EVT_PREFIX,
+  type HelloInfo,
   type PadEvent,
   type Reply
 } from '../../shared/protocol'
 import type { PullResult, PushResult } from '../../shared/api'
+import {
+  FW_CONFIRM_MS,
+  FW_SPACE_MARGIN,
+  bundleBytes,
+  fwAbortLine,
+  fwBeginLine,
+  fwCommitLine,
+  fwDataLines,
+  fwFileEndLine,
+  fwFileLine,
+  fwInfoLine,
+  parseFwInfo,
+  verifyBundle,
+  type FirmwareBundle,
+  type FirmwareProgress,
+  type FirmwareUpdateResult,
+  type FwInfoResult
+} from '../../shared/firmwareUpdate'
 import type { Link } from './link'
 
 export const REPLY_TIMEOUT_MS = 2000
@@ -33,11 +52,15 @@ export class DeviceSession {
   private ledQueued = new Map<string, string>() // "layer:key" -> latest colour, not yet sent
   private stale = false // the last exchange timed out, so a late reply may still be on its way
   private longOps = 0 // push / pull in flight or waiting
+  private fwOps = 0 // firmware updates queued or running
+  private fwCancelled = false
 
   /** Protocol version the pad announced with HELLO; 1 until (and unless) it does. */
   version = 1
+  /** Firmware version the pad announced with HELLO; null if it did not (or has not yet). */
+  firmware: string | null = null
   private eventCb: (e: PadEvent) => void = () => {}
-  private helloCb: (version: number) => void = () => {}
+  private helloCb: (info: HelloInfo) => void = () => {}
 
   constructor(private readonly link: Link) {
     link.onLine((line) => this.route(line))
@@ -49,7 +72,7 @@ export class DeviceSession {
   }
 
   /** Called when the pad answers HELLO. */
-  onHello(cb: (version: number) => void): void {
+  onHello(cb: (info: HelloInfo) => void): void {
     this.helloCb = cb
   }
 
@@ -68,10 +91,11 @@ export class DeviceSession {
       if (e) this.eventCb(e)
       return
     }
-    const v = parseHello(line)
-    if (v !== null) {
-      this.version = v
-      this.helloCb(v)
+    const hello = parseHello(line)
+    if (hello !== null) {
+      this.version = hello.protocol
+      this.firmware = hello.firmware
+      this.helloCb(hello)
       return
     }
     this.handler?.(line) // lines nobody is waiting for are dropped
@@ -100,6 +124,40 @@ export class DeviceSession {
 
   pull(): Promise<PullResult> {
     return this.exclusive(() => this.collect(), true)
+  }
+
+  /** True while a firmware update is queued or running: nothing else should be sent to the pad then. */
+  get updating(): boolean {
+    return this.fwOps > 0
+  }
+
+  /** What the pad says about itself and its last update (FW_INFO). A pad without the updater does not answer. */
+  firmwareInfo(): Promise<FwInfoResult> {
+    return this.exclusive(() => this.readFwInfo(), false)
+  }
+
+  /** Stop a running firmware update: the pad throws away what it has staged and nothing changes. */
+  cancelFirmwareUpdate(): void {
+    if (!this.updating) return
+    this.fwCancelled = true
+    this.link.write(fwAbortLine())
+    this.stale = true // the pad answers FW_ABORT with an OK: let it arrive (and be dropped) before the next command
+  }
+
+  /**
+   * Send a firmware update (see PROTOCOL.md, "Firmware update"). It only stages the files on the pad and commits
+   * them; the pad installs them when it restarts, so on success the pad is about to disconnect. Any failure
+   * leaves the pad exactly as it was.
+   */
+  updateFirmware(
+    bundle: FirmwareBundle,
+    onProgress: (p: FirmwareProgress) => void = () => {}
+  ): Promise<FirmwareUpdateResult> {
+    this.fwOps++
+    this.fwCancelled = false
+    return this.exclusive(() => this.sendFirmware(bundle, onProgress), true).finally(() => {
+      this.fwOps--
+    })
   }
 
   /**
@@ -158,6 +216,97 @@ export class DeviceSession {
       this.handler = (l) => done(parseReply(l))
       this.link.write(line)
     })
+  }
+
+  private async readFwInfo(): Promise<FwInfoResult> {
+    const r = await this.exchange(fwInfoLine(), REPLY_TIMEOUT_MS)
+    if (r.kind === 'other') {
+      const info = parseFwInfo(r.line)
+      if (info) return { ok: true, ...info }
+    }
+    if (r.kind === 'err' && r.reason === 'no reply from pad')
+      return { ok: false, error: 'no reply from pad' }
+    return { ok: false, error: r.kind === 'err' ? r.reason : 'unexpected reply' }
+  }
+
+  private async sendFirmware(
+    bundle: FirmwareBundle,
+    onProgress: (p: FirmwareProgress) => void
+  ): Promise<FirmwareUpdateResult> {
+    const { manifest } = bundle
+    const total = bundleBytes(manifest)
+    const fail = (error: string, abort = true): FirmwareUpdateResult => {
+      if (abort) {
+        this.link.write(fwAbortLine()) // the pad throws away what it staged
+        this.stale = true // ... and answers OK: let that arrive (and be dropped) before the next command
+      }
+      return this.fwCancelled
+        ? { ok: false, error: 'cancelled', cancelled: true }
+        : { ok: false, error }
+    }
+
+    const bad = verifyBundle(bundle)
+    if (bad) return fail(bad, false)
+
+    onProgress({ phase: 'checking' })
+    const info = await this.readFwInfo()
+    if (!info.ok)
+      return fail(
+        info.error === 'no reply from pad'
+          ? 'This pad cannot take a firmware update from Studio yet. It needs one flash from the computer first.'
+          : info.error,
+        false
+      )
+    if (info.circuitpython !== manifest.circuitpython)
+      return fail(
+        `This update is for CircuitPython ${manifest.circuitpython}, the pad runs ${info.circuitpython}.`,
+        false
+      )
+    if (info.freeBytes < total * 2 + FW_SPACE_MARGIN)
+      return fail('The pad does not have enough free space for the update.', false)
+    if (this.fwCancelled) return fail('', false)
+
+    onProgress({ phase: 'waiting' })
+    const begin = await this.exchange(fwBeginLine(manifest), FW_CONFIRM_MS + 5000)
+    if (this.fwCancelled) return fail('')
+    if (begin.kind !== 'ok')
+      return fail(reasonOf(begin), begin.kind === 'err' && begin.reason === 'no reply from pad')
+
+    let sent = 0
+    for (const f of manifest.files) {
+      onProgress({ phase: 'sending', file: f.name, sent, total })
+      const opened = await this.exchange(fwFileLine(f), REPLY_TIMEOUT_MS)
+      if (this.fwCancelled) return fail('')
+      if (opened.kind !== 'ok') return fail(reasonOf(opened))
+      const lines = fwDataLines(bundle.data[f.name])
+      const chunk = f.size / Math.max(lines.length, 1)
+      for (let i = 0; i < lines.length; i++) {
+        this.link.write(lines[i])
+        if (i % 16 === 15) {
+          onProgress({
+            phase: 'sending',
+            file: f.name,
+            sent: Math.round(sent + chunk * (i + 1)),
+            total
+          })
+          await new Promise((r) => setImmediate(r)) // let the progress reach the window and a cancel reach us
+          if (this.fwCancelled) return fail('')
+        }
+      }
+      const closed = await this.exchange(fwFileEndLine(), REPLY_TIMEOUT_MS * 2)
+      if (this.fwCancelled) return fail('')
+      if (closed.kind !== 'ok')
+        return fail(
+          reasonOf(closed),
+          closed.kind === 'err' && closed.reason === 'no reply from pad'
+        )
+      sent += f.size
+    }
+
+    onProgress({ phase: 'finishing' })
+    const commit = await this.exchange(fwCommitLine(manifest.version), SAVE_TIMEOUT_MS)
+    if (commit.kind !== 'ok') return fail(reasonOf(commit))
+    return { ok: true } // the pad restarts now and installs the update
   }
 
   /** GET_CFG: collect CFG_BEGIN / CFG_LINE... / CFG_END and check length and CRC. */

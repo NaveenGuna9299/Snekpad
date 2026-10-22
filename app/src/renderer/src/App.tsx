@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   blankProfile,
   defaultConfig,
@@ -19,6 +19,10 @@ import { useShortcuts } from './lib/useShortcuts'
 import { neighbor } from './lib/grid'
 import { describeAction } from './lib/describe'
 import { PresetBrowser } from './components/PresetBrowser'
+import { KeyTest } from './components/KeyTest'
+import { FirmwareNotice } from './components/FirmwareNotice'
+import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
+import { updateOffer } from '../../shared/firmware'
 import type { Preset } from './lib/presets'
 
 function App(): React.JSX.Element {
@@ -27,7 +31,20 @@ function App(): React.JSX.Element {
   const [selectedProfile, setSelectedProfile] = useState(0)
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
   const [mock, setMock] = useState(false)
-  const [view, setView] = useState<'home' | 'editor'>('home')
+  const [view, setView] = useState<'home' | 'editor' | 'test'>('home')
+  // the firmware warning is hidden for one pad at a time: it comes back when the pad is plugged in again
+  const [warningHidden, setWarningHidden] = useState(false)
+  // the pad firmware inside this build of Studio (null if none), and the update dialog
+  const [bundleVersion, setBundleVersion] = useState<string | null>(null)
+  const [updatingFirmware, setUpdatingFirmware] = useState(false)
+  useEffect(() => {
+    void window.api.firmwareBundle().then((b) => setBundleVersion(b.ok ? b.version : null))
+  }, [])
+  const [wasConnected, setWasConnected] = useState(false)
+  if (wasConnected !== (device.status === 'connected')) {
+    setWasConnected(device.status === 'connected')
+    setWarningHidden(false)
+  }
   const [browsing, setBrowsing] = useState(false)
 
   const editProfile = useCallback(
@@ -177,7 +194,22 @@ function App(): React.JSX.Element {
   return (
     <div className="flex h-full flex-col">
       <TitleBar device={device} />
-      {view === 'home' ? (
+      {!warningHidden && (
+        <FirmwareNotice
+          device={device}
+          bundleVersion={bundleVersion}
+          onDismiss={() => setWarningHidden(true)}
+          onUpdate={() => setUpdatingFirmware(true)}
+        />
+      )}
+      {__DEV_TOOLS__ && view === 'test' ? (
+        <KeyTest
+          profile={padProfile ?? profile}
+          device={device}
+          pressed={pressed}
+          onBack={() => setView('home')}
+        />
+      ) : view === 'home' ? (
         <Home
           profile={padProfile ?? profile}
           padProfileName={padProfile?.name}
@@ -185,9 +217,20 @@ function App(): React.JSX.Element {
           device={device}
           profileCount={config.profiles.length}
           onOpen={() => setView('editor')}
+          onTestKeys={__DEV_TOOLS__ ? () => setView('test') : undefined}
           mock={mock}
           onMock={setMockPad}
           onReset={restoreStarterProfiles}
+          sync={sync}
+          pushing={pushing}
+          onPush={() => void push()}
+          bundleVersion={bundleVersion}
+          offer={updateOffer(device, bundleVersion)}
+          onUpdateFirmware={() => setUpdatingFirmware(true)}
+          sleepMinutes={config.settings.sleepMinutes}
+          onSleepMinutes={(minutes) =>
+            update((c) => ({ ...c, settings: { ...c.settings, sleepMinutes: minutes } }))
+          }
         />
       ) : (
         <>
@@ -253,6 +296,13 @@ function App(): React.JSX.Element {
         </>
       )}
       <Toast message={message} onUndo={history.undo} onDismiss={dismiss} />
+      {updatingFirmware && bundleVersion && (
+        <FirmwareUpdateDialog
+          device={device}
+          bundleVersion={bundleVersion}
+          onClose={() => setUpdatingFirmware(false)}
+        />
+      )}
       {browsing && (
         <PresetBrowser
           current={profile}

@@ -10,16 +10,29 @@
 //   CFG_LINE<TAB>chunk                           (no reply)
 //   CFG_END                                      OK | ERR<TAB>reason
 //   GET_CFG                                      CFG_BEGIN, CFG_LINE..., CFG_END (the config now on the pad) | ERR<TAB>reason
-//   HELLO                                        HELLO<TAB>version (pads from protocol 2; older pads ignore it)
+//   TEST                                         (no reply; key test: the pad types nothing for ~3 s, send it every second)
+//   HELLO                                        HELLO<TAB>protocol<TAB>firmware (pads from protocol 2; older pads ignore it)
 //   (nothing)                                    EVT<TAB>layer<TAB>n  /  EVT<TAB>key<TAB>n<TAB>0|1  (only after HELLO)
 
 import { z } from 'zod'
-import { FN_KEY, KEY_COUNT, LABEL_MAX, MAX_PROFILES, type Config } from './config'
+import {
+  FN_KEY,
+  KEY_COUNT,
+  LABEL_MAX,
+  MAX_PROFILES,
+  MAX_SLEEP_MINUTES,
+  type Config
+} from './config'
+import { isFirmwareVersion } from './firmware'
 
 export const CFG_CHUNK = 160 // characters of JSON per CFG_LINE (keeps pad buffers small)
 
 export function crc32(text: string): number {
-  const bytes = Buffer.from(text, 'utf8')
+  return crc32Bytes(Buffer.from(text, 'utf8'))
+}
+
+/** CRC-32 (zlib) of raw bytes: what the pad checks every file of a firmware update against. */
+export function crc32Bytes(bytes: Uint8Array): number {
   let crc = 0xffffffff
   for (const b of bytes) {
     crc ^= b
@@ -53,6 +66,8 @@ export const appLine = (proc: string, title: string): string =>
   `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
 export const getCfgLine = (): string => 'GET_CFG'
 export const helloLine = (): string => 'HELLO'
+/** Key test heartbeat: for about 3 s after each one the pad reports keys but types nothing. No reply. */
+export const testLine = (): string => 'TEST'
 
 /** 1 = the original protocol; 2 adds HELLO and the pad's own EVT lines. */
 export const PROTOCOL_VERSION = 2
@@ -121,6 +136,9 @@ export class ConfigReceiver {
 const liveColor = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 export const liveViewSchema = z.object({
   h: z.literal(32).catch(32), // OLED height
+  // minutes of idle time before the screen and key LEDs switch off (0 = never). Pads from before this
+  // setting leave it out, and a value that makes no sense is ignored rather than failing the whole view.
+  s: z.number().int().min(0).max(MAX_SLEEP_MINUTES).optional().catch(undefined),
   p: z
     .array(
       z.object({
@@ -138,6 +156,7 @@ export type LiveView = z.infer<typeof liveViewSchema>
 export function liveViewOf(config: Config): LiveView {
   return {
     h: config.device.oled.height,
+    s: config.settings.sleepMinutes,
     p: config.profiles.map((p) => ({
       n: p.name,
       k: p.encoder.label,
@@ -152,6 +171,7 @@ export function applyLiveView(config: Config, view: LiveView): Config {
   return {
     ...config,
     device: { ...config.device, oled: { ...config.device.oled, height: view.h } },
+    settings: view.s === undefined ? config.settings : { ...config.settings, sleepMinutes: view.s },
     profiles: config.profiles.map((profile, i) => {
       const live = view.p[i]
       if (!live) return profile
@@ -177,21 +197,46 @@ export function applyLiveView(config: Config, view: LiveView): Config {
 export const HELLO_PREFIX = 'HELLO\t'
 export const EVT_PREFIX = 'EVT\t'
 
-/** The version in a `HELLO<TAB>n` reply, or null if the line is not one. */
-export function parseHello(line: string): number | null {
+/**
+ * What a pad says about itself in its HELLO reply. `firmware` is null when the pad does not send one;
+ * `dev` is true for a pad flashed with the development tools (flash_pad.ps1 -Dev), which a customer pad never is.
+ */
+export type HelloInfo = { protocol: number; firmware: string | null; dev: boolean }
+
+/**
+ * Parse `HELLO<TAB>protocol[<TAB>firmware]`, or null if the line is not a HELLO reply. The firmware
+ * field came later than the protocol number, so pads without it are still understood, and a firmware
+ * field that is not `x.y.z` is ignored rather than trusted.
+ */
+export function parseHello(line: string): HelloInfo | null {
   if (!line.startsWith(HELLO_PREFIX)) return null
-  const n = Number(line.slice(HELLO_PREFIX.length).split('\t')[0])
-  return Number.isInteger(n) && n >= 1 ? n : null
+  const [protocol, firmware, flag] = line.replace(/\r$/, '').slice(HELLO_PREFIX.length).split('\t')
+  const n = Number(protocol)
+  if (!Number.isInteger(n) || n < 1) return null
+  return {
+    protocol: n,
+    firmware: firmware && isFirmwareVersion(firmware) ? firmware : null,
+    dev: flag === 'dev'
+  }
 }
 
 export type PadEvent =
   | { kind: 'layer'; index: number } // the profile the pad is running changed
   | { kind: 'key'; index: number; down: boolean }
+  | { kind: 'knob'; action: KnobAction } // the knob was turned right / left or pressed
+
+/** What the knob did: turned right (clockwise), turned left, or pressed. */
+export type KnobAction = 'cw' | 'ccw' | 'press'
+const KNOB_ACTIONS: readonly string[] = ['cw', 'ccw', 'press']
+
+/** The events that come from the pad's own controls (not the profile change); sent on to the screen. */
+export type PadInput = Exclude<PadEvent, { kind: 'layer' }>
 
 /** Parse an `EVT` line; anything malformed or out of range is dropped (null). */
 export function parseEvent(line: string): PadEvent | null {
   if (!line.startsWith(EVT_PREFIX)) return null
   const [, kind, a, b] = line.replace(/\r$/, '').split('\t')
+  if (kind === 'knob') return KNOB_ACTIONS.includes(a) ? { kind, action: a as KnobAction } : null
   const index = Number(a)
   if (!Number.isInteger(index) || index < 0) return null
   if (kind === 'layer') return index < MAX_PROFILES ? { kind, index } : null

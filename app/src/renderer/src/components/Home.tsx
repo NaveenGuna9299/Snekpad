@@ -1,5 +1,7 @@
 import type { Profile } from '../../../shared/config'
 import type { DeviceState } from '../../../shared/api'
+import type { SyncStatus } from '../../../shared/sync'
+import type { UpdateOffer } from '../../../shared/firmware'
 import { PadView } from './PadView'
 import { SettingsMenu } from './SettingsMenu'
 
@@ -8,12 +10,22 @@ type Props = {
   device: DeviceState
   profileCount: number
   onOpen: () => void
+  /** Only given in builds with the development tools; production has no key test. */
+  onTestKeys?: () => void
   /** Name of the profile the pad reports running; undefined if it does not report one. */
   padProfileName?: string
   pressed?: ReadonlySet<number>
   mock: boolean
   onMock: (on: boolean) => void
   onReset: () => void
+  sleepMinutes: number
+  onSleepMinutes: (minutes: number) => void
+  sync: SyncStatus
+  pushing: boolean
+  onPush: () => void
+  bundleVersion: string | null
+  offer: UpdateOffer
+  onUpdateFirmware: () => void
 }
 
 function greeting(): string {
@@ -27,18 +39,41 @@ export function Home({
   device,
   profileCount,
   onOpen,
+  onTestKeys,
   padProfileName,
   pressed,
   mock,
   onMock,
-  onReset
+  onReset,
+  sleepMinutes,
+  onSleepMinutes,
+  sync,
+  pushing,
+  onPush,
+  bundleVersion,
+  offer,
+  onUpdateFirmware
 }: Props): React.JSX.Element {
   const connected = device.status === 'connected'
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-y-auto p-10">
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-4xl font-bold tracking-tight">{greeting()}</h1>
-        <SettingsMenu mock={mock} onMock={onMock} onReset={onReset} />
+        <SettingsMenu
+          mock={mock}
+          onMock={onMock}
+          onReset={onReset}
+          sleepMinutes={sleepMinutes}
+          onSleepMinutes={onSleepMinutes}
+          connected={connected}
+          sync={sync}
+          pushing={pushing}
+          onPush={onPush}
+          bundleVersion={bundleVersion}
+          padFirmware={device.firmware}
+          offer={offer}
+          onUpdateFirmware={onUpdateFirmware}
+        />
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center gap-6">
@@ -68,6 +103,14 @@ export function Home({
             {connected ? (device.label ?? 'SnekPad') : 'Not connected'}
           </span>
         </div>
+        {__DEV_TOOLS__ && onTestKeys && (
+          <button
+            onClick={onTestKeys}
+            className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+          >
+            Test keys
+          </button>
+        )}
         <p className="text-sm text-muted">
           {profileCount} profile{profileCount === 1 ? '' : 's'} ·{' '}
           {padProfileName ? `on the pad: ${padProfileName}` : `showing: ${profile.name}`}

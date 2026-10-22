@@ -30,6 +30,7 @@ import {
 } from './store'
 import { checkForUpdate, openReleases } from './updater'
 import { listRunning, rememberProgram, programIcon } from './programs'
+import { bundleInfo, readBundle } from './firmwareBundle'
 import { validateConfig, type Config, type Template } from '../shared/config'
 import type { PushResult } from '../shared/api'
 import { chromeColors, themePrefSchema } from '../shared/theme'
@@ -54,7 +55,20 @@ const overlay = (): { color: string; symbolColor: string; height: number } => {
   return { color: c.background, symbolColor: c.symbol, height: 36 }
 }
 
+// DEVELOPMENT TOOLS (__DEV_TOOLS__ is false in the production build, so all of this is compiled out).
+// True while the renderer shows the key test: the pad then types its shortcuts into this window, so
+// the window must not act on them (Ctrl+W would close it).
+let keyTestActive = false
+function setKeyTest(on: boolean): void {
+  if (!__DEV_TOOLS__) return
+  keyTestActive = on
+  device.setTestMode(on) // the pad types nothing while this is on, and goes back to normal if the app goes quiet
+}
+const isShortcut = (i: Electron.Input): boolean =>
+  i.type === 'keyDown' && (i.control || i.alt || i.meta || /^F\d{1,2}$/.test(i.key))
+
 function createWindow(onShown?: () => void): BrowserWindow {
+  setKeyTest(false)
   // Fit the window to the screen: tall enough to show the whole home page, never bigger than the
   // usable area (taskbar excluded), and centred.
   const { width: areaW, height: areaH } = screen.getPrimaryDisplay().workAreaSize
@@ -90,6 +104,13 @@ function createWindow(onShown?: () => void): BrowserWindow {
 
   // A blank window means the page failed to load or the renderer died: say why, and retry.
   const wc = mainWindow.webContents
+  if (__DEV_TOOLS__) {
+    wc.on('before-input-event', (e, input) => {
+      if (keyTestActive && isShortcut(input)) e.preventDefault() // also stops menu accelerators
+    })
+    wc.on('did-start-loading', () => setKeyTest(false)) // a reload starts on the home screen
+    mainWindow.on('closed', () => setKeyTest(false))
+  }
   wc.on('did-fail-load', (_e, code, desc, url) => {
     console.error(`[window] load failed (${code} ${desc}) ${url}; retrying`)
     setTimeout(() => !mainWindow.isDestroyed() && wc.reload(), 500)
@@ -175,9 +196,27 @@ function registerIpc(): void {
   ipcMain.handle('device:pull', () => device.pull())
   ipcMain.handle('device:state', () => device.state)
   ipcMain.handle('device:mock', (_e, on: boolean) => device.useMock(on))
+  if (__DEV_TOOLS__) ipcMain.handle('app:keyTest', (_e, on: boolean) => setKeyTest(on === true))
   ipcMain.handle('device:led', (_e, layer: number, key: number, color: string) =>
     device.previewLed(layer, key, color)
   )
+
+  // The firmware inside this build (resources/firmware). Read and checked each time, so a damaged bundle is never sent.
+  // SNEKPAD_FIRMWARE_DIR (a folder with manifest.json) lets a development build try another bundle, for example a
+  // test update. It is compiled out of the production build, which only ever sends the bundle it was built with.
+  const bundleDir = (): string =>
+    (__DEV_TOOLS__ && process.env['SNEKPAD_FIRMWARE_DIR']) ||
+    join(app.getAppPath(), 'resources', 'firmware')
+  ipcMain.handle('firmware:bundle', () => bundleInfo(readBundle(bundleDir())))
+  ipcMain.handle('firmware:info', () => device.firmwareInfo())
+  ipcMain.handle('firmware:update', async () => {
+    const r = readBundle(bundleDir())
+    if (!r.ok) return { ok: false, error: r.error }
+    return device.updateFirmware(r.bundle, (p) => {
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('firmware:progress', p)
+    })
+  })
+  ipcMain.handle('firmware:cancel', () => device.cancelFirmwareUpdate())
 
   device.on('event', (e) => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send('device:event', e)

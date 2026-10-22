@@ -17,8 +17,13 @@
   (`mpy-cross --version` must match boot_out.txt on the pad).
 
 .PARAMETER Dev
-  Development flash: creates /nowatchdog so the watchdog stays off while you work at the console.
-  Without -Dev (the customer build) the file is removed and the watchdog is on.
+  Development flash. Two differences from the customer build:
+    - creates /nowatchdog so the watchdog stays off while you work at the console;
+    - adds dev_tools.mpy (from dev/dev_tools.py), the tools for the desktop app's key test: the TEST
+      command that stops the pad typing while keys are tested, and knob events.
+  Without -Dev (the customer build) none of that exists: dev_tools is not built, it is deleted from the
+  pad if an earlier flash left it there, /nowatchdog is removed, and the watchdog is on.
+  Run the customer flash (no -Dev) when testing is done and before the pad goes to a customer.
 
 .PARAMETER ResetConfig
   Also delete config.json, so the pad starts on the built-in profiles.
@@ -43,9 +48,12 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $build = Join-Path $here 'build'
 
 # --- what goes on the pad -------------------------------------------------------------------
-$files = 'firmware.mpy', 'config_loader.mpy', 'rgb_keys.mpy', 'encoder_modes.mpy', 'app_profiles.mpy', 'oled_ui.mpy', 'code.py', 'boot.py'
-$modules = 'config_loader', 'rgb_keys', 'encoder_modes', 'app_profiles', 'oled_ui', 'firmware'
-$junkDirs = '.Trash-1000', '.Trashes', '.fseventsd', '.vscode', 'System Volume Information'
+$files = 'firmware.mpy', 'config_loader.mpy', 'rgb_keys.mpy', 'encoder_modes.mpy', 'app_profiles.mpy', 'oled_ui.mpy', 'fw_boot.mpy', 'fw_update.mpy', 'code.py', 'boot.py'
+$modules = 'config_loader', 'rgb_keys', 'encoder_modes', 'app_profiles', 'oled_ui', 'fw_boot', 'fw_update', 'firmware'
+# fw_new / fw_old: files of a firmware update from the app. A flash from the computer replaces the whole firmware,
+# so a half-finished update (or a staged one) must not be applied on top of it at the next start.
+$junkDirs = '.Trash-1000', '.Trashes', '.fseventsd', '.vscode', 'System Volume Information', 'fw_new', 'fw_old'
+$updateMarkers = 'fw_apply', 'fw_try', 'fw_rollback', 'fw_failed'
 
 # --- serial helpers -------------------------------------------------------------------------
 $script:P = $null
@@ -63,10 +71,16 @@ function Open-Pad([string]$name) {
         catch { Start-Sleep 2 }
     }
     if (-not $script:P) { throw "Can't open $name. Is another program (Thonny, a terminal, the app) using it?" }
-    $script:P.Write([string][char]3); Start-Sleep -Milliseconds 300     # Ctrl-C twice: stop the firmware
-    $script:P.Write([string][char]3); Start-Sleep -Milliseconds 500
-    $script:P.Write([string][char]1); Start-Sleep -Milliseconds 500     # Ctrl-A: raw REPL
-    $script:P.ReadExisting() | Out-Null
+    # Stop the firmware and get into the raw REPL. Right after the interrupt the pad can still be at
+    # "Press any key to enter the REPL", so check for the raw REPL banner and try again if it is not there.
+    for ($try = 0; $try -lt 5; $try++) {
+        $script:P.Write([string][char]3); Start-Sleep -Milliseconds 300     # Ctrl-C twice: stop the firmware
+        $script:P.Write([string][char]3); Start-Sleep -Milliseconds 500
+        $script:P.Write([string][char]1); Start-Sleep -Milliseconds 700     # Ctrl-A: raw REPL
+        if ($script:P.ReadExisting() -match 'raw REPL') { return }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "The pad's console did not enter the REPL. Unplug and replug the pad, then run this again."
 }
 
 function Pad-Exec([string]$code, [int]$timeout = 30) {
@@ -101,9 +115,13 @@ function Pad-Put([string]$local, [string]$remote) {
 
 # --- 1. build -------------------------------------------------------------------------------
 Write-Host "Building..."
-& python (Join-Path $here 'build_mpy.py') --mpy-cross $MpyCross
+$buildArgs = @('--mpy-cross', $MpyCross)
+if ($Dev) { $buildArgs += '--dev' }
+& python (Join-Path $here 'build_mpy.py') @buildArgs
 if ($LASTEXITCODE) { throw "build_mpy.py failed" }
-foreach ($f in $files) { if (-not (Test-Path (Join-Path $build $f))) { throw "Build is missing $f" } }
+$expected = if ($Dev) { $files + 'dev_tools.mpy' } else { $files }
+foreach ($f in $expected) { if (-not (Test-Path (Join-Path $build $f))) { throw "Build is missing $f" } }
+if (-not $Dev -and (Test-Path (Join-Path $build 'dev_tools.mpy'))) { throw "The customer build must not contain dev_tools.mpy" }
 
 # --- 2. flash -------------------------------------------------------------------------------
 if (-not $Port) { $Port = Find-Port }
@@ -132,6 +150,10 @@ for d in ($(($junkDirs | ForEach-Object { "'$_'" }) -join ', ')):
     rm('/' + d)
 for m in ($(($modules | ForEach-Object { "'$_'" }) -join ', ')):
     rm('/' + m + '.py')
+for m in ($(($updateMarkers | ForEach-Object { "'$_'" }) -join ', ')):
+    rm('/' + m)
+for n in ('dev_tools.mpy', 'dev_tools.py'):
+    rm('/' + n)
 for n in os.listdir('/'):
     if n.endswith('.bak') or n.endswith('.new'):
         rm('/' + n)
@@ -141,15 +163,16 @@ for n in os.listdir('/'):
 
     Write-Host "Writing..."
     foreach ($f in $files) { Pad-Put (Join-Path $build $f) "/$f" }
+    if ($Dev) { Pad-Put (Join-Path $build 'dev_tools.mpy') '/dev_tools.mpy' }
     $logo = Join-Path $here 'snekpad32.bmp'      # startup logo, 128x32 1-bit BMP
     if (Test-Path $logo) { Pad-Put $logo '/snekpad32.bmp' }
 
     if ($Dev) {
         Pad-Exec "open('/nowatchdog', 'w').close()`n" | Out-Null
-        Write-Host "Dev build: watchdog off (/nowatchdog)"
+        Write-Host "Dev build: watchdog off (/nowatchdog), key test tools on (dev_tools.mpy)"
     } else {
         Pad-Exec "import os`ntry:`n    os.remove('/nowatchdog')`nexcept OSError:`n    pass`n" | Out-Null
-        Write-Host "Customer build: watchdog on"
+        Write-Host "Customer build: watchdog on, no dev tools"
     }
 
     Pad-Exec "import os`ntry:`n    os.sync()`nexcept Exception:`n    pass`n" | Out-Null
@@ -174,6 +197,7 @@ $checks = [ordered]@{
     'LEDs ready'          = ($out -match 'rgb_keys ready')
     'no crash'            = (-not ($out -match 'Traceback|firmware stopped|MemoryError'))
     'watchdog as chosen'  = $(if ($Dev) { $out -match 'watchdog off' } else { $out -match 'watchdog on' })
+    'dev tools as chosen' = $(if ($Dev) { $out -match 'dev_tools loaded' } else { -not ($out -match 'dev_tools loaded') })
 }
 $ram = [regex]::Match($out, 'free RAM: (\d+)')
 Write-Host ""

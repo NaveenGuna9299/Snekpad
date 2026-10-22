@@ -19,7 +19,10 @@ import time
 
 import usb_cdc
 
+import gc
 import json
+import os
+import sys
 
 import supervisor
 
@@ -30,6 +33,9 @@ CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/proto
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
 PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
+FIRMWARE_VERSION = "0.3.4"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
+                            # at or above REQUIRED_FIRMWARE in app/src/shared/firmware.ts (a test checks this).
+FS_ROOT = ""            # root of the pad's filesystem; tests point it at a temporary folder
 EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
 EVENT_BACKLOG = 256     # if the host has left this many bytes unread, stop sending events
 
@@ -64,6 +70,8 @@ class AppProfiles(Module):
         self._auto_layer = None
         self._last_tick = 0
         self.ui = None              # OledUI, set by code.py: refused pushes are shown on the screen
+        self.encoder = None         # EncoderModes, set by code.py: the knob press that allows a firmware update
+        self._fw = None             # the firmware update receiver (fw_update.Updater) while one is loaded
         self._rx = None             # config_loader.Receiver while a config is arriving
         self._rx_t = 0
         self._reload_at = None      # reload the board once a new config is saved
@@ -144,14 +152,17 @@ class AppProfiles(Module):
 
     # ------------------------------------------------------------ HELLO / events
     def _hello(self):
-        # HELLO -> HELLO<TAB>version. From now on the pad reports, on its own:
+        # HELLO -> HELLO<TAB>protocol<TAB>firmware. From now on the pad reports, on its own:
         #   EVT<TAB>layer<TAB>n          the profile it runs changed
         #   EVT<TAB>key<TAB>n<TAB>1|0    key n (0-11, row by row) went down / up
         # An older app never sends HELLO and so never gets events.
-        self._write("HELLO\t%d\n" % PROTOCOL_VERSION)
+        self._write(self._hello_reply() + "\n")
         self.events = True
         self._evq = []
         self._reported_layer = None     # report the current profile right away
+
+    def _hello_reply(self):
+        return "HELLO\t%d\t%s" % (PROTOCOL_VERSION, FIRMWARE_VERSION)
 
     def _queue_event(self, line):
         if len(self._evq) < EVENT_QUEUE_MAX:
@@ -169,7 +180,7 @@ class AppProfiles(Module):
     def _flush_events(self):
         # Never during a config transfer (replies must not be mixed with events), never to a host that
         # closed the port, and never into a full buffer: events are dropped rather than ever blocking keys.
-        if not self._evq or self._rx is not None:
+        if not self._evq or self._rx is not None or self._fw_busy():
             return
         if not getattr(self.ser, "connected", True):
             self.events = False         # the app is gone; it says HELLO again when it comes back
@@ -180,6 +191,80 @@ class AppProfiles(Module):
                 break
             self._write(line)
         self._evq = []
+
+    # ------------------------------------------------------------ firmware update
+    def _fw_busy(self):
+        return self._fw is not None and self._fw.state != 0
+
+    def _fw_info(self):
+        # FW_INFO<TAB>firmware<TAB>circuitpython<TAB>free bytes<TAB>failed. Answered here, not by fw_update: the pad
+        # cannot spare the RAM to load that module just to say which firmware it runs (about 4 KB are free).
+        # `failed` is why the last update was undone ("-" if it was not), read from /fw_failed and reported once.
+        v = sys.implementation.version
+        free = 0
+        try:
+            st = os.statvfs(FS_ROOT or "/")
+            free = st[0] * st[3]
+        except Exception:
+            pass
+        failed = "-"
+        try:
+            with open(FS_ROOT + "/fw_failed") as f:
+                failed = "".join(c if " " <= c <= "~" else "?" for c in f.readline().strip())[:60] or "-"
+            os.remove(FS_ROOT + "/fw_failed")
+        except OSError:
+            pass
+        self._write("FW_INFO\t%s\t%d.%d.%d\t%d\t%s\n" % (FIRMWARE_VERSION, v[0], v[1], v[2], free, failed))
+
+    def _fw_cmd(self, parts, now):
+        # FW_* commands (see fw_update.py). The receiver is only loaded for FW_BEGIN, after the screen's RAM was freed,
+        # and dropped again when the update is over, so it takes no RAM in normal use. Everything that does not need
+        # it is answered without loading it: the pad has too little RAM to load it next to the screen.
+        cmd = parts[0]
+        if cmd == "FW_INFO":
+            return self._fw_info()
+        if self._fw is None:
+            if cmd == "FW_DATA":
+                return      # stray data after an update was dropped
+            if cmd == "FW_ABORT":
+                return self._write("OK\n")      # nothing to abort
+            if cmd != "FW_BEGIN":
+                return self._write("ERR\tno update in progress\n")
+            if self._rx is not None:
+                return self._write("ERR\tbusy\n")       # a config is arriving: leave it, and the screen, alone
+        try:
+            if self._fw is None:
+                # free the screen's memory first, as for a config push; fw_update restarts the pad afterwards
+                gc.collect()
+                self._ui_call("suspend")
+                gc.collect()
+                import fw_update
+
+                self._fw = fw_update.Updater(self, FIRMWARE_VERSION)
+            self._fw.handle(parts, now)
+            self._fw_check()
+        except Exception as e:
+            print("app_profiles firmware update error:", e)
+            if self._fw is not None:
+                try:
+                    self._fw.abort()            # releases the knob hook and drops the staged files
+                except Exception:
+                    pass
+            self._fw = None
+            sys.modules.pop("fw_update", None)
+            if self.ui is not None and self.ui.suspended:
+                self._reload_at = time.monotonic() + 3.0    # the screen was freed for the update: restart to get it back
+            try:
+                self._write("ERR\tfirmware update not available\n")
+            except Exception:
+                pass
+
+    def _fw_check(self):
+        # drop the receiver once it has nothing in progress
+        if self._fw is not None and self._fw.state == 0:
+            self._fw = None
+            sys.modules.pop("fw_update", None)
+            gc.collect()
 
     # ------------------------------------------------------------ GET_CFG
     def _write(self, data):
@@ -215,6 +300,8 @@ class AppProfiles(Module):
         # CFG_BEGIN<TAB>length<TAB>crc32hex -> OK | ERR<TAB>reason
         self._drop_rx()
         try:
+            if self._fw_busy():
+                raise OSError("firmware update in progress")
             if not config_loader.can_save():
                 raise OSError("drive is visible: replug without holding the top-left key")
             self._rx = config_loader.Receiver(int(parts[1]), parts[2])
@@ -321,6 +408,8 @@ class AppProfiles(Module):
             self._send_cfg()
         elif parts[0] == "HELLO":
             self._hello()
+        elif parts[0].startswith("FW_"):
+            self._fw_cmd(parts, now)
         elif parts[0] == "OS" and len(parts) >= 2:
             self.host_os = parts[1]
             print("app_profiles: host os", self.host_os)
@@ -381,12 +470,15 @@ class AppProfiles(Module):
             supervisor.reload()     # start again with the new config.json
         if self._evq:
             self._send_events()     # key events go out on the next scan, not on the 50 ms tick
-        # poll every scan while a config is arriving (the port's buffer is small), else every 50 ms
-        if self._rx is None and now - self._last_tick < 0.05:
+        # poll every scan while a config or a firmware update is arriving (the port's buffer is small), else every 50 ms
+        if self._rx is None and not self._fw_busy() and now - self._last_tick < 0.05:
             return None
         self._last_tick = now
         try:
             self._read(now)
+            if self._fw is not None:
+                self._fw.tick(now)
+                self._fw_check()
             if self._rx is not None and now - self._rx_t > RX_TIMEOUT_S:
                 self._drop_rx()
                 print("app_profiles: config transfer timed out")

@@ -8,8 +8,41 @@ on:
 permissions:
   contents: write
 
+env:
+  # must match the CircuitPython version on the pads (boot_out.txt) and the one in firmware.yml
+  CIRCUITPYTHON_VERSION: '10.3.1'
+
 jobs:
+  firmware:
+    # The pad firmware that ships inside every Studio build: Studio updates the pad from this bundle.
+    # Compiled once here (the .mpy files are the same on every platform) and given to the builds below.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: Download mpy-cross for CircuitPython ${{ env.CIRCUITPYTHON_VERSION }}
+        run: |
+          curl -fsSL -o mpy-cross             "https://adafruit-circuit-python.s3.amazonaws.com/bin/mpy-cross/linux-amd64/mpy-cross-linux-amd64-${CIRCUITPYTHON_VERSION}.static"
+          chmod +x mpy-cross
+          ./mpy-cross --version | tee version.txt
+          grep -q "CircuitPython ${CIRCUITPYTHON_VERSION}" version.txt
+      - name: Test the pad's firmware
+        run: python -m unittest discover -s Programs/tests
+      - name: Build the firmware and its update bundle
+        working-directory: Programs
+        run: python build_mpy.py --mpy-cross ../mpy-cross
+      - name: Test the bundle that was built
+        run: python -m unittest discover -s Programs/tests
+      - uses: actions/upload-artifact@v7
+        with:
+          name: firmware-bundle
+          path: Programs/build/ota
+          if-no-files-found: error
+
   build:
+    needs: firmware
     strategy:
       fail-fast: false
       matrix:
@@ -26,17 +59,33 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: firmware-bundle
+          path: app/resources/firmware
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: app/package-lock.json
       - run: npm ci
+      - name: The firmware bundle is whole
+        run: npm run firmware:check
       - run: npm test
       - run: npm run typecheck
       - run: npm run ${{ matrix.script }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+      - name: The production app has no development tools
+        # the key test is compiled out unless built with --mode devtools (npm run build:dev)
+        shell: bash
+        run: |
+          for s in "app:keyTest" "Test keys" "silence its keys"; do
+            if grep -rqF "$s" out; then
+              echo "development tool found in the production bundle: $s"
+              exit 1
+            fi
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: installer-${{ matrix.os }}
@@ -56,6 +105,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: installers
+          pattern: installer-*   # not the firmware bundle: it is inside the installers already
           merge-multiple: true
       - run: gh release create "$GITHUB_REF_NAME" $(find installers -type f) --title "SnekPad $GITHUB_REF_NAME" --notes-file RELEASE_NOTES_$GITHUB_REF_NAME.md
         env:

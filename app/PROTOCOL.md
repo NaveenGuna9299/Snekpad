@@ -12,7 +12,7 @@ One message per line, `\n` terminated, fields separated by TAB. ASCII only.
 | `CFG_BEGIN<TAB>length<TAB>crc32hex`    | `OK` / `ERR<TAB>reason`                                      | Start of a config transfer. `length` = characters of compact JSON, `crc32hex` = 8 lower-case hex digits (zlib CRC-32).                                                                                                                                                                                                                                                                                                                        |
 | `CFG_LINE<TAB>chunk`                   | none                                                         | Up to 160 characters of the JSON per line, in order.                                                                                                                                                                                                                                                                                                                                                                                          |
 | `CFG_END`                              | `OK` / `ERR<TAB>reason`                                      | Pad checks length and CRC, then checks the structure and builds every profile to make sure it can run it. Only on success it writes `config.json` atomically (temp file, then rename), replies `OK`, and restarts about 0.5 s later to use it. Reasons: `length mismatch`, `crc mismatch`, `no CFG_BEGIN`, or why a profile could not be built (for example `unknown key ...`). A refused push also shows `PUSH REFUSED` on the pad's screen. |
-| `GET_CFG`                              | `CFG_BEGIN` / `CFG_LINE`... / `CFG_END`, or `ERR<TAB>reason` | Reads what the pad shows right now (the "live view", not the full config): per profile the name, knob hint text, 12 key labels and 12 key colours. Same framing as a push.                                                                                                                                                                                                                                                                    |
+| `GET_CFG`                              | `CFG_BEGIN` / `CFG_LINE`... / `CFG_END`, or `ERR<TAB>reason` | Reads what the pad shows right now (the "live view", not the full config): the sleep time in minutes (`s`, from firmware that has the setting) and per profile the name, knob hint text, 12 key labels and 12 key colours. Same framing as a push.                                                                                                                                                                                            |
 
 `CFG_BEGIN` is refused with `ERR<TAB>drive is visible: ...` when the pad's drive is visible (plugged in with the top-left key held), because the pad cannot write files then. The app waits at most 2 s for a reply, and up to 10 s for the reply to `CFG_END` while the pad writes to flash.
 
@@ -22,11 +22,11 @@ The pad ignores unknown commands.
 
 Until now the pad only answered. Protocol 2 lets it also say what happens on the pad itself. It is opt-in, so an older app or an older pad keeps working exactly as before.
 
-| App sends | Pad replies / sends                                   | Notes                                                                                                                                                       |
-| --------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HELLO`   | `HELLO<TAB>2`                                         | The app sends it once after it connects. A pad that answers speaks protocol 2 and starts sending events. A pad without support ignores it (no reply).       |
-| (nothing) | `EVT<TAB>layer<TAB>n`                                 | The profile the pad runs is now `n` (0 = General). Sent right after `HELLO` for the current profile, then on every change (app focus, knob, utility layer). |
-| (nothing) | `EVT<TAB>key<TAB>n<TAB>1` / `EVT<TAB>key<TAB>n<TAB>0` | Key `n` (0-11, row \* 4 + column) went down / up.                                                                                                           |
+| App sends | Pad replies / sends                                   | Notes                                                                                                                                                                                                                                                                         |
+| --------- | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HELLO`   | `HELLO<TAB>2<TAB>0.3.3`                               | The app sends it after it connects (up to 3 times, 1 s apart, until the pad answers). A pad that answers speaks protocol 2 (first field) and runs the firmware version in the second field (`x.y.z`), and starts sending events. A pad without support ignores it (no reply). |
+| (nothing) | `EVT<TAB>layer<TAB>n`                                 | The profile the pad runs is now `n` (0 = General). Sent right after `HELLO` for the current profile, then on every change (app focus, knob, utility layer).                                                                                                                   |
+| (nothing) | `EVT<TAB>key<TAB>n<TAB>1` / `EVT<TAB>key<TAB>n<TAB>0` | Key `n` (0-11, row \* 4 + column) went down / up.                                                                                                                                                                                                                             |
 
 Rules both sides follow:
 
@@ -34,9 +34,65 @@ Rules both sides follow:
 - The pad sends events only after `HELLO`, never while a config transfer is running, and never to a host that has closed the port. It keeps at most 24 queued events and drops them (never blocks the keys) when the host has left more than 256 bytes unread.
 - Events are a courtesy: if sending one fails, the pad stops sending events and keeps switching profiles.
 - Lines the app cannot parse, or values out of range (`layer` above 3, `key` above 11), are dropped.
-- The app asks again with `HELLO` each time it connects, so a pad that stopped sending events starts again.
+- The app asks again with `HELLO` each time it connects, so a pad that stopped sending events starts again. Repeating `HELLO` is harmless: the pad answers again and re-reports its current profile.
+- The firmware field is optional: pads from before it existed answer `HELLO<TAB>2`, and the app treats them as older than any numbered firmware. A firmware field that is not three dot-separated numbers is ignored. A pad that never answers `HELLO` runs firmware from before protocol 2.
+- The app compares the firmware version with the one it needs (`REQUIRED_FIRMWARE` in `src/shared/firmware.ts`, bumped only when the app starts to rely on a firmware change) and shows a warning when the pad is older. The pad's own number is `FIRMWARE_VERSION` in `Programs/app_profiles.py`; bump it with every firmware change.
 
 The firmware part is `AppProfiles._hello` and `_flush_events` in `Programs/app_profiles.py`. `Programs/tests/test_app_profiles_events.py` runs it on a normal Python with fake modules. It does not replace trying a real pad.
+
+## Development tools: `TEST` and knob events (development pads only)
+
+These exist only on a pad flashed with `flash_pad.ps1 -Dev`, which adds `Programs/dev/dev_tools.py`. A customer pad does not have them: it answers `HELLO` without the `dev` field, ignores `TEST` and sends no knob events. The production Studio never sends `TEST`.
+
+| App sends | Pad replies / sends                     | Notes                                                                                                                                                                                                                                                                                         |
+| --------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TEST`    | none                                    | Key test mode: for 3 s after each `TEST` the pad still reports every key (`EVT key`) but types nothing on the computer, and the knob types nothing either. The app sends it right away and then every second while its key test screen is open.                                               |
+| (nothing) | `EVT<TAB>knob<TAB>cw` / `ccw` / `press` | The knob was turned right (clockwise, the action the profile calls "turn right"), turned left, or pressed. One event per click, only after `HELLO`, also while the screen sleeps or test mode stops the typing. A fast spin can drop events when the queue is full, so counts are "at least". |
+
+- `HELLO` from a development pad has a fourth field: `HELLO<TAB>2<TAB>0.3.3<TAB>dev`. The app uses it to know the pad has these tools; a pad without the field is a customer pad.
+- `TEST` is only a heartbeat. If the app closes, crashes or the cable is pulled, the pad leaves test mode by itself within 3 s, so the keys cannot stay dead.
+- A key pressed in test mode is not typed on release either, and a key pressed before test mode began still gets its normal release, so no key is left held down on the computer.
+
+## Firmware update (`FW_*`)
+
+Studio can update the pad's firmware over the data port. A release carries the firmware as a **bundle**: the compiled files and a `manifest.json` (made by `Programs/build_mpy.py`, put into the app's `resources/firmware`). Studio checks it, sends it, and the pad stages, verifies and installs it. The pad is never left without working firmware: nothing live changes while the firmware runs, the old files are kept until the new firmware has proved itself, and a firmware that does not run is replaced by the old one again.
+
+| App sends                                                    | Pad replies                                                        | Notes                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FW_INFO`                                                    | `FW_INFO<TAB>firmware<TAB>circuitpython<TAB>free bytes<TAB>failed` | The firmware version, the CircuitPython version, free flash, and why the last update was undone (`-` if it was not; reported once). A pad without the updater does not answer.                                                                                     |
+| `FW_BEGIN<TAB>version<TAB>files<TAB>bytes<TAB>circuitpython` | `OK` once the knob is pressed, or `ERR<TAB>reason`                 | The pad shows "press knob to allow" and waits 30 s for a press of the knob (the press is not typed). Refused for: another CircuitPython version, a drive that is visible, too little space, a config transfer or another update running, an update still on trial. |
+| `FW_FILE<TAB>name<TAB>size<TAB>crc32hex`                     | `OK` / `ERR<TAB>reason`                                            | Starts one file. Only the names below are accepted.                                                                                                                                                                                                                |
+| `FW_DATA<TAB>base64`                                         | none                                                               | The file's bytes, up to 96 per line, in order.                                                                                                                                                                                                                     |
+| `FW_FILE_END`                                                | `OK` / `ERR<TAB>reason`                                            | The pad checks size and CRC-32. Any mismatch drops the whole update.                                                                                                                                                                                               |
+| `FW_COMMIT<TAB>version`                                      | `OK`, then the pad restarts                                        | Needs every file declared in `FW_BEGIN`. Writes the commit marker.                                                                                                                                                                                                 |
+| `FW_ABORT`                                                   | `OK`                                                               | Throws away what was staged. Nothing live changed.                                                                                                                                                                                                                 |
+
+**What can be sent.** Only `firmware.mpy`, `config_loader.mpy`, `rgb_keys.mpy`, `encoder_modes.mpy`, `app_profiles.mpy`, `oled_ui.mpy`, `fw_update.mpy` and `snekpad32.bmp` (at most 12 files, 40 000 bytes each, 150 000 in all). `code.py`, `boot.py`, `fw_boot.mpy` (the safety net), `kmk/`, `lib/`, `config.json` and CircuitPython itself cannot be updated this way: they need a flash from the computer (`flash_pad.ps1`).
+
+**On the pad:**
+
+1. `FW_BEGIN` .. `FW_FILE_END`: files go to `/fw_new`, each verified. If the app goes quiet for 5 s, or anything is wrong, `/fw_new` is deleted and nothing changes.
+2. `FW_COMMIT` writes `/fw_apply` (the version, then the file names) and the pad restarts.
+3. At the next start `fw_boot.py` (run by the `code.py` stub before the firmware) moves each live file to `/fw_old` and the staged one in its place, recording what it did first (`/fw_old/names`, `/fw_old/had`). Every step can be repeated, so a power cut at any point is finished at the next start. It then writes `/fw_try`.
+4. **Trial.** The new firmware has 3 starts to prove itself (`nvm[2]` counts them). `code.py`'s heartbeat deletes `/fw_try` after the firmware has run for 15 s.
+5. If it never does (it crashes, or the pad is reset by the watchdog), the 4th start is a **rollback**: the old files are put back, `/fw_failed` records why, and the old firmware starts. `FW_INFO` reports the reason once.
+
+Studio follows the pad after `FW_COMMIT`: it must reconnect on the new firmware and stay on it for 20 s before the update is called done. A pad that comes back on the old firmware is reported as an update the pad undid, with the reason from `FW_INFO`.
+
+**Not covered.** A new firmware that hangs _before_ the watchdog is armed (the first seconds after start) does not undo itself: unplugging and replugging the pad 3 times does (each start under trial counts).
+
+**Bundle.** `manifest.json`: `{"format": 1, "version": "x.y.z", "circuitpython": "x.y.z", "files": [{"name", "size", "crc32"}]}`. Studio refuses a bundle whose files are missing, the wrong size or damaged, and one built for another CircuitPython version than the pad runs. Pads need firmware `OTA_FIRMWARE` (0.3.4) or newer (`src/shared/firmware.ts`) to take an update; older pads get one flash from the computer first.
+
+## Pad settings in the config JSON
+
+Under `settings`:
+
+| Field          | Meaning                                                                                                                                                                                                  |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brightness`   | Starting brightness of the key LEDs, 0.05 to 0.5.                                                                                                                                                        |
+| `sleepMinutes` | Whole minutes of idle time (no key or knob touch) before the pad's screen and key LEDs switch off, 0 to 60, 0 = never. They dim at half that time. Optional: a config without it (an older app) means 2. |
+
+The pad refuses a push whose `sleepMinutes` is not a whole number from 0 to 60, and a pad with older firmware ignores the field.
 
 ## Knob settings in the config JSON
 

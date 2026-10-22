@@ -105,10 +105,30 @@ class EventTests(unittest.TestCase):
         scan(pad, kb, 3)
         self.assertEqual(sent(), "")
 
-    def test_hello_is_answered_with_the_version(self):
+    def test_hello_is_answered_with_the_protocol_and_firmware_version(self):
         pad, kb = make_pad()
         feed(pad, kb, "HELLO\n")
-        self.assertTrue(sent().startswith("HELLO\t2\n"))
+        self.assertEqual(sent().split("\n")[0], "HELLO\t2\t%s" % app_profiles.FIRMWARE_VERSION)
+
+    def test_firmware_version_is_x_y_z(self):
+        parts = app_profiles.FIRMWARE_VERSION.split(".")
+        self.assertEqual(len(parts), 3)
+        self.assertTrue(all(p.isdigit() for p in parts))
+
+    def test_the_customer_firmware_has_no_key_test_tools(self):
+        # TEST, knob events and the dev flag live in dev/dev_tools.py, which a customer pad does not have
+        pad, kb = make_pad()
+        feed(pad, kb, "HELLO\n")
+        self.assertNotIn("dev", sent().split("\n")[0].split("\t"))
+        scan(pad, kb, 2)
+        SERIAL.out = b""                # start from clean output, after the usual first profile report
+        feed(pad, kb, "TEST\n")
+        key = object()
+        self.assertIs(pad.process_key(kb, key, True, 3), key)
+        self.assertIs(pad.process_key(kb, key, False, 3), key)
+        self.assertFalse(hasattr(pad, "test_active"))
+        self.assertFalse(hasattr(pad, "report_knob"))
+        self.assertEqual(sent(), "")
 
     def test_current_profile_is_reported_after_hello_then_only_on_change(self):
         pad, kb = make_pad()

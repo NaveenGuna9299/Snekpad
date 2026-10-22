@@ -10,30 +10,38 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 SnekPad Studio v0.3.2 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
-| OS | Download |
-|---|---|
-| Windows | [SnekPad-Studio-Setup-0.3.2.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/SnekPad-Studio-Setup-0.3.2.exe) |
-| macOS | [snekpad-studio-0.3.2.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/snekpad-studio-0.3.2.dmg) |
-| Linux (any distro) | [snekpad-studio-0.3.2.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/snekpad-studio-0.3.2.AppImage) |
+| OS                      | Download                                                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Windows                 | [SnekPad-Studio-Setup-0.3.2.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/SnekPad-Studio-Setup-0.3.2.exe) |
+| macOS                   | [snekpad-studio-0.3.2.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/snekpad-studio-0.3.2.dmg)             |
+| Linux (any distro)      | [snekpad-studio-0.3.2.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/snekpad-studio-0.3.2.AppImage)   |
 | Linux (Debian / Ubuntu) | [snekpad-studio_0.3.2_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v0.3.2/snekpad-studio_0.3.2_amd64.deb) |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
 
-The app only configures the pad. A new pad still needs its firmware set up by hand, see [Quick start](#quick-start).
+The app configures the pad and updates its firmware. A new pad needs its firmware set up by hand once, see
+[Quick start](#quick-start); after that, new firmware arrives with a new Studio (**Update pad**, with a knob press on
+the pad to allow it).
 
 ## What is in this repo
 
-| Folder | What it is |
-|---|---|
+| Folder                  | What it is                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------- |
 | [`Programs/`](Programs) | The pad's firmware: Python files that are copied onto the pad's `CIRCUITPY` drive. |
-| [`app/`](app) | SnekPad Studio, the desktop app (Electron + React + TypeScript). |
+| [`app/`](app)           | SnekPad Studio, the desktop app (Electron + React + TypeScript).                   |
 
 ## Features
 
 - 3 x 4 keys, up to 4 profiles, each with its own key actions, labels and per-key RGB colours.
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
+- The screen and the key LEDs sleep together: after the sleep time (2 minutes by default) both switch off, the screen
+  really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
+  dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps
+  after** (0 = never) and sent to the pad with **Push to pad**.
+- A short flash of the new profile's main colour on all keys when the profile changes (automatically or by hand), so
+  you notice the switch without looking at the screen. Holding FN does not flash.
 - Automatic profile switching based on the focused app (Windows). The app can start with Windows and keep switching
   profiles from the tray with its window closed.
 - Config is pushed from the app over USB serial with a length and CRC check, then saved on the pad as `config.json`.

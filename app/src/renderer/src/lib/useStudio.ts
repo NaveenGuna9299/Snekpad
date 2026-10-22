@@ -64,14 +64,15 @@ export function useStudio(): Studio {
       // a pad that went away cannot still be holding keys
       if (s.status !== 'connected') setPressed(new Set())
     })
-    const offEvent = window.api.onDeviceEvent((e) =>
+    const offEvent = window.api.onDeviceEvent((e) => {
+      if (e.kind !== 'key') return // knob events are for the key test screen
       setPressed((held) => {
         const next = new Set(held)
         if (e.down) next.add(e.index)
         else next.delete(e.index)
         return next
       })
-    )
+    })
     return () => {
       offState()
       offEvent()

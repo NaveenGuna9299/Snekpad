@@ -47,17 +47,32 @@ jobs:
       - name: Check the build output
         working-directory: Programs/build
         run: |
-          for f in firmware.mpy config_loader.mpy rgb_keys.mpy encoder_modes.mpy app_profiles.mpy oled_ui.mpy code.py boot.py; do
+          for f in firmware.mpy config_loader.mpy rgb_keys.mpy encoder_modes.mpy app_profiles.mpy oled_ui.mpy fw_boot.mpy fw_update.mpy code.py boot.py ota/manifest.json; do
             test -s "$f" || { echo "missing or empty: $f"; exit 1; }
           done
           # the pad's code.py is plain source: it must at least parse
           python -m py_compile code.py
-          ls -l
+          ls -l . ota
+
+      - name: The customer build has no development tools
+        # dev/dev_tools.py (the app's key test tools) is only built by `build_mpy.py --dev`
+        working-directory: Programs/build
+        run: |
+          test ! -e dev_tools.mpy
+          test ! -e ota/dev_tools.mpy
 
       - name: Python files still parse
         working-directory: Programs
-        run: python -m py_compile boot.py code.py config_loader.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py focus_sender.py
+        run: python -m py_compile boot.py code.py config_loader.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py fw_boot.py fw_update.py focus_sender.py dev/dev_tools.py
 
-      - name: Test the pad's serial protocol
-        # runs app_profiles.py on a normal Python with fake CircuitPython / KMK modules (no hardware)
+      - name: Test the pad's firmware
+        # runs the firmware on a normal Python with fake CircuitPython / KMK modules (no hardware), including the
+        # firmware update (power cut at every step) and the checks of the update bundle built above (build/ota)
         run: python -m unittest discover -s Programs/tests -v
+
+      - name: The development build compiles
+        # last: it replaces Programs/build, which the tests above check
+        working-directory: Programs
+        run: |
+          python build_mpy.py --mpy-cross ../mpy-cross --dev
+          test -s build/dev_tools.mpy

@@ -39,6 +39,7 @@ class EncoderModes(Module):
         self._debounce = debounce_s
 
         self.ui = None            # set to the OledUI after it is created (wake / asleep)
+        self.press_hook = None    # a prompt on the screen (firmware update) can take the next press: function() -> True if it did
         self.enabled = False
 
         self._a = self._b = self._sw = None
@@ -86,6 +87,9 @@ class EncoderModes(Module):
 
     # ------------------------------------------------------------ button
     def _press_down(self, kb):
+        if self.press_hook is not None and self.press_hook():
+            self._swallow = True    # this press answered the prompt: it is not typed
+            return
         if self._asleep():
             self._wake()
             self._swallow = True            # this press only wakes the screen

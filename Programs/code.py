@@ -69,6 +69,7 @@ ENABLE_RGB = True
 ENABLE_APP_PROFILES = True     # needs boot.py + the SnekPad desktop app (or focus_sender.py) running
 ENABLE_WATCHDOG = True         # reset the pad if the main loop stops for WATCHDOG_S seconds
 WATCHDOG_S = 5.0               # the RP2040 allows up to about 8 s
+TRIAL_OK_S = 15                # a firmware just installed from the app is kept once it has run this long (see fw_boot.py)
 
 if CFG:   # owner screen from the app (the OLED size stays a hardware setting below)
     try:
@@ -80,6 +81,15 @@ if CFG:   # owner screen from the app (the OLED size stays a hardware setting be
 
 OLED_HEIGHT = 32               # the 0.91" 128x32 screen on the PCB
 OLED_ROTATION = 0              # 180 if the screen turns out to be upside down
+SLEEP_MINUTES = 2              # idle minutes before the screen and key LEDs switch off; 0 = never. The app's setting
+                               # (settings.sleepMinutes in config.json, set in SnekPad Studio) overrides this default.
+if CFG:
+    try:
+        SLEEP_MINUTES = config_loader.sleep_minutes(CFG)
+    except Exception as e:
+        print("config sleepMinutes ignored:", e)
+OLED_OFF_S = SLEEP_MINUTES * 60 if SLEEP_MINUTES else 1000000000    # the screen really switches off, the LEDs with it
+OLED_DIM_S = OLED_OFF_S // 2   # half way there, the screen dims and the LEDs drop to their lowest step
 RGB_START_LEVEL = 3            # 0-4 index into LEVELS in rgb_keys.py (3 = 40% brightness)
 
 # ---------------------------------------------------------------- keyboard
@@ -297,6 +307,15 @@ ENC_MAP.append((KC.NO, KC.NO, KC.NO))
 
 keyboard.keymap = keymap
 
+# ---------------------------------------------------------------- development tools
+# dev_tools.py exists on the pad only after a development flash (flash_pad.ps1 -Dev): it adds what the
+# desktop app's key test needs (the TEST command, knob events). A customer pad does not have the file,
+# so nothing on the computer can silence its keys through the serial port.
+try:
+    import dev_tools
+except ImportError:
+    dev_tools = None
+
 # ---------------------------------------------------------------- encoder
 # Idle (first touch only wakes the screen), then turn = the profile's knob action and
 # press = the profile's press action. Per layer: (turn left, turn right, press). See encoder_modes.py.
@@ -304,6 +323,8 @@ encoder = None
 if ENABLE_ENCODER:
     from encoder_modes import EncoderModes
 
+    if dev_tools is not None:
+        EncoderModes = dev_tools.DevEncoderModes
     encoder = EncoderModes(
         board.GP7, board.GP8, board.GP9,
         actions=ENC_MAP,
@@ -315,11 +336,15 @@ if ENABLE_ENCODER:
 # ---------------------------------------------------------------- RGB
 if ENABLE_RGB:
     leds.set_colors(COLORS)
+    leds.profile_layers = N         # a colour flash when the profile changes (not for the utility layer)
 
 # ---------------------------------------------------------------- focused app
 apps = None
 if ENABLE_APP_PROFILES:
     from app_profiles import AppProfiles
+
+    if dev_tools is not None:
+        AppProfiles = dev_tools.DevAppProfiles
 
     def live_view():
         """What the pad shows right now, for the app's GET_CFG: per profile name, knob text, labels, colours."""
@@ -333,10 +358,13 @@ if ENABLE_APP_PROFILES:
                 "l": LABELS[i],
                 "c": ["#%06x" % c for c in COLORS[i]],   # COLORS is what the LEDs show (set_key changes it in place)
             })
-        return json.dumps({"h": OLED_HEIGHT, "p": profs})
+        return json.dumps({"h": OLED_HEIGHT, "s": SLEEP_MINUTES, "p": profs})
 
     apps = AppProfiles([(p["name"], p["proc"], p["title"]) for p in PROFILES], general=0, view=live_view, leds=leds)
     keyboard.modules.append(apps)
+    if dev_tools is not None and encoder is not None:
+        encoder.apps = apps     # knob events and the key test's silence
+    apps.encoder = encoder      # the knob press that allows a firmware update
 
 # ---------------------------------------------------------------- OLED
 # Screens live in oled_ui.py (128x32). Needs adafruit_display_text and
@@ -355,12 +383,16 @@ if ENABLE_OLED:
         width=128,
         height=OLED_HEIGHT,
         rotation=OLED_ROTATION,
+        dim_s=OLED_DIM_S,
+        off_s=OLED_OFF_S,
         app=apps,
         notice=("CONFIG: " + CONFIG_ERROR) if CONFIG_ERROR else None,
     )
     keyboard.modules.append(oled)
     if encoder is not None:
         encoder.ui = oled
+    if ENABLE_RGB:
+        leds.ui = oled              # the key LEDs dim and switch off with the screen
     if apps is not None:
         apps.ui = oled      # refused config pushes show up on the screen
 
@@ -377,6 +409,7 @@ class Heartbeat(Module):
         self._wdt = None
         self._t0 = time.monotonic()
         self._stable = False
+        self._trial = False     # a firmware update installed at this start is on trial until it has run for a while
 
     def _dev_mode(self):
         try:
@@ -392,6 +425,11 @@ class Heartbeat(Module):
             return False
 
     def during_bootup(self, keyboard):
+        try:
+            os.stat("/fw_try")
+            self._trial = True
+        except OSError:
+            pass
         try:
             if self._dev_mode():
                 print("watchdog off (dev mode)")
@@ -409,6 +447,14 @@ class Heartbeat(Module):
     def before_matrix_scan(self, keyboard):
         if self._wdt is not None:
             self._wdt.feed()
+        if self._trial and time.monotonic() - self._t0 > TRIAL_OK_S:
+            self._trial = False
+            try:
+                os.remove("/fw_try")            # the new firmware ran fine: fw_boot keeps it
+                microcontroller.nvm[2] = 0
+                print("firmware update accepted")
+            except Exception as e:
+                print("fw_try:", e)
         if not self._stable and time.monotonic() - self._t0 > 60:
             self._stable = True
             try:

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { MAX_SLEEP_MINUTES } from '../../../shared/config'
+import type { UpdateOffer } from '../../../shared/firmware'
+import type { SyncStatus } from '../../../shared/sync'
 import type { ThemePref } from '../../../shared/theme'
 import type { UpdateInfo } from '../../../shared/update'
 
@@ -6,11 +9,40 @@ type Props = {
   mock: boolean
   onMock: (on: boolean) => void
   onReset: () => void
+  /** Idle minutes before the pad's screen and key LEDs switch off; 0 = never. Part of the pad's config. */
+  sleepMinutes: number
+  onSleepMinutes: (minutes: number) => void
+  /** For the Push to pad button next to the sleep time. */
+  connected: boolean
+  sync: SyncStatus
+  pushing: boolean
+  onPush: () => void
+  /** The firmware version inside this build of Studio (null if none), the pad's own, and what to offer. */
+  bundleVersion: string | null
+  padFirmware?: string
+  offer: UpdateOffer
+  onUpdateFirmware: () => void
 }
 
 /** Rarely used options, kept out of the top bar: start with Windows, restore the starter profiles, mock pad. */
-export function SettingsMenu({ mock, onMock, onReset }: Props): React.JSX.Element {
+export function SettingsMenu({
+  mock,
+  onMock,
+  onReset,
+  sleepMinutes,
+  onSleepMinutes,
+  connected,
+  sync,
+  pushing,
+  onPush,
+  bundleVersion,
+  padFirmware,
+  offer,
+  onUpdateFirmware
+}: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  // what is typed in the sleep box while it has focus; null shows the saved value. Only whole numbers in range are saved.
+  const [sleepDraft, setSleepDraft] = useState<string | null>(null)
   const [startup, setStartup] = useState<{ supported: boolean; enabled: boolean }>({
     supported: false,
     enabled: false
@@ -115,6 +147,85 @@ export function SettingsMenu({ mock, onMock, onReset }: Props): React.JSX.Elemen
               ))}
             </div>
           </div>
+          <div className="flex flex-col gap-1 border-t border-line pt-3 text-sm">
+            <label htmlFor="sleep-minutes">Pad sleeps after</label>
+            <div className="flex items-center gap-2">
+              <input
+                id="sleep-minutes"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={MAX_SLEEP_MINUTES}
+                step={1}
+                value={sleepDraft ?? String(sleepMinutes)}
+                onChange={(e) => {
+                  setSleepDraft(e.target.value)
+                  const n = Number(e.target.value)
+                  if (
+                    e.target.value.trim() !== '' &&
+                    Number.isInteger(n) &&
+                    n >= 0 &&
+                    n <= MAX_SLEEP_MINUTES
+                  )
+                    onSleepMinutes(n)
+                }}
+                onBlur={() => setSleepDraft(null)}
+                className="w-20 rounded-md border border-line bg-input px-2 py-1"
+              />
+              <span className="text-xs text-muted">minutes (0 = never)</span>
+            </div>
+            <span className="text-xs text-muted">
+              The pad&apos;s screen and key lights dim at half this time, then switch off.
+            </span>
+            <div className="mt-1 flex items-center gap-2">
+              <button
+                onClick={onPush}
+                disabled={!connected || pushing}
+                title={connected ? 'Send all your changes to the pad' : 'Connect a pad first'}
+                className={`rounded-md px-3 py-1.5 text-sm font-semibold disabled:opacity-40 ${sync === 'unsent' ? 'bg-accent text-accentfg' : 'border border-line text-fg hover:bg-surface2'}`}
+              >
+                {pushing ? 'Sending…' : 'Push to pad'}
+              </button>
+              {sync === 'unsent' && (
+                <span className="text-xs text-muted" role="status">
+                  Changes not on the pad yet
+                </span>
+              )}
+              {sync === 'in-sync' && (
+                <span className="text-xs text-ok" role="status">
+                  Pad is up to date
+                </span>
+              )}
+            </div>
+          </div>
+          {bundleVersion && (
+            <div className="flex flex-col gap-1 border-t border-line pt-3 text-sm">
+              <span>Pad firmware</span>
+              <span className="text-xs text-muted">
+                On the pad: {padFirmware ?? (connected ? 'unknown' : 'no pad')} · in this app:{' '}
+                {bundleVersion}
+              </span>
+              {offer === 'ota' && (
+                <button
+                  onClick={() => {
+                    setOpen(false)
+                    onUpdateFirmware()
+                  }}
+                  className="rounded-md border border-accent bg-selected px-3 py-1.5 text-left font-semibold"
+                >
+                  Update pad firmware…
+                </button>
+              )}
+              {offer === 'manual' && (
+                <span className="text-xs text-muted">
+                  This pad needs one flash from the computer before it can update from Studio.
+                </span>
+              )}
+              {offer === 'none' && connected && padFirmware && (
+                <span className="text-xs text-ok">The pad has the latest firmware.</span>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-1.5 border-t border-line pt-3 text-sm">
             {update?.ok && update.newer ? (
               <button

@@ -1,7 +1,9 @@
 node_modules
 dist
+dist-dev
 out
 .DS_Store
 .eslintcache
 *.log*
 installer/payload
+resources/firmware
