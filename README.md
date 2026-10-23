@@ -8,15 +8,15 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 ## Download
 
-SnekPad Studio v1.0.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+SnekPad Studio v1.1.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
 | OS                      | Download                                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows                 | [SnekPad-Studio-Setup-1.0.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/SnekPad-Studio-Setup-1.0.0.exe)                       |
-| Windows (portable)      | [SnekPad-Studio-1.0.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/SnekPad-Studio-1.0.0-windows-portable.zip) |
-| macOS                   | [snekpad-studio-1.0.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.dmg)                                   |
-| Linux (any distro)      | [snekpad-studio-1.0.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio-1.0.0.AppImage)                         |
-| Linux (Debian / Ubuntu) | [snekpad-studio_1.0.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.0.0/snekpad-studio_1.0.0_amd64.deb)                       |
+| Windows                 | [SnekPad-Studio-Setup-1.1.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.0/SnekPad-Studio-Setup-1.1.0.exe)                       |
+| Windows (portable)      | [SnekPad-Studio-1.1.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.0/SnekPad-Studio-1.1.0-windows-portable.zip) |
+| macOS                   | [snekpad-studio-1.1.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.0/snekpad-studio-1.1.0.dmg)                                   |
+| Linux (any distro)      | [snekpad-studio-1.1.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.0/snekpad-studio-1.1.0.AppImage)                         |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.1.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.0/snekpad-studio_1.1.0_amd64.deb)                       |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
@@ -38,13 +38,15 @@ the pad to allow it).
 - 3 x 4 keys, up to 4 profiles, each with its own key actions, labels and per-key RGB colours.
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
-- Lighting effects: in Studio, **Home → Lighting effects** picks how the key LEDs look: Static (your per-key colours),
-  Rainbow (a wave of colour from left to right), Ripple (a ring of a random colour from the key you press), Starry
-  night (random keys twinkle in random colours), and two that follow the music: Equalizer (the four columns are bass
-  to treble and fill up from the bottom row) and Beat pulse (all keys flash on the beat). The music effects listen
-  to the sound your computer plays (Windows, no microphone). They keep working when you close the Studio window to the
-  tray (Studio has to be running, which it is when it starts with Windows). Push to
-  pad after choosing; the pad remembers the effect across a power-off and Studio shows the one the pad runs.
+- Lighting effects: in Studio, **Home → Lighting effects** picks how the key LEDs look. **Static** shows your per-key
+  colours; **Rainbow** is a wave of colour from left to right; **Ripple** sends a ring of a random colour out from the
+  key you press; **Starry night** twinkles random keys in random colours. Choose it, press **Push to pad**: the pad
+  remembers the effect across a power-off, and Studio shows the one the pad is running. Needs pad firmware 0.4.0
+  (Studio offers **Update pad** for it).
+- Music effects: **Equalizer** (the four columns are bass to treble and fill up from the bottom row) and **Beat pulse**
+  (all keys flash on the beat, and the colour moves on with every beat). Studio listens to the sound your computer plays
+  (Windows only, no microphone) and sends the pad its levels about 25 times a second. They keep working when you close
+  the Studio window to the tray, as long as Studio is running (it starts with Windows by default).
 - The screen and the key LEDs sleep together: after the sleep time (2 minutes by default) both switch off, the screen
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
   dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps
@@ -91,6 +93,7 @@ A new pad is set up by hand: install CircuitPython, KMK and three Adafruit libra
 
 - [`app/README.md`](app/README.md): running the app, setting up a pad, the knob.
 - [`app/PROTOCOL.md`](app/PROTOCOL.md): the serial messages between the app and the pad.
+- [Release notes](RELEASE_NOTES_v1.1.0.md): what is new in this version (older ones are in the same folder).
 
 ## License
 

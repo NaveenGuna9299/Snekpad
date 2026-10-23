@@ -1,6 +1,6 @@
 {
   "name": "snekpad-studio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "SnekPad Studio: configure your SnekPad macropad",
   "main": "./out/main/index.js",
   "author": "SnekPad",

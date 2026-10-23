@@ -1,7 +1,8 @@
 # SnekPad Studio
 
 Desktop app (Electron + React + TypeScript + Tailwind) to configure a SnekPad macropad:
-profiles, key actions, labels, per-key RGB colour, and encoder actions. No cloud, no accounts, no telemetry.
+profiles, key actions, labels, per-key RGB colour, encoder actions and lighting effects (some of which follow the
+music). No cloud, no accounts, no telemetry.
 
 ## Run
 
@@ -31,12 +32,26 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
 - **On the pad (needs the updated firmware).** The profile the pad runs is marked "On pad", Home shows it, and keys
   light up on the pad drawing while you hold them. This uses protocol 2 (`HELLO` and `EVT`, see [PROTOCOL.md](PROTOCOL.md)).
   A pad without the updated `app_profiles.py` works exactly as before, just without these.
+- **Lighting effects.** On the Home screen, **Lighting effects** opens a grid of effects like the one in other RGB
+  software. Click one, then **Push to pad**; the pad keeps it across a power-off and Studio shows the effect the pad is
+  really running. **Static** shows the per-key colours of each profile (and has the per-key colour editor, with a tab
+  per profile); **Rainbow**, **Ripple** and **Starry night** make their own colours, so there is nothing to set. The
+  effect is one setting for the whole pad, not per profile. It needs pad firmware 0.4.0: an older pad shows a note and
+  keeps its static colours until it is updated.
+- **Music effects.** **Equalizer** and **Beat pulse** follow the sound the computer plays. Studio listens to it
+  (Windows, system audio loopback, no microphone and no permission prompt), works out four bands from bass to treble and a
+  beat, and sends them to the pad about 25 times a second (the `M` line in [PROTOCOL.md](PROTOCOL.md#music-levels-m)).
+  The Lighting effects page shows what Studio hears, bar by bar. While a music effect is chosen, closing the Studio
+  window only hides it, so the lights keep following the music from the tray; the tray tooltip says so, and **Quit** in
+  the tray menu stops it. If Studio started with Windows it makes the hidden window by itself about 20 seconds after
+  login. Nothing is recorded or stored: the sound is analysed in memory and thrown away. On macOS and Linux Studio
+  cannot listen to the system sound yet and says so on the page.
 - **Firmware update.** The pad reports its firmware version when the app connects. Every Studio carries the matching
   firmware, and when the pad's is older a strip offers **Update pad** (also under Settings → Pad firmware). The pad asks
   you to press its knob to allow it, the files are sent and checked, and the pad restarts by itself and installs
   them. If the new firmware does not run, the pad puts the old one back. See
   [Updating the pad's firmware](#updating-the-pads-firmware-from-studio). A pad too old to update itself (before
-  firmware 0.3.4) is told to need one flash from the computer first. The strip can be dismissed until the pad is
+  firmware 0.3.4) is told to need one flash from the computer first. The lighting effects need firmware 0.4.0. The strip can be dismissed until the pad is
   plugged in again.
 - **Key test (development builds only).** A development build of Studio has a **Test keys** button on the Home screen;
   the production app does not. See [Development tools](#development-tools-not-in-the-customer-build).
@@ -211,6 +226,7 @@ profiles in `code.py`.
 src/shared/config.ts     config types, limits (4 profiles, 3x4 keys, 5-char labels), validation, starter profiles
 src/shared/protocol.ts   serial line protocol: framing, CRC32, reply parsing, HELLO / EVT parsing, config receiver
 src/shared/firmware.ts   the firmware version the app needs and how a pad's reported version is judged
+src/shared/music.ts      MusicAnalyzer: the sound's frequency picture -> four band levels and a beat (0 to 63)
 src/shared/sync.ts       "is the pad up to date?": compares the editor with what the pad is known to hold
 src/shared/theme.ts      theme choice and the native window colours
 src/main/device/         Link interface, real USB serial link, mock link, DeviceSession, DeviceManager
@@ -218,9 +234,13 @@ src/main/device/         Link interface, real USB serial link, mock link, Device
 src/main/store.ts        config.json, last-pushed.json (what the pad holds) and settings.json (theme) in the user
                          data folder (atomic writes)
 src/main/focusWatcher.ts which program has focus (Windows), for automatic profile switching
+src/main/index.ts        windows, tray, IPC; the system-sound handler and the music levels' way to the pad;
+                         keeps the window (hidden) alive while a music effect is chosen
 src/preload/index.ts     the only bridge to the renderer (typed, contextIsolation on)
-src/renderer/            UI: pad view, profile sidebar, key / encoder inspector, top bar, settings, toasts
-src/renderer/src/lib/    useStudio (document, device and sync state), useHistory (undo), useShortcuts
+src/renderer/            UI: pad view, profile sidebar, key / encoder inspector, top bar, settings, toasts,
+                         the Lighting effects page (components/Effects.tsx)
+src/renderer/src/lib/    useStudio (document, device and sync state), useHistory (undo), useShortcuts,
+                         useMusic (listens to the system sound and sends the levels to the pad)
 tests/                   vitest; tests/ui/ holds the component tests (React Testing Library in jsdom, with a stand-in
                          for the preload bridge in tests/ui/stubApi.ts)
 ../Programs/tests/       the pad's serial handling run on a normal Python with fake modules (no hardware):
@@ -256,7 +276,9 @@ dark and light theme, serial link (finds the pad by CircuitPython VID + PING/PON
 check, one-at-a-time commands so replies cannot be mixed up, up-to-date tracking, firmware receiver (`CFG_*`,
 `GET_CFG`, `LED`; the pad saves `config.json` and restarts), the four-mode knob, the tray with active-window
 detection (`APP` messages, Windows), Windows / macOS / Linux installers, and the pad's own reports (`HELLO` / `EVT`:
-active profile and held keys), the firmware version check, the key test screen, and UI tests.
+active profile and held keys), the firmware version check, the key test screen, firmware update from Studio, the
+sleep time, the lighting effects (static, rainbow, ripple, starry night) and the music effects (equalizer, beat pulse),
+and UI tests.
 
 The pad's `HELLO` / `EVT` firmware is covered by tests that run it with fake modules, but it has not been tried on a
 real pad yet.
@@ -266,7 +288,8 @@ held, the pad refuses the push: replug it without the key.
 
 Not done yet:
 
-- Import/export of `.snekprofile.json`, per-profile LED effects, auto-update of Studio itself, and profile
-  switching by focused app on macOS and Linux.
+- Import/export of `.snekprofile.json`, an effect per profile (it is one setting for the whole pad), effect speed and
+  colour options, a brightness setting in Studio, music effects on macOS and Linux, auto-update of Studio itself, and
+  profile switching by focused app on macOS and Linux.
 
 See `PROTOCOL.md` for the messages.
