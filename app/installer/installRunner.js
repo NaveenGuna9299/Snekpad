@@ -1,5 +1,8 @@
 // Runs the real (NSIS) setup for the themed installer window, and runs it again when it could not remove the old version.
 //
+// The main cause of that failure was found and fixed in main.js (the window scanned the install folder with Electron's
+// asar-aware fs, which kept the old app.asar open: see plainFs there). This retry is a safety net for anything else.
+//
 // Why: the NSIS setup first runs the old version's uninstaller. That sometimes fails (exit code 2, "Failed to uninstall
 // old application files") when a program is still closing or holds the folder for a moment. The failed uninstaller has
 // already removed its own entry from Windows, so running the setup once more installs over the old files and works. A

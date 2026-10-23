@@ -72,6 +72,10 @@ export interface SnekApi {
   /** Start with Windows (hidden in the tray). `supported` is false in dev builds and off Windows. */
   getStartup(): Promise<{ supported: boolean; enabled: boolean }>
   setStartup(on: boolean): Promise<boolean>
+  /** True when this Studio was installed with the Windows installer, so it has an uninstaller of its own to run. */
+  canUninstall(): Promise<boolean>
+  /** Starts that uninstaller and closes Studio. Does nothing when canUninstall is false. */
+  uninstall(): Promise<void>
   /** Asks GitHub whether a newer release exists. Never downloads or installs anything. */
   checkForUpdate(): Promise<UpdateInfo>
   openReleasePage(): Promise<void>

@@ -18,6 +18,9 @@ npm run build:mac    # macOS build (run on a Mac)
 The Windows installer (`npm run build:win:setup`) is a small themed window (`installer/`) that runs the standard NSIS setup
 silently. It closes a running Studio first and runs the setup again (up to 3 times) when the old version's uninstaller reports
 code 2, "Failed to uninstall old application files" (`installer/installRunner.js`, tested in `tests/installRunner.test.ts`).
+The cause of that error was the window itself: it scanned the install folder (for its progress bar) with Electron's own `fs`,
+which treats an `.asar` file as a folder and keeps it open, so the old Studio's `resources/app.asar` could not be deleted. The
+scan uses `original-fs` now (checked in `tests/installerMain.test.ts`); keep it that way.
 
 On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to use the whole app without hardware.
 
@@ -28,7 +31,9 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
   pad shows (key labels and colours, and the sleep time) and adopts it only when that would not overwrite unsent edits (or when the app has
   no record of the pad yet), so it does not throw away your work.
 - **Settings** (on the Home screen) holds **Pad sleeps after** (minutes before the pad's screen and key lights switch
-  off, 2 by default, 0 = never; it is part of the pad's config, so it reaches the pad with **Push to pad**), Start with Windows, Restore starter profiles, the theme (System, Dark, Light) and the mock pad. The
+  off, 2 by default, 0 = never; it is part of the pad's config, so it reaches the pad with **Push to pad**), Start with Windows, Restore starter profiles, the theme (System, Dark, Light), the mock pad and, in an app installed with the Windows installer, **Uninstall SnekPad Studio…**
+  (asks twice; it starts the uninstaller that sits next to the app, so it works even when Windows' own list of installed apps does not
+  show Studio yet). The
   **Profiles** button hides the profile list to give the pad more room.
 - **Keys.** Pick the action type with the buttons in the inspector. A sequence lets you re-record a step and move steps
   up or down. Drag a key onto another to swap them (the FN key, bottom right, always stays put). Deleting a profile,

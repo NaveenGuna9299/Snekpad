@@ -11,7 +11,8 @@ import {
   Menu,
   nativeImage
 } from 'electron'
-import { join } from 'path'
+import { dirname, join } from 'path'
+import { spawn } from 'child_process'
 import { existsSync, writeFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -155,6 +156,13 @@ function createWindow(onShown?: () => void, hidden = false): BrowserWindow {
 }
 
 // only an installed Windows build can sit in Windows' startup list (a dev build would register electron.exe)
+// The Windows installer puts "Uninstall SnekPad Studio.exe" next to the app. Windows' own list of installed apps (Settings,
+// Control Panel) can lag behind or miss an app, so Studio can start that uninstaller itself.
+const uninstallerPath = (): string =>
+  join(dirname(process.execPath), 'Uninstall SnekPad Studio.exe')
+const canUninstall = (): boolean =>
+  app.isPackaged && process.platform === 'win32' && existsSync(uninstallerPath())
+
 const canAutoStart = (): boolean => app.isPackaged && process.platform === 'win32'
 
 // Windows only reports the entry when asked with the same args it was registered with
@@ -197,6 +205,14 @@ function registerIpc(): void {
   ipcMain.handle('templates:save', (_e, list: Template[]) => saveTemplates(list))
 
   ipcMain.handle('startup:get', () => ({ supported: canAutoStart(), enabled: loginEnabled() }))
+  ipcMain.handle('app:canUninstall', () => canUninstall())
+  ipcMain.handle('app:uninstall', () => {
+    if (!canUninstall()) return
+    // the uninstaller closes a running Studio itself, but quitting first leaves nothing of ours to wait for
+    spawn(uninstallerPath(), ['/currentuser'], { detached: true, stdio: 'ignore' }).unref()
+    quitting = true
+    app.quit()
+  })
   ipcMain.handle('startup:set', (_e, on: boolean) => {
     if (canAutoStart()) app.setLoginItemSettings({ openAtLogin: on, args: STARTUP_ARGS })
     return loginEnabled()

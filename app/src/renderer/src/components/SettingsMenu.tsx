@@ -51,10 +51,14 @@ export function SettingsMenu({
   const [auto, setAuto] = useState(true)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [checking, setChecking] = useState(false)
+  // true when Studio came from the Windows installer; the uninstall button asks twice, so a stray click does nothing
+  const [canUninstall, setCanUninstall] = useState(false)
+  const [sure, setSure] = useState(false)
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     void window.api.getStartup().then(setStartup)
+    void window.api.canUninstall().then((can) => setCanUninstall(can === true))
     void window.api.getTheme().then(setTheme)
     void window.api.getAutoUpdateCheck().then((on) => {
       setAuto(on)
@@ -271,6 +275,20 @@ export function SettingsMenu({
           >
             Restore starter profiles
           </button>
+          {canUninstall && (
+            <div className="flex flex-col gap-1.5 border-t border-line pt-3 text-sm">
+              <button
+                onClick={() => (sure ? void window.api.uninstall() : setSure(true))}
+                onBlur={() => setSure(false)}
+                className={`rounded-md border px-3 py-1.5 text-left hover:bg-surface2 ${sure ? 'border-danger text-danger' : 'border-line'}`}
+              >
+                {sure ? 'Click again to uninstall SnekPad Studio' : 'Uninstall SnekPad Studio…'}
+              </button>
+              <span className="text-xs text-muted">
+                Removes the app from this computer. Your pad and its profiles are not touched.
+              </span>
+            </div>
+          )}
           <label className="flex items-center gap-2 border-t border-line pt-3 text-xs text-muted">
             <input type="checkbox" checked={mock} onChange={(e) => onMock(e.target.checked)} />
             Use a mock pad (for trying the app without hardware)

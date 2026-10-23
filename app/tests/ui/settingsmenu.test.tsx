@@ -157,3 +157,43 @@ describe('Settings: pad sleep time', () => {
     expect(screen.getByLabelText('Pad sleeps after')).toBeTruthy()
   })
 })
+
+describe('Settings: uninstall', () => {
+  it('has an uninstall button when Studio came from the Windows installer, and asks twice', async () => {
+    const uninstall = vi.fn(() => Promise.resolve())
+    installApi(undefined, { canUninstall: () => Promise.resolve(true), uninstall })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    const first = await screen.findByRole('button', { name: /Uninstall SnekPad Studio/ })
+    await userEvent.click(first)
+    expect(uninstall).not.toHaveBeenCalled() // one click only asks
+    await userEvent.click(screen.getByRole('button', { name: /Click again to uninstall/ }))
+    expect(uninstall).toHaveBeenCalledTimes(1)
+  })
+
+  it('a click somewhere else cancels the question', async () => {
+    const uninstall = vi.fn(() => Promise.resolve())
+    installApi(undefined, { canUninstall: () => Promise.resolve(true), uninstall })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    await userEvent.click(await screen.findByRole('button', { name: /Uninstall SnekPad Studio/ }))
+    await userEvent.click(screen.getByLabelText('Pad sleeps after')) // focus moves away
+    expect(screen.getByRole('button', { name: /Uninstall SnekPad Studio…/ })).toBeTruthy()
+    expect(uninstall).not.toHaveBeenCalled()
+  })
+
+  it('says the pad and its profiles are not touched', async () => {
+    installApi(undefined, { canUninstall: () => Promise.resolve(true) })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    expect(await screen.findByText(/pad and its profiles are not touched/)).toBeTruthy()
+  })
+
+  it('has no uninstall button in a development run, the portable zip or another system', async () => {
+    installApi(undefined, { canUninstall: () => Promise.resolve(false) })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByRole('button', { name: /Uninstall SnekPad Studio/ })).toBeNull()
+  })
+})

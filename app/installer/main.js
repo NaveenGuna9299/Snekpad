@@ -5,6 +5,10 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron')
 const { spawn, spawnSync } = require('node:child_process')
 const { runSetup } = require('./installRunner')
 const fs = require('node:fs')
+// For looking inside the install folder. Electron's own fs treats an .asar file as a folder and keeps it open for as long as
+// the program runs: the old Studio's resources/app.asar then could not be deleted, and the old version's uninstaller
+// failed with "Failed to uninstall old application files ... : 2". original-fs does not do that.
+const plainFs = require('original-fs')
 const path = require('node:path')
 
 const DRY_RUN = process.env.SNEKPAD_SETUP_DRYRUN === '1'
@@ -37,7 +41,7 @@ function dirSize(dir) {
     const d = stack.pop()
     let entries
     try {
-      entries = fs.readdirSync(d, { withFileTypes: true })
+      entries = plainFs.readdirSync(d, { withFileTypes: true })
     } catch {
       continue
     }
@@ -46,7 +50,7 @@ function dirSize(dir) {
       if (e.isDirectory()) stack.push(p)
       else
         try {
-          total += fs.statSync(p).size
+          total += plainFs.statSync(p).size
         } catch {
           /* file vanished mid-scan */
         }
