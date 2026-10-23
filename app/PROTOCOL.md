@@ -44,7 +44,7 @@ The firmware part is `AppProfiles._hello` and `_flush_events` in `Programs/app_p
 
 For the pad's `equalizer` and `beat` effects, Studio listens to the sound the computer plays (Windows: system audio
 loopback) and sends the pad its levels about 25 times a second, only while a pad is connected and one of those effects is
-chosen:
+chosen (also while the Studio window is closed to the tray: with a music effect chosen, closing the window only hides it):
 
 | App sends   | Pad replies | Notes                                                                                                                                                     |
 | ----------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |

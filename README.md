@@ -42,7 +42,8 @@ the pad to allow it).
   Rainbow (a wave of colour from left to right), Ripple (a ring of a random colour from the key you press), Starry
   night (random keys twinkle in random colours), and two that follow the music: Equalizer (the four columns are bass
   to treble and fill up from the bottom row) and Beat pulse (all keys flash on the beat). The music effects listen
-  to the sound your computer plays (Windows, no microphone) and need Studio to be open, minimised is fine. Push to
+  to the sound your computer plays (Windows, no microphone). They keep working when you close the Studio window to the
+  tray (Studio has to be running, which it is when it starts with Windows). Push to
   pad after choosing; the pad remembers the effect across a power-off and Studio shows the one the pad runs.
 - The screen and the key LEDs sleep together: after the sleep time (2 minutes by default) both switch off, the screen
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they

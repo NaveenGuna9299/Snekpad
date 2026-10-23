@@ -17,6 +17,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { showSplash } from './splash'
 import { DeviceManager } from './device/manager'
+import { isMusicEffect } from '../shared/config'
 import { FocusWatcher } from './focusWatcher'
 import {
   loadConfig,
@@ -50,6 +51,11 @@ const device = new DeviceManager()
 const focus = new FocusWatcher((proc, title) => device.sendApp(proc, title))
 // Closing the window keeps the app running in the tray: profile switching needs it to stay alive.
 let tray: Tray | null = null
+// The music effects need the page (it listens to the sound and works out the levels). While one is chosen, closing the
+// window only hides it, so the lights keep following the music from the tray; otherwise closing destroys the window and
+// its renderer, so the tray costs no web-page memory.
+let musicActive = false
+let quitting = false
 
 /** The native window buttons are drawn by the OS over our title bar, so they must match the theme. */
 const overlay = (): { color: string; symbolColor: string; height: number } => {
@@ -69,7 +75,7 @@ function setKeyTest(on: boolean): void {
 const isShortcut = (i: Electron.Input): boolean =>
   i.type === 'keyDown' && (i.control || i.alt || i.meta || /^F\d{1,2}$/.test(i.key))
 
-function createWindow(onShown?: () => void): BrowserWindow {
+function createWindow(onShown?: () => void, hidden = false): BrowserWindow {
   setKeyTest(false)
   // Fit the window to the screen: tall enough to show the whole home page, never bigger than the
   // usable area (taskbar excluded), and centred.
@@ -103,8 +109,15 @@ function createWindow(onShown?: () => void): BrowserWindow {
   // state costs no web-page memory. Edits are auto-saved, and showWindow() rebuilds it on demand.
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    if (!hidden) mainWindow.show() // a window made only for the music effects stays in the tray
     onShown?.()
+  })
+
+  mainWindow.on('close', (e) => {
+    if (musicActive && !quitting) {
+      e.preventDefault()
+      mainWindow.hide()
+    }
   })
 
   // A blank window means the page failed to load or the renderer died: say why, and retry.
@@ -218,6 +231,15 @@ function registerIpc(): void {
     },
     { useSystemPicker: false }
   )
+  // The page says whether a music effect is chosen. When it stops while the window is closed to the tray, the window
+  // (kept only for the music) goes.
+  ipcMain.on('music:active', (_e, on: unknown) => {
+    musicActive = on === true
+    tray?.setToolTip(trayTip())
+    if (!musicActive) {
+      for (const w of BrowserWindow.getAllWindows()) if (!w.isVisible()) w.destroy()
+    }
+  })
   ipcMain.on('music:levels', (_e, bands: unknown, beat: unknown) => {
     if (!Array.isArray(bands) || typeof beat !== 'number') return
     device.sendMusic(
@@ -256,6 +278,11 @@ function registerIpc(): void {
 if (!app.requestSingleInstanceLock()) app.quit()
 else app.on('second-instance', () => showWindow())
 
+const trayTip = (): string =>
+  musicActive
+    ? 'SnekPad Studio (profile switching and the music lights are on)'
+    : 'SnekPad Studio (profile switching is on)'
+
 function showWindow(): void {
   const w = BrowserWindow.getAllWindows()[0]
   if (!w) return void createWindow()
@@ -289,8 +316,20 @@ app.whenReady().then(() => {
     device.start()
     focus.start()
   }
-  if (startHidden) setTimeout(startWork, LOGIN_DELAY_MS)
-  else startWork()
+  if (startHidden) {
+    setTimeout(() => {
+      startWork()
+      // started with Windows and a music effect is chosen: make the page, hidden, so the lights follow the music
+      if (
+        isMusicEffect(loadConfig().settings.effect) &&
+        BrowserWindow.getAllWindows().length === 0
+      ) {
+        musicActive = true
+        tray?.setToolTip(trayTip())
+        createWindow(undefined, true)
+      }
+    }, LOGIN_DELAY_MS)
+  } else startWork()
 
   // First run of an installed build: start with Windows (hidden in the tray) so profiles switch
   // without opening the window. After that the choice is the user's, set in the top bar.
@@ -308,7 +347,7 @@ app.whenReady().then(() => {
 
   const show = showWindow
   tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
-  tray.setToolTip('SnekPad Studio (profile switching is on)')
+  tray.setToolTip(trayTip())
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open SnekPad Studio', click: show },
@@ -328,6 +367,7 @@ app.whenReady().then(() => {
 })
 
 app.on('before-quit', () => {
+  quitting = true
   focus.stop()
   device.stop()
 })

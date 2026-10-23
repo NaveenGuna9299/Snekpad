@@ -33,9 +33,14 @@ function App(): React.JSX.Element {
     useStudio()
   const [selectedProfile, setSelectedProfile] = useState(0)
   // a music effect is chosen and a pad is there to receive it: listen to the computer's sound and feed the pad
-  const music = useMusic(
-    !!config && isMusicEffect(config.settings.effect) && device.status === 'connected'
-  )
+  const musicChosen = !!config && isMusicEffect(config.settings.effect)
+  const music = useMusic(musicChosen && device.status === 'connected')
+  // closing the window then only hides it, so the music effects keep going from the tray
+  // (not before the config has loaded: "no music effect" is not an answer yet, and would close a window kept for it)
+  const configLoaded = config !== null
+  useEffect(() => {
+    if (configLoaded) window.api.setMusicActive(musicChosen)
+  }, [configLoaded, musicChosen])
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
   const [mock, setMock] = useState(false)
   const [view, setView] = useState<'home' | 'editor' | 'test' | 'effects'>('home')

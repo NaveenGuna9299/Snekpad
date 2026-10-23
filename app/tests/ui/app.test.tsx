@@ -29,6 +29,42 @@ async function start(
 }
 
 describe('App', () => {
+  it('tells the main process whether a music effect is chosen, so closing the window can keep it going from the tray', async () => {
+    const withEffect = (effect: Config['settings']['effect']): Config => {
+      const c = defaultConfig()
+      c.settings.effect = effect
+      return c
+    }
+    for (const [effect, expected] of [
+      ['equalizer', true],
+      ['beat', true],
+      ['static', false],
+      ['rainbow', false]
+    ] as const) {
+      const setMusicActive = vi.fn()
+      await start(pad(), {
+        loadConfig: () => Promise.resolve(withEffect(effect)),
+        setMusicActive
+      })
+      await waitFor(() => expect(setMusicActive).toHaveBeenCalledWith(expected), { timeout: 2000 })
+      expect(setMusicActive).not.toHaveBeenCalledWith(!expected)
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('does not break when the sound cannot be listened to (no pad, or a system without it)', async () => {
+    const sendMusic = vi.fn()
+    const c = defaultConfig()
+    c.settings.effect = 'beat'
+    await start(pad(), { loadConfig: () => Promise.resolve(c), sendMusic })
+    await userEvent.click(screen.getByRole('button', { name: 'Lighting effects' }))
+    // jsdom has no media devices: Studio says so instead of failing
+    expect(
+      await screen.findByText(/could not|Listening needs|Cannot read|not a function|undefined/i)
+    ).toBeTruthy()
+    expect(sendMusic).not.toHaveBeenCalled()
+  })
+
   it('opens on the home screen and goes into the editor and back', async () => {
     await start()
     expect(screen.getByText('Not connected')).toBeTruthy()

@@ -312,8 +312,8 @@ function MusicPanel({
         </div>
       </div>
       <p className="text-xs text-muted">
-        Keep Studio open (you can minimise it). Push to pad after choosing the effect. It listens to
-        the computer&apos;s own sound, so it needs Windows and no microphone.
+        Studio keeps listening when you close its window to the tray. Push to pad after choosing the
+        effect. It listens to the computer&apos;s own sound, so it needs Windows and no microphone.
       </p>
     </div>
   )

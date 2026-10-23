@@ -56,6 +56,8 @@ export interface SnekApi {
   previewLed(layer: number, key: number, color: string): Promise<void>
   /** Levels of the sound the computer plays, for the pad's music effects: four bands (0 to 63) and a beat (0 = none). */
   sendMusic(bands: readonly number[], beat: number): void
+  /** Tell the main process whether a music effect is chosen: then closing the window hides it (the music keeps playing in the lights from the tray). */
+  setMusicActive(on: boolean): void
   /**
    * Key test screen open / closed. While open, the window ignores shortcuts (Ctrl/Alt/Cmd combos and
    * function keys), because the pad types its normal shortcuts into whatever has focus, and one of
