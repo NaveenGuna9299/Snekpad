@@ -42,6 +42,12 @@ the pad to allow it).
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
   dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps
   after** (0 = never) and sent to the pad with **Push to pad**.
+- LED brightness is changed on the pad with the dim and brighter keys of the utility layer (hold FN). The step you
+  choose is remembered across a power-off or a computer restart, and pushing a config from Studio does not reset it.
+  Studio has no brightness setting yet.
+- A soft start for the LEDs: at power-up they stay dark for about a second, so the computer can finish setting up the
+  USB connection, and then fade in over about two seconds. Switching on all 12 LEDs at once could overload a weak or
+  crowded USB hub and reset other devices on it (a Bluetooth module, for example).
 - A short flash of the new profile's main colour on all keys when the profile changes (automatically or by hand), so
   you notice the switch without looking at the screen. Holding FN does not flash.
 - Automatic profile switching based on the focused app (Windows). The app can start with Windows and keep switching
