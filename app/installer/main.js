@@ -2,7 +2,8 @@
 // The NSIS setup.exe is bundled as a payload and run silently; this window only shows progress.
 
 const { app, BrowserWindow, ipcMain, dialog } = require('electron')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
+const { runSetup } = require('./installRunner')
 const fs = require('node:fs')
 const path = require('node:path')
 
@@ -87,12 +88,22 @@ function install(dir) {
 
   const setup = path.join(payloadDir, 'setup.exe')
   if (!fs.existsSync(setup)) return finish(false, 'The installer payload is missing.')
-  // /D must be the last argument and must not be quoted, even if the path has spaces.
-  child = spawn(setup, ['/S', `/D=${dir}`], { windowsVerbatimArguments: true, windowsHide: true })
-  child.on('error', (e) => finish(false, e.message))
-  child.on('exit', (code) =>
-    code === 0 ? finish(true) : finish(false, `Setup exited with code ${code}.`)
-  )
+  // The setup is run again if the old version could not be removed (see installRunner.js).
+  runSetup({
+    // /D must be the last argument and must not be quoted, even if the path has spaces.
+    start: () =>
+      spawn(setup, ['/S', `/D=${dir}`], { windowsVerbatimArguments: true, windowsHide: true }),
+    stopStudio,
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+    onChild: (c) => (child = c)
+  }).then((r) => (r.ok ? finish(true) : finish(false, r.error)))
+}
+
+/** Closes a running SnekPad Studio (it lives in the tray when its window is closed), so its files can be replaced. */
+function stopStudio() {
+  if (process.platform !== 'win32') return false
+  const r = spawnSync('taskkill', ['/F', '/IM', `${PRODUCT}.exe`], { windowsHide: true })
+  return r.status === 0 // 0 = it found one and closed it
 }
 
 function launchInstalled(dir) {

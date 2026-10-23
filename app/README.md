@@ -15,6 +15,10 @@ npm run build:win    # Windows installer (electron-builder)
 npm run build:mac    # macOS build (run on a Mac)
 ```
 
+The Windows installer (`npm run build:win:setup`) is a small themed window (`installer/`) that runs the standard NSIS setup
+silently. It closes a running Studio first and runs the setup again (up to 3 times) when the old version's uninstaller reports
+code 2, "Failed to uninstall old application files" (`installer/installRunner.js`, tested in `tests/installRunner.test.ts`).
+
 On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to use the whole app without hardware.
 
 ## Using the editor
