@@ -43,6 +43,13 @@ SWITCH_FLASH_S = 0.3
 # holding the key down to go from dim to bright writes the pad's memory once, not at every step.
 SAVE_AFTER_S = 2.0
 
+# Soft start. At power-up the computer may only give the pad 100 mA until it has enumerated the device, and 12 LEDs at
+# once can draw about three times that. On a weak or crowded hub the sudden load pulls the whole hub's voltage down and
+# resets what else is plugged into it (seen: a Bluetooth module). So the LEDs stay dark for START_DELAY_S, which lets
+# USB finish, and then fade up to the chosen brightness over RAMP_S seconds.
+START_DELAY_S = 1.0
+RAMP_S = 2.0
+
 
 class RgbKeys(Module):
     def __init__(self, pin, level=3, press_flash=True, on_level=None):
@@ -51,6 +58,9 @@ class RgbKeys(Module):
         self._flash = press_flash
         self._on_level = on_level   # function(level): remembers the step across a power-off (code.py sets it)
         self._save_at = 0
+        self._t0 = None         # when the soft start began: the first scan, not power-up (the screen's start-up logo
+                                # blocks for about 2 s before the first scan, which would use up the fade)
+        self._ramp = 1.0        # 0 to 1: how far the soft start has got (1 = done, or none)
 
         self.ui = None          # the OledUI: the LEDs dim and switch off with the screen (set by code.py)
         self.profile_layers = 0 # layers below this number are profiles; 0 = no flash on profile change
@@ -131,12 +141,20 @@ class RgbKeys(Module):
     def _brightness(self):
         # while the screen is dimmed the LEDs drop to the lowest step (never up: a lower setting stays)
         b = LEVELS[self._level]
-        return min(b, LEVELS[0]) if self._idle == 1 else b
+        return (min(b, LEVELS[0]) if self._idle == 1 else b) * self._ramp
 
     def _apply_level(self):
         if self.px is not None:
             self.px.brightness = self._brightness()
             self._paint()
+
+    def _soft_start(self, now):
+        # one step of the fade-in; the LEDs are repainted only when the step changes
+        r = (now - self._t0 - START_DELAY_S) / RAMP_S
+        r = 0.0 if r < 0 else (1.0 if r >= 1 else r)
+        if r != self._ramp:
+            self._ramp = r
+            self._apply_level()
 
     def _apply_idle(self, idle):
         self._idle = idle
@@ -147,8 +165,10 @@ class RgbKeys(Module):
     # ------------------------------------------------------------ KMK hooks
     def during_bootup(self, keyboard):
         try:
+            self._t0 = None
+            self._ramp = 0.0
             self.px = neopixel.NeoPixel(
-                self._pin, KEYS, brightness=LEVELS[self._level],
+                self._pin, KEYS, brightness=0,
                 auto_write=False, pixel_order=neopixel.GRB)
             self.enabled = True
             self.layer = keyboard.active_layers[0]
@@ -188,6 +208,10 @@ class RgbKeys(Module):
                 except Exception as e:      # never let a memory error switch the LEDs off
                     print("rgb_keys level not saved:", e)
         try:
+            if self._ramp < 1.0:
+                if self._t0 is None:
+                    self._t0 = now
+                self._soft_start(now)
             if self.ui is not None:
                 idle = self.ui.idle_level()
                 if idle != self._idle:

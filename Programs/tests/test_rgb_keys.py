@@ -379,5 +379,89 @@ class BrightnessSavingTests(unittest.TestCase):
         self.assertEqual(self.leds._level, 2)
 
 
+class SoftStartTests(unittest.TestCase):
+    """At power-up the LEDs wait for USB and then fade in, so the pad never pulls its full current at once."""
+
+    def setUp(self):
+        self.now = 1000.0
+        patch = mock.patch.object(rgb_keys.time, "monotonic", lambda: self.now)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.strip = FakeStrip()
+        fake_neopixel = mock.Mock(return_value=self.strip)
+        fake_neopixel.GRB = "GRB"
+        patch2 = mock.patch.object(rgb_keys, "neopixel", types.SimpleNamespace(NeoPixel=fake_neopixel, GRB="GRB"))
+        patch2.start()
+        self.addCleanup(patch2.stop)
+        self.leds = rgb_keys.RgbKeys(None, level=3)
+        self.leds.set_colors([list(row) for row in COLORS])
+        self.kb = FakeKeyboard()
+        self.leds.during_bootup(self.kb)
+
+    def tick(self, seconds):
+        self.now += seconds
+        self.leds.before_matrix_scan(self.kb)
+
+    def start(self):
+        """The first scan: the soft start begins here."""
+        self.tick(0.06)
+
+    def test_the_leds_start_dark(self):
+        self.assertEqual(self.strip.brightness, 0)
+
+    def test_the_screens_start_up_logo_does_not_use_up_the_fade(self):
+        # oled_ui.during_bootup sleeps about 2 s before the first scan: the LEDs must still start from dark
+        self.now += 2.0
+        self.start()
+        self.assertEqual(self.strip.brightness, 0)
+        self.tick(rgb_keys.START_DELAY_S + rgb_keys.RAMP_S / 2)
+        self.assertGreater(self.strip.brightness, 0)
+        self.assertLess(self.strip.brightness, rgb_keys.LEVELS[3])
+
+    def test_they_stay_dark_while_usb_enumerates(self):
+        self.start()
+        for _ in range(int(rgb_keys.START_DELAY_S / 0.06)):
+            self.tick(0.06)
+        self.assertEqual(self.strip.brightness, 0)
+
+    def test_then_they_fade_up_in_steps_never_jumping(self):
+        self.start()
+        self.tick(rgb_keys.START_DELAY_S + 0.01)
+        seen = []
+        for _ in range(int(rgb_keys.RAMP_S / 0.06) + 5):
+            self.tick(0.06)
+            seen.append(self.strip.brightness)
+        self.assertEqual(seen, sorted(seen))                          # only ever up
+        self.assertAlmostEqual(seen[-1], rgb_keys.LEVELS[3])          # ends at the chosen level
+        steps = [b - a for a, b in zip([0] + seen, seen)]
+        self.assertLess(max(steps), rgb_keys.LEVELS[3] / 10)          # no step is more than a tenth of the way
+
+    def test_a_dimmer_level_is_reached_too(self):
+        self.start()
+        self.leds._dimmer()
+        self.tick(rgb_keys.START_DELAY_S + rgb_keys.RAMP_S + 0.1)
+        self.assertAlmostEqual(self.strip.brightness, rgb_keys.LEVELS[2])
+
+    def test_the_keys_work_during_the_fade(self):
+        self.start()
+        self.tick(rgb_keys.START_DELAY_S + 0.5)
+        self.leds._brighter()
+        self.assertLess(self.strip.brightness, rgb_keys.LEVELS[4])    # still part of the way
+        self.tick(rgb_keys.RAMP_S)
+        self.assertAlmostEqual(self.strip.brightness, rgb_keys.LEVELS[4])
+
+    def test_once_up_the_fade_does_no_more_work(self):
+        self.start()
+        self.tick(rgb_keys.START_DELAY_S + rgb_keys.RAMP_S + 0.1)
+        shows = self.strip.shows
+        for _ in range(20):
+            self.tick(0.06)
+        self.assertEqual(self.strip.shows, shows)
+
+    def test_a_module_without_a_start_time_is_not_faded(self):
+        leds = rgb_keys.RgbKeys(None, level=3)
+        self.assertEqual(leds._ramp, 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
