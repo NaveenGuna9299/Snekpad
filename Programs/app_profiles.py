@@ -29,11 +29,20 @@ import supervisor
 import config_loader
 from kmk.modules import Module
 
+try:
+    from supervisor import ticks_ms
+except ImportError:                 # on a normal computer (the tests)
+    def ticks_ms():
+        return int(time.monotonic() * 1000) & 0x1FFFFFFF
+
+# The scan loop runs hundreds of times a second: a decimal number made on every pass fills the RAM, and the clean-up
+# that follows freezes the key LEDs for about 50 ms. So the 50 ms throttle is kept with whole numbers (ticks_ms).
+
 CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/protocol.ts)
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
 PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
-FIRMWARE_VERSION = "0.3.5"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
+FIRMWARE_VERSION = "0.4.0"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
                             # at or above REQUIRED_FIRMWARE in app/src/shared/firmware.ts (a test checks this).
 FS_ROOT = ""            # root of the pad's filesystem; tests point it at a temporary folder
 EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
@@ -68,7 +77,7 @@ class AppProfiles(Module):
         self._held = 0
         self._pending = None
         self._auto_layer = None
-        self._last_tick = 0
+        self._last_ms = 0
         self.ui = None              # OledUI, set by code.py: refused pushes are shown on the screen
         self.encoder = None         # EncoderModes, set by code.py: the knob press that allows a firmware update
         self._fw = None             # the firmware update receiver (fw_update.Updater) while one is loaded
@@ -465,15 +474,19 @@ class AppProfiles(Module):
     def before_matrix_scan(self, keyboard):
         if not self.enabled:
             return None
+        ms = ticks_ms()
+        # poll every scan while a config or a firmware update is arriving (the port's buffer is small), else every 50 ms
+        if (self._rx is None and not self._fw_busy() and self._reload_at is None and not self._evq
+                and ((ms - self._last_ms) & 0x1FFFFFFF) < 50):
+            return None
         now = time.monotonic()
         if self._reload_at is not None and now >= self._reload_at:
             supervisor.reload()     # start again with the new config.json
         if self._evq:
             self._send_events()     # key events go out on the next scan, not on the 50 ms tick
-        # poll every scan while a config or a firmware update is arriving (the port's buffer is small), else every 50 ms
-        if self._rx is None and not self._fw_busy() and now - self._last_tick < 0.05:
+        if self._rx is None and not self._fw_busy() and ((ms - self._last_ms) & 0x1FFFFFFF) < 50:
             return None
-        self._last_tick = now
+        self._last_ms = ms
         try:
             self._read(now)
             if self._fw is not None:

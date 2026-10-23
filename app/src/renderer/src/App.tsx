@@ -20,6 +20,7 @@ import { neighbor } from './lib/grid'
 import { describeAction } from './lib/describe'
 import { PresetBrowser } from './components/PresetBrowser'
 import { KeyTest } from './components/KeyTest'
+import { Effects } from './components/Effects'
 import { FirmwareNotice } from './components/FirmwareNotice'
 import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
 import { updateOffer } from '../../shared/firmware'
@@ -31,7 +32,7 @@ function App(): React.JSX.Element {
   const [selectedProfile, setSelectedProfile] = useState(0)
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
   const [mock, setMock] = useState(false)
-  const [view, setView] = useState<'home' | 'editor' | 'test'>('home')
+  const [view, setView] = useState<'home' | 'editor' | 'test' | 'effects'>('home')
   // the firmware warning is hidden for one pad at a time: it comes back when the pad is plugged in again
   const [warningHidden, setWarningHidden] = useState(false)
   // the pad firmware inside this build of Studio (null if none), and the update dialog
@@ -209,6 +210,36 @@ function App(): React.JSX.Element {
           pressed={pressed}
           onBack={() => setView('home')}
         />
+      ) : view === 'effects' ? (
+        <Effects
+          profiles={config.profiles}
+          effect={config.settings.effect}
+          onEffect={(effect) => update((c) => ({ ...c, settings: { ...c.settings, effect } }))}
+          onKeyColor={(pi, key, color) => {
+            update((c) => ({
+              ...c,
+              profiles: c.profiles.map((pr, i) =>
+                i === pi
+                  ? { ...pr, keys: pr.keys.map((k, j) => (j === key ? { ...k, color } : k)) }
+                  : pr
+              )
+            }))
+            void window.api.previewLed(pi, key, color)
+          }}
+          onAllColors={(pi, color) =>
+            update((c) => ({
+              ...c,
+              profiles: c.profiles.map((pr, i) =>
+                i === pi ? { ...pr, keys: pr.keys.map((k) => ({ ...k, color })) } : pr
+              )
+            }))
+          }
+          device={device}
+          sync={sync}
+          pushing={pushing}
+          onPush={() => void push()}
+          onBack={() => setView('home')}
+        />
       ) : view === 'home' ? (
         <Home
           profile={padProfile ?? profile}
@@ -217,6 +248,7 @@ function App(): React.JSX.Element {
           device={device}
           profileCount={config.profiles.length}
           onOpen={() => setView('editor')}
+          onEffects={() => setView('effects')}
           onTestKeys={__DEV_TOOLS__ ? () => setView('test') : undefined}
           mock={mock}
           onMock={setMockPad}

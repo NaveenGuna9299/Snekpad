@@ -20,6 +20,39 @@ export const FN_KEY = 11 // bottom-right key is always the utility (FN) layer ke
 export const DEFAULT_SLEEP_MINUTES = 2 // idle minutes before the pad's screen and key LEDs switch off
 export const MAX_SLEEP_MINUTES = 60 // 0 = never sleep
 
+// How the key LEDs behave. The names are the same as EFFECTS in Programs/config_loader.py (the firmware also knows
+// 'breathing' and 'cycle', which Studio does not offer). `colors` says where an effect's colours come from:
+// 'perKey' (each profile's key colours) or 'none' (the effect makes its own).
+export const EFFECTS = [
+  {
+    id: 'static',
+    label: 'Static',
+    colors: 'perKey',
+    text: 'Each key keeps the colour you gave it.'
+  },
+  {
+    id: 'rainbow',
+    label: 'Rainbow',
+    colors: 'none',
+    text: 'A wave of rainbow colour sweeps across the keys.'
+  },
+  {
+    id: 'ripple',
+    label: 'Ripple',
+    colors: 'none',
+    text: 'Pressing a key sends a ring of a random colour spreading across the pad.'
+  },
+  {
+    id: 'starry',
+    label: 'Starry night',
+    colors: 'none',
+    text: 'Random keys twinkle in random colours.'
+  }
+] as const
+export type EffectId = (typeof EFFECTS)[number]['id']
+export const DEFAULT_EFFECT: EffectId = 'static'
+const effectIds = EFFECTS.map((e) => e.id) as [EffectId, ...EffectId[]]
+
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'colour must look like #RRGGBB')
 const keyName = z.string().regex(/^[A-Z0-9_]{1,12}$/, 'key names are upper case, e.g. CTRL, C, F12')
 
@@ -105,7 +138,14 @@ export const configSchema = z
       brightness: z.number().min(0.05).max(0.5),
       // idle minutes before the screen and key LEDs switch off (they dim at half that time); 0 = never.
       // A config saved before this setting existed gets the default.
-      sleepMinutes: z.number().int().min(0).max(MAX_SLEEP_MINUTES).default(DEFAULT_SLEEP_MINUTES)
+      sleepMinutes: z.number().int().min(0).max(MAX_SLEEP_MINUTES).default(DEFAULT_SLEEP_MINUTES),
+      // the key LED effect; a config saved before effects existed gets static, and so does one saved while
+      // Studio still offered Breathing or Color Cycle (taken out again: the pad's brightness steps are too few
+      // for a slow fade at the dimmest levels)
+      effect: z.preprocess(
+        (v) => (v === 'breathing' || v === 'cycle' ? DEFAULT_EFFECT : v),
+        z.enum(effectIds).default(DEFAULT_EFFECT)
+      )
     }),
     profiles: z.array(profileSchema).min(1).max(MAX_PROFILES)
   })
@@ -357,7 +397,11 @@ export function defaultConfig(): Config {
       owner_screen: { line1: '', line2: '', date: '' },
       oled: { width: 128, height: 32 }
     },
-    settings: { brightness: 0.4, sleepMinutes: DEFAULT_SLEEP_MINUTES },
+    settings: {
+      brightness: 0.4,
+      sleepMinutes: DEFAULT_SLEEP_MINUTES,
+      effect: DEFAULT_EFFECT
+    },
     profiles: [general(), vscode(), terminal(), browser()]
   }
 }

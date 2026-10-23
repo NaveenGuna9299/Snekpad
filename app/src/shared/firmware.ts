@@ -9,6 +9,9 @@ import { isNewer } from './update'
 
 export const REQUIRED_FIRMWARE = '0.3.3'
 
+/** First firmware that draws the key LED effects (settings.effect) and reports the effect it runs. */
+export const EFFECTS_FIRMWARE = '0.4.0'
+
 /** First firmware that can receive an update from Studio (it has fw_update.py and fw_boot.py). */
 export const OTA_FIRMWARE = '0.3.4'
 

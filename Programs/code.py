@@ -126,7 +126,13 @@ if ENABLE_RGB:
         LEVEL_SAVER = _cl.save_level
     except Exception as e:
         print("saved brightness ignored:", e)
-    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL, on_level=LEVEL_SAVER)
+    LED_EFFECT = "static"       # the app's setting (settings.effect in config.json, set in SnekPad Studio)
+    if CFG:
+        try:
+            LED_EFFECT = config_loader.effect(CFG)
+        except Exception as e:
+            print("config effect ignored:", e)
+    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL, on_level=LEVEL_SAVER, effect=LED_EFFECT)
     keyboard.modules.append(leds)
 
 
@@ -370,7 +376,7 @@ if ENABLE_APP_PROFILES:
                 "l": LABELS[i],
                 "c": ["#%06x" % c for c in COLORS[i]],   # COLORS is what the LEDs show (set_key changes it in place)
             })
-        return json.dumps({"h": OLED_HEIGHT, "s": SLEEP_MINUTES, "p": profs})
+        return json.dumps({"h": OLED_HEIGHT, "s": SLEEP_MINUTES, "e": leds.effect if leds else "static", "p": profs})
 
     apps = AppProfiles([(p["name"], p["proc"], p["title"]) for p in PROFILES], general=0, view=live_view, leds=leds)
     keyboard.modules.append(apps)

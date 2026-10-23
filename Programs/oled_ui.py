@@ -30,6 +30,15 @@ from adafruit_display_text import label
 
 from kmk.modules import Module
 
+try:
+    from supervisor import ticks_ms
+except ImportError:                 # on a normal computer (the tests)
+    def ticks_ms():
+        return int(time.monotonic() * 1000) & 0x1FFFFFFF
+
+# The scan loop runs hundreds of times a second: a decimal number made on every pass fills the RAM, and the clean-up
+# that follows freezes the key LEDs for about 50 ms. So the 50 ms throttle is kept with whole numbers (ticks_ms).
+
 WHITE = 0xFFFFFF
 BLACK = 0x000000
 
@@ -131,7 +140,7 @@ class OledUI(Module):
         self.hl_idx = None
         self.hl_until = None   # None while the key is held
         self.last_activity = time.monotonic()
-        self._last_tick = 0
+        self._last_ms = 0
         self._level = 1.0
         self._bus = None            # the display bus, for switching the panel off (see _panel)
         self._panel_on = True
@@ -459,10 +468,11 @@ class OledUI(Module):
     def before_matrix_scan(self, keyboard):
         if not self.enabled or self._suspended:
             return None
-        now = time.monotonic()
-        if now - self._last_tick < 0.05:
+        ms = ticks_ms()
+        if ((ms - self._last_ms) & 0x1FFFFFFF) < 50:
             return None
-        self._last_tick = now
+        self._last_ms = ms
+        now = time.monotonic()
         try:
             layer = keyboard.active_layers[0]
             if layer != self.layer:

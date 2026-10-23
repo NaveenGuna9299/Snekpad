@@ -21,6 +21,8 @@ import {
   LABEL_MAX,
   MAX_PROFILES,
   MAX_SLEEP_MINUTES,
+  EFFECTS,
+  type EffectId,
   type Config
 } from './config'
 import { isFirmwareVersion } from './firmware'
@@ -139,6 +141,12 @@ export const liveViewSchema = z.object({
   // minutes of idle time before the screen and key LEDs switch off (0 = never). Pads from before this
   // setting leave it out, and a value that makes no sense is ignored rather than failing the whole view.
   s: z.number().int().min(0).max(MAX_SLEEP_MINUTES).optional().catch(undefined),
+  // the key LED effect the pad runs. Pads from before effects leave it out, and a name this app does not know
+  // (a newer firmware) is ignored rather than failing the whole view.
+  e: z
+    .enum(EFFECTS.map((x) => x.id) as [EffectId, ...EffectId[]])
+    .optional()
+    .catch(undefined),
   p: z
     .array(
       z.object({
@@ -157,6 +165,7 @@ export function liveViewOf(config: Config): LiveView {
   return {
     h: config.device.oled.height,
     s: config.settings.sleepMinutes,
+    e: config.settings.effect,
     p: config.profiles.map((p) => ({
       n: p.name,
       k: p.encoder.label,
@@ -171,7 +180,11 @@ export function applyLiveView(config: Config, view: LiveView): Config {
   return {
     ...config,
     device: { ...config.device, oled: { ...config.device.oled, height: view.h } },
-    settings: view.s === undefined ? config.settings : { ...config.settings, sleepMinutes: view.s },
+    settings: {
+      ...config.settings,
+      ...(view.s === undefined ? {} : { sleepMinutes: view.s }),
+      ...(view.e === undefined ? {} : { effect: view.e })
+    },
     profiles: config.profiles.map((profile, i) => {
       const live = view.p[i]
       if (!live) return profile

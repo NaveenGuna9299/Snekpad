@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   type Action,
   blankProfile,
+  DEFAULT_EFFECT,
   DEFAULT_SLEEP_MINUTES,
   defaultConfig,
+  EFFECTS,
   MAX_PROFILES,
   MAX_SLEEP_MINUTES,
   migrateConfig,
@@ -180,5 +182,63 @@ describe('sleep time setting', () => {
     c.settings.sleepMinutes = 7
     expect(JSON.parse(JSON.stringify(resolveForOs(c, 'windows'))).settings.sleepMinutes).toBe(7)
     expect(JSON.parse(JSON.stringify(resolveForOs(c, 'macos'))).settings.sleepMinutes).toBe(7)
+  })
+})
+
+describe('key LED effect setting', () => {
+  const withEffect = (value: unknown): unknown => {
+    const c = JSON.parse(JSON.stringify(defaultConfig()))
+    c.settings.effect = value
+    return c
+  }
+
+  it('is static by default', () => {
+    expect(DEFAULT_EFFECT).toBe('static')
+    expect(defaultConfig().settings.effect).toBe('static')
+  })
+
+  it('lists the four effects Studio offers, with the names the firmware knows', () => {
+    expect(EFFECTS.map((e) => e.id)).toEqual(['static', 'rainbow', 'ripple', 'starry'])
+  })
+
+  it('accepts every effect', () => {
+    for (const { id } of EFFECTS) {
+      const r = validateConfig(withEffect(id))
+      expect(r.ok, id).toBe(true)
+      if (r.ok) expect(r.config.settings.effect).toBe(id)
+    }
+  })
+
+  it('rejects a name it does not know', () => {
+    for (const bad of ['disco', '', null, 3, true])
+      expect(validateConfig(withEffect(bad)).ok, String(bad)).toBe(false)
+  })
+
+  it('gives a config saved before effects existed static', () => {
+    const old = JSON.parse(JSON.stringify(defaultConfig()))
+    delete old.settings.effect
+    const r = validateConfig(old)
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.config.settings.effect).toBe('static')
+  })
+
+  it('is part of what is sent to the pad', () => {
+    const c = defaultConfig()
+    c.settings.effect = 'ripple'
+    expect(JSON.parse(JSON.stringify(resolveForOs(c, 'windows'))).settings.effect).toBe('ripple')
+    expect(JSON.parse(JSON.stringify(resolveForOs(c, 'macos'))).settings.effect).toBe('ripple')
+  })
+
+  it('says where each effect gets its colours', () => {
+    const colors = Object.fromEntries(EFFECTS.map((e) => [e.id, e.colors]))
+    expect(colors).toEqual({ static: 'perKey', rainbow: 'none', ripple: 'none', starry: 'none' })
+  })
+
+  it('turns an effect saved while Studio offered breathing or color cycle into static', () => {
+    for (const old of ['breathing', 'cycle']) {
+      const r = validateConfig(withEffect(old))
+      expect(r.ok, old).toBe(true)
+      if (r.ok) expect(r.config.settings.effect).toBe('static')
+    }
   })
 })

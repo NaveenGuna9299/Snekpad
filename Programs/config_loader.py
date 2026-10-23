@@ -35,6 +35,9 @@ KEYS = 12
 MAX_BYTES = 24000              # bigger than any real config; guards RAM
 DEFAULT_SLEEP_MINUTES = 2      # settings.sleepMinutes when the config has none (an older app)
 MAX_SLEEP_MINUTES = 60
+EFFECTS = ("static", "rainbow", "ripple", "starry")   # the same names as in rgb_keys.py
+RETIRED_EFFECTS = ("breathing", "cycle")   # Studio no longer offers these; a config that still has one means static
+DEFAULT_EFFECT = "static"      # settings.effect when the config has none (an older app)
 
 MODS = {"CTRL": "LCTL", "SHIFT": "LSFT", "ALT": "LALT", "GUI": "LGUI"}
 
@@ -181,6 +184,16 @@ def sleep_minutes(cfg):
     return v
 
 
+def effect(cfg):
+    """The key LED effect (one of EFFECTS). Missing = the default."""
+    v = cfg["settings"].get("effect", DEFAULT_EFFECT)
+    if v in RETIRED_EFFECTS:        # a pad that was set to one of these before they were taken out keeps its config
+        return DEFAULT_EFFECT
+    if v not in EFFECTS:
+        raise ValueError("effect must be one of: " + ", ".join(EFFECTS))
+    return v
+
+
 def check(cfg):
     """Raises ValueError (or KeyError/TypeError) if the structure is not what the firmware needs."""
     if cfg["schema_version"] != SCHEMA_VERSION:
@@ -198,6 +211,7 @@ def check(cfg):
         p["match"]["windows"], p["match"]["macos"], p["match"]["titles"], p["encoder"]["cw"]
     cfg["settings"]["brightness"], cfg["device"]["owner_screen"]
     sleep_minutes(cfg)
+    effect(cfg)
 
 
 # ---------------------------------------------------------------- building

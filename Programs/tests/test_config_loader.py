@@ -82,6 +82,51 @@ class CheckTests(unittest.TestCase):
             config_loader.check(config({"brightness": 0.4, "sleepMinutes": 99}))
 
 
+class EffectTests(unittest.TestCase):
+    def test_a_config_without_an_effect_is_static(self):
+        self.assertEqual(config_loader.effect(config()), "static")
+
+    def test_every_effect_is_accepted(self):
+        for name in config_loader.EFFECTS:
+            self.assertEqual(config_loader.effect(config({"brightness": 0.4, "effect": name})), name)
+
+    def test_the_names_match_the_ones_rgb_keys_draws(self):
+        self.assertEqual(config_loader.EFFECTS, ("static", "rainbow", "ripple", "starry"))
+
+    def test_the_two_effects_taken_out_mean_static_so_an_old_config_still_loads(self):
+        for old in config_loader.RETIRED_EFFECTS:
+            cfg = config({"brightness": 0.4, "effect": old, "breathingColor": "#112233"})
+            self.assertEqual(config_loader.effect(cfg), "static")
+            config_loader.check(cfg)                            # not refused: the pad keeps its profiles
+
+    def test_an_unknown_effect_is_refused(self):
+        for bad in ("disco", "", None, 3, True):
+            with self.assertRaises(ValueError):
+                config_loader.effect(config({"brightness": 0.4, "effect": bad}))
+
+    def test_check_refuses_an_unknown_effect_so_a_bad_push_is_not_saved(self):
+        with self.assertRaises(ValueError):
+            config_loader.check(config({"brightness": 0.4, "effect": "disco"}))
+        config_loader.check(config({"brightness": 0.4, "effect": "ripple"}))
+
+
+class CodePyEffectTests(unittest.TestCase):
+    def setUp(self):
+        with open(os.path.join(HERE, "..", "code.py"), encoding="utf-8") as f:
+            self.code = f.read()
+
+    def test_it_reads_the_effect_and_survives_a_bad_one(self):
+        self.assertIn("config_loader.effect(CFG)", self.code)
+        self.assertIn("config effect ignored", self.code)
+        self.assertIn("effect=LED_EFFECT", self.code)
+
+    def test_the_live_view_reports_the_effect(self):
+        self.assertIn('"e": leds.effect', self.code)
+
+    def test_there_is_no_breathing_colour_any_more(self):
+        self.assertNotIn("breath", self.code)
+
+
 class CodePyTests(unittest.TestCase):
     """code.py turns the setting into the screen's times; its source is checked, it cannot run without hardware."""
 

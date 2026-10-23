@@ -76,4 +76,58 @@ describe('live view (GET_CFG)', () => {
     view.p = view.p.slice(0, 1)
     expect(applyLiveView(saved, view).profiles[2]).toEqual(saved.profiles[2])
   })
+
+  it('takes the effect from what the pad reports', () => {
+    const saved = defaultConfig()
+    const view = liveViewOf(saved)
+    view.e = 'rainbow'
+    expect(applyLiveView(saved, view).settings.effect).toBe('rainbow')
+    expect(saved.settings.effect).toBe('static') // the saved config itself is not changed
+  })
+
+  it('reports the effect of the config it describes', () => {
+    const c = defaultConfig()
+    c.settings.effect = 'starry'
+    expect(liveViewOf(c).e).toBe('starry')
+  })
+
+  it('keeps the saved effect when an older pad does not report one', () => {
+    const saved = defaultConfig()
+    saved.settings.effect = 'ripple'
+    const view = liveViewSchema.parse(
+      JSON.parse(JSON.stringify({ ...liveViewOf(saved), e: undefined }))
+    )
+    expect(view.e).toBeUndefined()
+    expect(applyLiveView(saved, view).settings.effect).toBe('ripple')
+  })
+
+  it('ignores an effect it does not know instead of rejecting the whole view', () => {
+    for (const bad of ['disco', 3, null, '']) {
+      const view = liveViewSchema.parse(
+        JSON.parse(JSON.stringify({ ...liveViewOf(defaultConfig()), e: bad }))
+      )
+      expect(view.e).toBeUndefined()
+      expect(view.p.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('keeps the sleep time and the effect apart', () => {
+    const saved = defaultConfig()
+    const view = liveViewOf(saved)
+    view.s = 5
+    view.e = 'starry'
+    expect(applyLiveView(saved, view).settings).toMatchObject({ sleepMinutes: 5, effect: 'starry' })
+  })
+
+  it('keeps the saved effect when a pad reports one Studio does not offer', () => {
+    const saved = defaultConfig()
+    saved.settings.effect = 'rainbow'
+    for (const unknown of ['breathing', 'cycle']) {
+      const view = liveViewSchema.parse(
+        JSON.parse(JSON.stringify({ ...liveViewOf(saved), e: unknown }))
+      )
+      expect(view.e).toBeUndefined()
+      expect(applyLiveView(saved, view).settings.effect).toBe('rainbow')
+    }
+  })
 })

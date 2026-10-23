@@ -10,6 +10,7 @@ type Props = {
   device: DeviceState
   profileCount: number
   onOpen: () => void
+  onEffects: () => void
   /** Only given in builds with the development tools; production has no key test. */
   onTestKeys?: () => void
   /** Name of the profile the pad reports running; undefined if it does not report one. */
@@ -39,6 +40,7 @@ export function Home({
   device,
   profileCount,
   onOpen,
+  onEffects,
   onTestKeys,
   padProfileName,
   pressed,
@@ -103,6 +105,12 @@ export function Home({
             {connected ? (device.label ?? 'SnekPad') : 'Not connected'}
           </span>
         </div>
+        <button
+          onClick={onEffects}
+          className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2"
+        >
+          Lighting effects
+        </button>
         {__DEV_TOOLS__ && onTestKeys && (
           <button
             onClick={onTestKeys}

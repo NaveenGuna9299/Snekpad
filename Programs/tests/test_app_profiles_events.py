@@ -77,7 +77,7 @@ def make_pad():
 
 def scan(pad, kb, n=1):
     for _ in range(n):
-        pad._last_tick = 0  # skip the 50 ms throttle
+        pad._last_ms = -1000  # skip the 50 ms throttle (the next scan is then more than 50 ms after it)
         pad.before_matrix_scan(kb)
 
 

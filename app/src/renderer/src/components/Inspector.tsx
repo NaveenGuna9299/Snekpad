@@ -211,14 +211,15 @@ function Group({
   )
 }
 
-function ColorPicker({
+export function ColorPicker({
   color,
   onChange,
   onApplyAll
 }: {
   color: string
   onChange: (c: string) => void
-  onApplyAll: () => void
+  /** The button that copies the colour to every key; left out where there is nothing to copy it to. */
+  onApplyAll?: () => void
 }): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2">
@@ -257,12 +258,14 @@ function ColorPicker({
           className="w-24 rounded-md border border-line bg-input px-2 py-1.5 font-mono text-sm text-fg"
           aria-label="Hex colour"
         />
-        <button
-          onClick={onApplyAll}
-          className="ml-auto rounded-md border border-line px-2 py-1.5 text-xs hover:bg-surface2"
-        >
-          Apply to all keys
-        </button>
+        {onApplyAll && (
+          <button
+            onClick={onApplyAll}
+            className="ml-auto rounded-md border border-line px-2 py-1.5 text-xs hover:bg-surface2"
+          >
+            Apply to all keys
+          </button>
+        )}
       </div>
     </div>
   )

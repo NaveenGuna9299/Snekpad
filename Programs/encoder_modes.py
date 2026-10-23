@@ -98,12 +98,12 @@ class EncoderModes(Module):
         self._swallow = False
         kb.tap_key(self.actions[self._layer(kb)][2])
 
-    def _poll_button(self, kb, now):
+    def _poll_button(self, kb, now=None):
         raw = not self._sw.value            # pulled up, pressed = low
         if raw != self._raw:
             self._raw = raw
-            self._raw_t = now
-        elif raw != self._down and now - self._raw_t >= self._debounce:
+            self._raw_t = time.monotonic() if now is None else now
+        elif raw != self._down and (time.monotonic() if now is None else now) - self._raw_t >= self._debounce:
             self._down = raw
             if raw:
                 self._press_down(kb)
@@ -128,9 +128,8 @@ class EncoderModes(Module):
         if not self.enabled:
             return None
         try:
-            now = time.monotonic()
             self._poll_turn(keyboard)
-            self._poll_button(keyboard, now)
+            self._poll_button(keyboard)     # the time is only read when the button changes: no decimal number per scan
         except Exception as e:
             print("encoder_modes error:", e)
             self.enabled = False
