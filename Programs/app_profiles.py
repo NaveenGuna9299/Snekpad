@@ -42,7 +42,7 @@ CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/proto
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
 PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
-FIRMWARE_VERSION = "0.4.0"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
+FIRMWARE_VERSION = "0.4.1"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
                             # at or above REQUIRED_FIRMWARE in app/src/shared/firmware.ts (a test checks this).
 FS_ROOT = ""            # root of the pad's filesystem; tests point it at a temporary folder
 EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
