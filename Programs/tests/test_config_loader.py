@@ -9,6 +9,7 @@ import os
 import sys
 import types
 import unittest
+import unittest.mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
@@ -101,6 +102,15 @@ class CodePyTests(unittest.TestCase):
         self.assertIn("dim_s=OLED_DIM_S", self.code)
         self.assertIn("off_s=OLED_OFF_S", self.code)
 
+    def test_a_brightness_set_with_the_keys_wins_over_the_apps_and_a_push_keeps_it(self):
+        self.assertIn("_cl.saved_level(len(LEVELS))", self.code)
+        self.assertIn("RGB_START_LEVEL = _saved", self.code)
+        self.assertIn("on_level=LEVEL_SAVER", self.code)
+        self.assertIn("saved brightness ignored", self.code)           # a failure falls back to the app's value
+        with open(os.path.join(HERE, "..", "app_profiles.py"), encoding="utf8") as f:
+            profiles = f.read()
+        self.assertNotIn("forget_level", profiles)                      # a pushed config leaves it alone
+
     def test_the_live_view_reports_the_sleep_time_in_use(self):
         # GET_CFG: Studio reads it when the pad connects, so the app shows what the pad really uses
         self.assertIn('"s": SLEEP_MINUTES', self.code)
@@ -116,6 +126,62 @@ class CodePyTests(unittest.TestCase):
         dim, off = times(0)
         self.assertGreater(dim, 10 * 365 * 24 * 3600)   # never, in practice
         self.assertGreater(off, dim)
+
+
+class FakeNvm:
+    """microcontroller.nvm: a byte array that starts erased (0xFF) like new flash."""
+
+    def __init__(self):
+        self.data = bytearray([0xFF] * 8)
+        self.writes = 0
+
+    def __getitem__(self, i):
+        return self.data[i]
+
+    def __setitem__(self, i, v):
+        self.writes += 1
+        self.data[i] = v
+
+
+class SavedBrightnessTests(unittest.TestCase):
+    def setUp(self):
+        self.nvm = FakeNvm()
+        fake = types.ModuleType("microcontroller")
+        fake.nvm = self.nvm
+        patch = unittest.mock.patch.dict(sys.modules, {"microcontroller": fake})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_a_pad_that_was_never_set_has_no_saved_step(self):
+        self.assertIsNone(config_loader.saved_level(5))      # erased flash: 0xFF
+        self.nvm.data[3] = 0
+        self.assertIsNone(config_loader.saved_level(5))
+
+    def test_a_saved_step_comes_back_after_a_power_off(self):
+        for step in range(5):
+            config_loader.save_level(step)
+            self.assertEqual(config_loader.saved_level(5), step)
+
+    def test_the_other_bytes_are_never_touched(self):
+        before = bytes(self.nvm.data)
+        config_loader.save_level(2)
+        self.assertEqual(bytes(self.nvm.data[:3]), before[:3])     # the stub's and fw_boot's bytes
+        self.assertEqual(bytes(self.nvm.data[4:]), before[4:])
+
+    def test_a_step_outside_the_list_is_ignored(self):
+        config_loader.save_level(4)
+        self.assertIsNone(config_loader.saved_level(3))      # fewer steps than the one saved
+
+    def test_the_same_step_is_not_written_again(self):
+        config_loader.save_level(3)
+        writes = self.nvm.writes
+        config_loader.save_level(3)
+        self.assertEqual(self.nvm.writes, writes)           # flash wears with every write
+
+    def test_a_pad_without_nvm_just_works(self):
+        with unittest.mock.patch.dict(sys.modules, {"microcontroller": types.ModuleType("microcontroller")}):
+            self.assertIsNone(config_loader.saved_level(5))
+            config_loader.save_level(2)                      # prints, never raises
 
 
 if __name__ == "__main__":

@@ -39,12 +39,18 @@ LEVELS = (0.05, 0.12, 0.25, 0.4, 0.5)
 # per-key colours return. Only between profiles: holding FN (the utility layer) does not flash.
 SWITCH_FLASH_S = 0.3
 
+# A brightness change made with the DIM / BRT keys is handed to on_level this long after the last key press, so
+# holding the key down to go from dim to bright writes the pad's memory once, not at every step.
+SAVE_AFTER_S = 2.0
+
 
 class RgbKeys(Module):
-    def __init__(self, pin, level=3, press_flash=True):
+    def __init__(self, pin, level=3, press_flash=True, on_level=None):
         self._pin = pin
         self._level = max(0, min(level, len(LEVELS) - 1))
         self._flash = press_flash
+        self._on_level = on_level   # function(level): remembers the step across a power-off (code.py sets it)
+        self._save_at = 0
 
         self.ui = None          # the OledUI: the LEDs dim and switch off with the screen (set by code.py)
         self.profile_layers = 0 # layers below this number are profiles; 0 = no flash on profile change
@@ -114,10 +120,12 @@ class RgbKeys(Module):
 
     def _dimmer(self, *args, **kwargs):
         self._level = max(0, self._level - 1)
+        self._save_at = time.monotonic() + SAVE_AFTER_S
         self._apply_level()
 
     def _brighter(self, *args, **kwargs):
         self._level = min(len(LEVELS) - 1, self._level + 1)
+        self._save_at = time.monotonic() + SAVE_AFTER_S
         self._apply_level()
 
     def _brightness(self):
@@ -172,6 +180,13 @@ class RgbKeys(Module):
         if now - self._last_tick < 0.05:
             return None
         self._last_tick = now
+        if self._save_at and now >= self._save_at:
+            self._save_at = 0
+            if self._on_level is not None:
+                try:
+                    self._on_level(self._level)
+                except Exception as e:      # never let a memory error switch the LEDs off
+                    print("rgb_keys level not saved:", e)
         try:
             if self.ui is not None:
                 idle = self.ui.idle_level()

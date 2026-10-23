@@ -114,7 +114,19 @@ if ENABLE_RGB:
             RGB_START_LEVEL = config_loader.level_for(CFG["settings"]["brightness"], LEVELS)
         except Exception as e:
             print("config brightness ignored:", e)
-    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL)
+    # a brightness chosen with the DIM / BRT keys on the pad is kept across a power-off and wins over the app's
+    # setting, and a config push does not undo it (config_loader.saved_level)
+    LEVEL_SAVER = None
+    try:
+        import config_loader as _cl
+
+        _saved = _cl.saved_level(len(LEVELS))
+        if _saved is not None:
+            RGB_START_LEVEL = _saved
+        LEVEL_SAVER = _cl.save_level
+    except Exception as e:
+        print("saved brightness ignored:", e)
+    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL, on_level=LEVEL_SAVER)
     keyboard.modules.append(leds)
 
 

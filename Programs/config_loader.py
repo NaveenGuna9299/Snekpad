@@ -291,3 +291,36 @@ def level_for(brightness, levels):
         if abs(levels[i] - brightness) < abs(levels[best] - brightness):
             best = i
     return best
+
+
+# ---------------------------------------------------------------- brightness set on the pad
+# The DIM / BRT keys change the LED brightness step. That choice is kept across a power-off in one byte of
+# non-volatile memory (nvm[3]; nvm[0] to nvm[2] belong to the code.py stub and fw_boot.py), so the pad does not
+# go back to the app's brightness every time the computer restarts. A byte that is not marked with LEVEL_MAGIC
+# means "never changed on the pad": the app's setting (settings.brightness) is used. A config pushed from the
+# app does not touch it, so a push never undoes a brightness chosen on the pad.
+NVM_LEVEL = 3
+LEVEL_MAGIC = 0xA0              # nvm[3] = LEVEL_MAGIC + step, anything else = not set
+
+
+def saved_level(count):
+    """The brightness step chosen with the keys on the pad (0 to count - 1), or None."""
+    try:
+        import microcontroller
+
+        v = microcontroller.nvm[NVM_LEVEL] - LEVEL_MAGIC
+        return v if 0 <= v < count else None
+    except Exception:
+        return None
+
+
+def save_level(level):
+    """Remember a step. Writes only when it differs: the memory is flash, which wears with every write."""
+    try:
+        import microcontroller
+
+        v = LEVEL_MAGIC + level
+        if microcontroller.nvm[NVM_LEVEL] != v:
+            microcontroller.nvm[NVM_LEVEL] = v
+    except Exception as e:
+        print("brightness not saved:", e)

@@ -319,5 +319,65 @@ class ScreenPanelTests(unittest.TestCase):
         self.assertEqual(ui.display.brightness, 0.0)
 
 
+class BrightnessSavingTests(unittest.TestCase):
+    def setUp(self):
+        self.now = 1000.0
+        patch = mock.patch.object(rgb_keys.time, "monotonic", lambda: self.now)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.saved = []
+        self.leds = rgb_keys.RgbKeys(None, level=3, on_level=self.saved.append)
+        self.leds.px = FakeStrip()
+        self.leds.enabled = True
+        self.leds.set_colors([list(row) for row in COLORS])
+        self.kb = FakeKeyboard()
+
+    def tick(self, seconds):
+        self.now += seconds
+        self.leds.before_matrix_scan(self.kb)
+
+    def test_nothing_is_saved_until_a_key_changed_the_level(self):
+        self.tick(10)
+        self.assertEqual(self.saved, [])
+
+    def test_the_step_is_saved_after_the_keys_have_settled(self):
+        self.leds._dimmer()
+        self.tick(0.06)
+        self.assertEqual(self.saved, [])                    # not yet: more key presses may follow
+        self.tick(rgb_keys.SAVE_AFTER_S)
+        self.assertEqual(self.saved, [2])
+        self.tick(10)
+        self.assertEqual(self.saved, [2])                   # once, not at every scan
+
+    def test_several_presses_in_a_row_are_saved_once_with_the_last_step(self):
+        self.leds._dimmer()
+        self.tick(0.5)
+        self.leds._dimmer()
+        self.tick(0.5)
+        self.leds._dimmer()
+        self.tick(rgb_keys.SAVE_AFTER_S + 0.1)
+        self.assertEqual(self.saved, [0])
+
+    def test_the_toggle_key_saves_nothing(self):
+        self.leds._toggle()
+        self.tick(10)
+        self.assertEqual(self.saved, [])
+
+    def test_a_failing_save_never_switches_the_leds_off(self):
+        def boom(level):
+            raise OSError("flash busy")
+
+        self.leds._on_level = boom
+        self.leds._brighter()
+        self.tick(rgb_keys.SAVE_AFTER_S + 0.1)
+        self.assertTrue(self.leds.enabled)
+
+    def test_without_a_saver_the_keys_still_work(self):
+        self.leds._on_level = None
+        self.leds._dimmer()
+        self.tick(rgb_keys.SAVE_AFTER_S + 0.1)
+        self.assertEqual(self.leds._level, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
