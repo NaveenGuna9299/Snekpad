@@ -44,7 +44,7 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
   The Lighting effects page shows what Studio hears, bar by bar. While a music effect is chosen, closing the Studio
   window only hides it, so the lights keep following the music from the tray; the tray tooltip says so, and **Quit** in
   the tray menu stops it. If Studio started with Windows it makes the hidden window by itself about 20 seconds after
-  login. Nothing is recorded or stored: the sound is analysed in memory and thrown away. On macOS and Linux Studio
+  login. The sleep time does not apply to the lights while a music effect is chosen (the screen still sleeps). Nothing is recorded or stored: the sound is analysed in memory and thrown away. On macOS and Linux Studio
   cannot listen to the system sound yet and says so on the page.
 - **Firmware update.** The pad reports its firmware version when the app connects. Every Studio carries the matching
   firmware, and when the pad's is older a strip offers **Update pad** (also under Settings → Pad firmware). The pad asks

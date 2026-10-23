@@ -46,7 +46,8 @@ the pad to allow it).
 - Music effects: **Equalizer** (the four columns are bass to treble and fill up from the bottom row) and **Beat pulse**
   (all keys flash on the beat, and the colour moves on with every beat). Studio listens to the sound your computer plays
   (Windows only, no microphone) and sends the pad its levels about 25 times a second. They keep working when you close
-  the Studio window to the tray, as long as Studio is running (it starts with Windows by default).
+  the Studio window to the tray, as long as Studio is running (it starts with Windows by default). They also ignore
+  the sleep time: the screen still sleeps, but the lights keep following the music (and go dark when it stops).
 - The screen and the key LEDs sleep together: after the sleep time (2 minutes by default) both switch off, the screen
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
   dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps

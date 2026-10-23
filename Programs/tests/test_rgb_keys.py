@@ -538,6 +538,58 @@ class EffectTests(unittest.TestCase):
         self.tick(leds, FRAME_S)
         self.assertEqual(leds.px.px, COLORS[3])
 
+    def test_the_music_effects_keep_the_lights_going_while_the_screen_dims_and_sleeps(self):
+        for name in ("equalizer", "beat"):
+            leds = self.make(name)
+            leds.ui = FakeScreen()
+            for level in (0, 1, 2):
+                leds.ui.level = level
+                if name == "beat":
+                    self.music(leds, (0, 0, 0, 0), beat=63)
+                else:
+                    self.music(leds, (63, 63, 63, 63))
+                self.tick(leds, FRAME_S)
+                self.assertNotEqual(leds.px.px, [0] * 12, (name, level))      # still lit when the screen is off
+                self.assertEqual(leds._idle, 0, (name, level))
+            self.assertEqual(leds.px.brightness, 1.0)                           # and not dimmed to the lowest step
+
+    def test_the_music_lights_are_not_dimmed_by_the_screens_dimming(self):
+        full = self.make("equalizer", level=3)
+        dimmed = self.make("equalizer", level=3)
+        dimmed.ui = FakeScreen()
+        dimmed.ui.level = 1                                                     # the screen has dimmed
+        for leds in (full, dimmed):
+            self.music(leds, (63, 63, 63, 63))
+            self.tick(leds, FRAME_S)
+        self.assertEqual(full.px.px, dimmed.px.px)
+
+    def test_the_music_lights_still_go_dark_when_the_music_stops_or_the_toggle_key_is_used(self):
+        leds = self.make("equalizer")
+        leds.ui = FakeScreen()
+        leds.ui.level = 2
+        self.music(leds, (63, 63, 63, 63))
+        self.tick(leds, FRAME_S)
+        self.assertNotEqual(leds.px.px, [0] * 12)
+        for _ in range(int(1.5 / FRAME_S)):                                     # no more music
+            self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)
+        self.music(leds, (63, 63, 63, 63))
+        self.tick(leds, FRAME_S)
+        leds._toggle()                                                          # switched off by hand
+        self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)
+
+    def test_the_other_effects_and_static_still_follow_the_screen(self):
+        for name in ("static", "rainbow", "ripple", "starry"):
+            leds = self.make(name)
+            leds.ui = FakeScreen()
+            leds.ui.level = 2
+            self.tick(leds, 0.06)
+            self.assertEqual(leds.px.px, [0] * 12, name)
+            leds.ui.level = 1
+            self.tick(leds, 0.06)
+            self.assertEqual(leds._idle, 1, name)
+
     # ------------------------------------------------------------ smoothness
     def test_a_moving_effect_is_drawn_at_full_precision_with_the_brightness_applied_in_the_firmware(self):
         leds = self.make("rainbow")

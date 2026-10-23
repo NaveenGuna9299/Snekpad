@@ -55,6 +55,8 @@ chosen (also while the Studio window is closed to the tray: with a music effect 
   board with a few KB of free RAM. Characters run from `0` (n = 0) to `o` (n = 63); none of them can be a tab or a newline.
 - The pad smooths the numbers into its 40 frames a second: a bar rises at once and falls away over about half a second, a
   beat flashes and fades in about 0.3 s. If no line arrives for 0.4 s (Studio closed, sound stopped) the lights go out.
+- While one of these effects is chosen the key LEDs ignore the screen's dimming and sleep (`sleepMinutes` still
+  applies to the screen); they go dark by themselves when the lines stop.
 - A pad whose effect is not `equalizer` or `beat` ignores the line, and so does a pad from before firmware 0.4.0 (it
   does not know the command). The pad polls its port every 20 ms instead of 50 ms while one of those effects is chosen.
 - Studio sends one line of zeros when the sound stops, then nothing until sound comes back.

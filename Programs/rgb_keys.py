@@ -74,7 +74,8 @@ RAMP_S = 2.0
 # treble, and how hard a beat has just hit (0 = none). "equalizer" lights each column of keys like a bar, from the
 # bottom row up, one column per band. "beat" flashes all the keys on every beat and moves the colour on round the
 # wheel. The pad smooths the numbers (they rise at once and fall away over about half a second) and lets the keys go
-# dark when the numbers stop coming.
+# dark when the numbers stop coming. Unlike the other effects they ignore the screen's dimming and sleep: the screen
+# still sleeps, but the lights keep following the music (the key LED toggle still switches them off).
 #
 # The LED chip has 256 steps per colour and the brightness steps of this pad leave it 12 (lowest step) to 127. Rounding
 # to those steps is all that is done. Carrying the rounding error from frame to frame (dithering) was tried and made
@@ -139,6 +140,8 @@ class RgbKeys(Module):
         self._c = 0             # colour and strength (0 to 1024) of the key being worked out
         self._g = 1024
         self._drawn = False
+        # the music effects keep the lights going while the screen sleeps (they go dark by themselves when the music stops)
+        self._music_fx = effect == "equalizer" or effect == "beat"
         # only the effect in use gets its memory
         if effect == "ripple":
             self._rp_t = [-1] * MAX_RIPPLES                             # start time, -1 = free
@@ -469,7 +472,7 @@ class RgbKeys(Module):
                 if self._t0 is None:
                     self._t0 = now
                 self._soft_start(now)
-            if self.ui is not None:
+            if self.ui is not None and not self._music_fx:
                 idle = self.ui.idle_level()
                 if idle != self._idle:
                     self._apply_idle(idle)
