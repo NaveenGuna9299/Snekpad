@@ -59,7 +59,7 @@ START_DELAY_S = 1.0
 RAMP_S = 2.0
 
 # Effects (settings.effect in the config, chosen in SnekPad Studio). "static" shows the profile's per-key colours. The
-# others make their own colours: "rainbow" (a wave of colour sweeping from left to right), "ripple" (a ring of a random
+# others make their own colours: "equalizer" and "beat" (music, see below), "rainbow" (a wave of colour sweeping from left to right), "ripple" (a ring of a random
 # colour spreads from the key you press) and "starry" (random keys twinkle). Brightness always stays inside the steps
 # above. config_loader.EFFECTS lists the same names.
 #
@@ -68,6 +68,13 @@ RAMP_S = 2.0
 # decimal numbers, an effect did that every half second, and that was the stutter. So the effects here use whole
 # numbers only (times in milliseconds, strengths and brightness 0 to 1024, tables worked out once at start) and make
 # no new objects per frame. The same goes for the clock that decides when to draw.
+#
+# Music (settings.effect "equalizer" or "beat"): SnekPad Studio listens to the sound the computer plays and sends the
+# pad five numbers 0 to 63, about 25 times a second (see AppProfiles._line): the loudness of four bands from bass to
+# treble, and how hard a beat has just hit (0 = none). "equalizer" lights each column of keys like a bar, from the
+# bottom row up, one column per band. "beat" flashes all the keys on every beat and moves the colour on round the
+# wheel. The pad smooths the numbers (they rise at once and fall away over about half a second) and lets the keys go
+# dark when the numbers stop coming.
 #
 # The LED chip has 256 steps per colour and the brightness steps of this pad leave it 12 (lowest step) to 127. Rounding
 # to those steps is all that is done. Carrying the rounding error from frame to frame (dithering) was tried and made
@@ -85,6 +92,11 @@ MAX_RIPPLES = 4
 TWINKLE_MS = 1600           # how long one star takes to light up and fade
 TWINKLE_ONE_IN = 10         # a new star appears on about one frame in this many
 MAX_STARS = 5
+MUSIC_HOLD_MS = 400         # the music numbers count as fresh for this long after the last message
+MUSIC_FALL = 48             # how far a bar falls on each frame, of 1024 (all the way down in about half a second)
+MUSIC_BEAT_FALL = 90        # the same for the beat flash
+MUSIC_BEAT_HUE = 140        # how far the beat moves the colour on round the wheel (of 1536)
+MUSIC_ROW = 341             # a bar of 1024 fills three rows of keys: this much for each
 COLUMNS = 4
 WHEEL = 1536                # positions round the colour wheel
 CLOCK_MASK = 0xFFFFFF       # the clock for ripples and stars wraps after 4.6 hours; ages are taken modulo this
@@ -119,7 +131,7 @@ def _wheel(p):
 class RgbKeys(Module):
     def __init__(self, pin, level=3, press_flash=True, on_level=None, effect="static"):
         self._pin = pin
-        self.effect = effect    # static, rainbow, ripple or starry
+        self.effect = effect    # static, rainbow, ripple, starry, equalizer or beat
         self._last_ms = 0       # ticks_ms of the last frame
         self._last = None       # ticks_ms of the last frame of an effect
         self._ms = 0            # the effects' clock, for ripples and stars (wraps at CLOCK_MASK)
@@ -132,6 +144,12 @@ class RgbKeys(Module):
             self._rp_t = [-1] * MAX_RIPPLES                             # start time, -1 = free
             self._rp_k = [0] * MAX_RIPPLES                              # the key it started from
             self._rp_c = [0] * MAX_RIPPLES                              # its colour
+        elif effect == "equalizer" or effect == "beat":
+            self._mt = [0] * COLUMNS                                    # the loudness of each band last heard, 0 to 1008
+            self._mu = [0] * COLUMNS                                    # what the bars show now (smoothed), 0 to 1024
+            self._mb = 0                                                # the beat flash now, 0 to 1024
+            self._mh = 0                                                # the beat's colour, a position on the wheel
+            self._mu_ms = 0                                             # ticks_ms of the last music message
         elif effect == "starry":
             self._st_t = [-1] * KEYS                                    # start time of the star on a key, -1 = none
             self._st_c = [0] * KEYS
@@ -210,6 +228,14 @@ class RgbKeys(Module):
         if e == "rainbow":
             # minus the time: the colours move from the left column to the right one
             self._c = _wheel((i % COLUMNS) * RAINBOW_SPREAD - self._tt * WHEEL // RAINBOW_MS)
+        elif e == "equalizer":
+            # column = band, bottom row first: each row is 341 of the bar's 1024, and fades in over a third of that
+            g = (self._mu[i % COLUMNS] - (2 - i // COLUMNS) * MUSIC_ROW) * 3
+            self._c = _wheel((i % COLUMNS) * RAINBOW_SPREAD)
+            self._g = 0 if g < 0 else 1024 if g > 1024 else g
+        elif e == "beat":
+            self._c = _wheel(self._mh)
+            self._g = self._mb
         elif e == "ripple":
             best = 0
             c = 0
@@ -282,6 +308,22 @@ class RgbKeys(Module):
             if not active and not self._drawn:
                 return
             self._drawn = active        # one more frame after the last ripple puts the keys dark
+        elif e == "equalizer" or e == "beat":
+            fresh = ((ms - self._mu_ms) & 0x1FFFFFFF) < MUSIC_HOLD_MS
+            active = False
+            for c in range(COLUMNS):
+                t = self._mt[c] if fresh else 0
+                v = self._mu[c]
+                v = t if t >= v else (t if v - MUSIC_FALL < t else v - MUSIC_FALL)    # up at once, down gently
+                self._mu[c] = v
+                if v:
+                    active = True
+            self._mb = 0 if self._mb < MUSIC_BEAT_FALL else self._mb - MUSIC_BEAT_FALL
+            if self._mb:
+                active = True
+            if not active and not self._drawn:
+                return
+            self._drawn = active        # one more frame after the last light goes out puts the keys dark
         elif e == "starry":
             count = 0
             for k in range(KEYS):
@@ -296,6 +338,21 @@ class RgbKeys(Module):
                     self._st_t[k] = self._ms
                     self._st_c[k] = _wheel(random.randrange(WHEEL))
         self._paint()
+
+    def music(self, a, b, c, d, beat):
+        """The loudness of the four bands and the strength of a beat just heard, each 0 to 63 (from Studio)."""
+        if self.effect != "equalizer" and self.effect != "beat":
+            return
+        mt = self._mt
+        mt[0] = (a & 63) * 16
+        mt[1] = (b & 63) * 16
+        mt[2] = (c & 63) * 16
+        mt[3] = (d & 63) * 16
+        beat = (beat & 63) * 16
+        if beat > self._mb:             # a beat: flash, and move the colour on
+            self._mb = beat
+            self._mh = (self._mh + MUSIC_BEAT_HUE) % WHEEL
+        self._mu_ms = ticks_ms()
 
     def _ripple_from(self, key):
         slot = 0

@@ -8,6 +8,7 @@ import {
   type Profile
 } from '../../shared/config'
 import { useStudio } from './lib/useStudio'
+import { useMusic } from './lib/useMusic'
 import { PadView, type Selection } from './components/PadView'
 import { Sidebar } from './components/Sidebar'
 import { Inspector } from './components/Inspector'
@@ -24,12 +25,17 @@ import { Effects } from './components/Effects'
 import { FirmwareNotice } from './components/FirmwareNotice'
 import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
 import { updateOffer } from '../../shared/firmware'
+import { isMusicEffect } from '../../shared/config'
 import type { Preset } from './lib/presets'
 
 function App(): React.JSX.Element {
   const { config, update, history, device, pressed, sync, push, pushing, message, flash, dismiss } =
     useStudio()
   const [selectedProfile, setSelectedProfile] = useState(0)
+  // a music effect is chosen and a pad is there to receive it: listen to the computer's sound and feed the pad
+  const music = useMusic(
+    !!config && isMusicEffect(config.settings.effect) && device.status === 'connected'
+  )
   const [selection, setSelection] = useState<Selection>({ kind: 'key', index: 0 })
   const [mock, setMock] = useState(false)
   const [view, setView] = useState<'home' | 'editor' | 'test' | 'effects'>('home')
@@ -215,6 +221,7 @@ function App(): React.JSX.Element {
           profiles={config.profiles}
           effect={config.settings.effect}
           onEffect={(effect) => update((c) => ({ ...c, settings: { ...c.settings, effect } }))}
+          music={music}
           onKeyColor={(pi, key, color) => {
             update((c) => ({
               ...c,

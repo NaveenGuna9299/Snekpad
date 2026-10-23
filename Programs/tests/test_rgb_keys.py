@@ -268,7 +268,7 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(leds.px.px, [RED] * 12)        # the profile flash is only for static
 
     def test_no_moving_effect_flashes_on_a_profile_change(self):
-        for name in ("rainbow", "ripple", "starry"):
+        for name in ("rainbow", "ripple", "starry", "equalizer", "beat"):
             leds = self.make(name)
             self.kb.active_layers[0] = 0
             self.tick(leds)
@@ -397,6 +397,146 @@ class EffectTests(unittest.TestCase):
             for _ in range(200):
                 self.tick(leds, FRAME_S)
                 self.assertLessEqual(len(self.lit(leds)), rgb_keys.MAX_STARS)
+
+    # ------------------------------------------------------------ music
+    def music(self, leds, bands, beat=0):
+        leds.music(bands[0], bands[1], bands[2], bands[3], beat)
+
+    def level_of(self, leds, key):
+        return sum(self.key(leds, key))
+
+    def test_the_equalizer_is_dark_until_music_arrives(self):
+        leds = self.make("equalizer")
+        for _ in range(10):
+            self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)
+
+    def test_each_column_is_one_band_and_fills_from_the_bottom_row_up(self):
+        leds = self.make("equalizer")
+        self.music(leds, (63, 0, 21, 42))
+        self.tick(leds, FRAME_S)
+        # column 0 full: all three rows; column 1 silent: none; column 2 a third: bottom row only
+        for row in range(3):
+            self.assertGreater(self.level_of(leds, row * 4 + 0), 0, row)
+            self.assertEqual(self.level_of(leds, row * 4 + 1), 0, row)
+        self.assertGreater(self.level_of(leds, 2 * 4 + 2), 0)           # bottom row of column 2
+        self.assertEqual(self.level_of(leds, 0 * 4 + 2), 0)             # top row of column 2
+        self.assertGreater(self.level_of(leds, 2 * 4 + 3), 0)           # column 3 two thirds: bottom two rows
+        self.assertGreater(self.level_of(leds, 1 * 4 + 3), 0)
+        self.assertEqual(self.level_of(leds, 0 * 4 + 3), 0)
+
+    def test_a_louder_band_lights_its_bar_higher_and_brighter(self):
+        leds = self.make("equalizer")
+        self.music(leds, (10, 0, 0, 0))
+        self.tick(leds, FRAME_S)
+        quiet = [self.level_of(leds, row * 4) for row in range(3)]
+        self.music(leds, (50, 0, 0, 0))
+        self.tick(leds, FRAME_S)
+        loud = [self.level_of(leds, row * 4) for row in range(3)]
+        self.assertGreater(sum(loud), sum(quiet))
+        self.assertGreater(loud[1], quiet[1])
+
+    def test_the_columns_have_different_colours_bass_to_treble(self):
+        leds = self.make("equalizer")
+        self.music(leds, (63, 63, 63, 63))
+        self.tick(leds, FRAME_S)
+        self.assertEqual(len({self.key(leds, 8 + c) for c in range(4)}), 4)
+
+    def test_bars_rise_at_once_and_fall_away_gently(self):
+        leds = self.make("equalizer")
+        self.music(leds, (63, 0, 0, 0))
+        self.tick(leds, FRAME_S)
+        top = self.level_of(leds, 8)
+        self.music(leds, (0, 0, 0, 0))
+        self.tick(leds, FRAME_S)
+        after = self.level_of(leds, 8)
+        self.assertGreater(after, 0)                                    # not gone in one frame
+        self.assertLessEqual(after, top)
+        for _ in range(int(0.9 / FRAME_S)):
+            self.music(leds, (0, 0, 0, 0))
+            self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)                          # gone within a second
+
+    def test_the_lights_go_out_when_the_music_stops_coming(self):
+        leds = self.make("equalizer")
+        self.music(leds, (63, 63, 63, 63))
+        self.tick(leds, FRAME_S)
+        self.assertNotEqual(leds.px.px, [0] * 12)
+        for _ in range(int(1.5 / FRAME_S)):                             # nothing more is sent
+            self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)
+
+    def test_beat_flashes_every_key_the_same_and_fades(self):
+        leds = self.make("beat")
+        self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, [0] * 12)
+        self.music(leds, (0, 0, 0, 0), beat=63)
+        self.tick(leds, FRAME_S)
+        flash = [self.key(leds, i) for i in range(12)]
+        self.assertEqual(len(set(flash)), 1)
+        self.assertGreater(sum(flash[0]), 0)
+        levels = []
+        for _ in range(int(0.6 / FRAME_S)):
+            self.tick(leds, FRAME_S)
+            levels.append(sum(self.key(leds, 0)))
+        self.assertTrue(all(b <= a for a, b in zip(levels, levels[1:])))   # only ever dimmer
+        self.assertEqual(levels[-1], 0)
+
+    def test_each_beat_moves_the_colour_on(self):
+        leds = self.make("beat")
+        colours = []
+        for _ in range(4):
+            self.music(leds, (0, 0, 0, 0), beat=63)
+            self.tick(leds, FRAME_S)
+            colours.append(self.key(leds, 0))
+            for _ in range(int(0.5 / FRAME_S)):
+                self.tick(leds, FRAME_S)
+        self.assertEqual(len(set(colours)), 4)
+
+    def test_a_weaker_beat_while_one_is_still_fading_does_not_start_a_new_flash(self):
+        leds = self.make("beat")
+        self.music(leds, (0, 0, 0, 0), beat=63)
+        hue = leds._mh
+        self.tick(leds, FRAME_S)
+        self.music(leds, (0, 0, 0, 0), beat=5)
+        self.assertEqual(leds._mh, hue)
+
+    def test_the_music_numbers_are_ignored_by_the_other_effects(self):
+        for name in ("static", "rainbow", "ripple", "starry"):
+            leds = self.make(name)
+            leds.music(63, 63, 63, 63, 63)                              # no state to put them in, and no error
+            self.tick(leds, FRAME_S)
+
+    def test_numbers_out_of_range_are_kept_in_range(self):
+        leds = self.make("equalizer")
+        leds.music(200, -3, 64, 1000, 99)
+        for level in leds._mt:
+            self.assertTrue(0 <= level <= 63 * 16)
+        self.tick(leds, FRAME_S)
+        for key in leds.px.px:
+            self.assertTrue(0 <= key <= 0xFFFFFF)
+
+    def test_music_works_in_whole_numbers(self):
+        for name in ("equalizer", "beat"):
+            leds = self.make(name)
+            self.music(leds, (10, 20, 30, 40), 50)
+            for _ in range(10):
+                self.tick(leds, FRAME_S)
+            for attr in ("_mt", "_mu"):
+                self.assertTrue(all(isinstance(v, int) for v in getattr(leds, attr)), (name, attr))
+            self.assertIsInstance(leds._mb, int)
+            self.assertIsInstance(leds._mh, int)
+
+    def test_music_effects_do_not_flash_on_a_profile_change_and_keep_the_utility_layer(self):
+        leds = self.make("equalizer")
+        self.music(leds, (63, 63, 63, 63))
+        self.tick(leds, FRAME_S)
+        self.kb.active_layers[0] = 1
+        self.tick(leds, FRAME_S)
+        self.assertEqual(leds._flash_until, 0)
+        self.kb.active_layers[0] = 3
+        self.tick(leds, FRAME_S)
+        self.assertEqual(leds.px.px, COLORS[3])
 
     # ------------------------------------------------------------ smoothness
     def test_a_moving_effect_is_drawn_at_full_precision_with_the_brightness_applied_in_the_firmware(self):

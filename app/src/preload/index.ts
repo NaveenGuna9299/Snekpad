@@ -17,6 +17,7 @@ const api: SnekApi = {
   setTheme: (theme) => ipcRenderer.invoke('theme:set', theme),
   useMock: (on) => ipcRenderer.invoke('device:mock', on),
   previewLed: (layer, key, color) => ipcRenderer.invoke('device:led', layer, key, color),
+  sendMusic: (bands, beat) => ipcRenderer.send('music:levels', bands, beat),
   setKeyTest: (on) => (__DEV_TOOLS__ ? ipcRenderer.invoke('app:keyTest', on) : Promise.resolve()),
   runningPrograms: () => ipcRenderer.invoke('programs:running'),
   rememberProgram: (proc) => ipcRenderer.invoke('programs:remember', proc),

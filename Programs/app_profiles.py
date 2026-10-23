@@ -59,6 +59,9 @@ class AppProfiles(Module):
         self.profiles = profiles
         self.view = view
         self.leds = leds        # RgbKeys; None = the LED command is not supported
+        # how often the serial port is read when nothing is arriving: 20 ms with a music effect (the levels come
+        # about every 40 ms and should not wait), else 50 ms
+        self._poll_ms = 20 if leds is not None and (leds.effect == "equalizer" or leds.effect == "beat") else 50
         self.general = general
         self.timeout_s = timeout_s
 
@@ -392,6 +395,12 @@ class AppProfiles(Module):
 
     # ------------------------------------------------------------ serial input
     def _line(self, raw, now):
+        # Music levels from Studio: "M" and five characters, each 48 + a number 0 to 63 (four bands and a beat). Read
+        # straight from the bytes: this comes about 25 times a second and must not make new strings.
+        if len(raw) >= 6 and raw[0] == 77:
+            if self.leds is not None:
+                self.leds.music(raw[1] - 48, raw[2] - 48, raw[3] - 48, raw[4] - 48, raw[5] - 48)
+            return
         try:
             line = raw.decode("utf-8").strip("\r")
         except Exception:
@@ -477,14 +486,14 @@ class AppProfiles(Module):
         ms = ticks_ms()
         # poll every scan while a config or a firmware update is arriving (the port's buffer is small), else every 50 ms
         if (self._rx is None and not self._fw_busy() and self._reload_at is None and not self._evq
-                and ((ms - self._last_ms) & 0x1FFFFFFF) < 50):
+                and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms):
             return None
         now = time.monotonic()
         if self._reload_at is not None and now >= self._reload_at:
             supervisor.reload()     # start again with the new config.json
         if self._evq:
             self._send_events()     # key events go out on the next scan, not on the 50 ms tick
-        if self._rx is None and not self._fw_busy() and ((ms - self._last_ms) & 0x1FFFFFFF) < 50:
+        if self._rx is None and not self._fw_busy() and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms:
             return None
         self._last_ms = ms
         try:

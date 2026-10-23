@@ -91,7 +91,7 @@ class EffectTests(unittest.TestCase):
             self.assertEqual(config_loader.effect(config({"brightness": 0.4, "effect": name})), name)
 
     def test_the_names_match_the_ones_rgb_keys_draws(self):
-        self.assertEqual(config_loader.EFFECTS, ("static", "rainbow", "ripple", "starry"))
+        self.assertEqual(config_loader.EFFECTS, ("static", "rainbow", "ripple", "starry", "equalizer", "beat"))
 
     def test_the_two_effects_taken_out_mean_static_so_an_old_config_still_loads(self):
         for old in config_loader.RETIRED_EFFECTS:

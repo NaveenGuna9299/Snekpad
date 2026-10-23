@@ -4,7 +4,9 @@ import {
   screen,
   nativeTheme,
   BrowserWindow,
+  desktopCapturer,
   ipcMain,
+  session,
   Tray,
   Menu,
   nativeImage
@@ -90,7 +92,10 @@ function createWindow(onShown?: () => void): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // the music effects listen to the sound while the window is minimised, and the audio must start without a click
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
 
@@ -200,6 +205,26 @@ function registerIpc(): void {
   ipcMain.handle('device:led', (_e, layer: number, key: number, color: string) =>
     device.previewLed(layer, key, color)
   )
+
+  // The music effects: the window listens to the sound the computer plays (system audio loopback, Windows) and sends the
+  // levels here, which go on to the pad. The handler answers the window's request for "the screen" with the first
+  // screen and its sound, so no picker appears; the window throws the picture away and keeps the sound.
+  session.defaultSession.setDisplayMediaRequestHandler(
+    (_request, callback) => {
+      desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then((sources) => callback({ video: sources[0], audio: 'loopback' }))
+        .catch(() => callback({}))
+    },
+    { useSystemPicker: false }
+  )
+  ipcMain.on('music:levels', (_e, bands: unknown, beat: unknown) => {
+    if (!Array.isArray(bands) || typeof beat !== 'number') return
+    device.sendMusic(
+      bands.map((n) => (typeof n === 'number' ? n : 0)),
+      beat
+    )
+  })
 
   // The firmware inside this build (resources/firmware). Read and checked each time, so a damaged bundle is never sent.
   // SNEKPAD_FIRMWARE_DIR (a folder with manifest.json) lets a development build try another bundle, for example a

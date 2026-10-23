@@ -6,6 +6,7 @@ import { Effects } from '../../src/renderer/src/components/Effects'
 import { defaultConfig, EFFECTS, type EffectId } from '../../src/shared/config'
 import type { DeviceState } from '../../src/shared/api'
 import type { SyncStatus } from '../../src/shared/sync'
+import type { MusicState } from '../../src/renderer/src/lib/useMusic'
 import { installApi } from './stubApi'
 
 const connected: DeviceState = { status: 'connected', label: 'SnekPad', firmware: '0.4.0' }
@@ -14,6 +15,7 @@ type Options = {
   effect?: EffectId
   device?: DeviceState
   sync?: SyncStatus
+  music?: Partial<MusicState>
 }
 
 type Rendered = {
@@ -40,6 +42,7 @@ function setup(options: Options = {}): Rendered {
       effect={options.effect ?? 'static'}
       device={options.device ?? connected}
       sync={options.sync ?? 'in-sync'}
+      music={{ status: 'off', bands: [0, 0, 0, 0], beat: 0, ...options.music }}
       pushing={false}
       {...fns}
     />
@@ -77,6 +80,37 @@ describe('Effects page', () => {
     expect(screen.getByLabelText('Hex colour')).toBeTruthy()
     expect(screen.getByRole('tablist', { name: 'Profile' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Apply to all keys' })).toBeTruthy()
+  })
+
+  it('shows what Studio hears for the music effects, bar by bar', () => {
+    for (const id of ['equalizer', 'beat'] as const) {
+      const { view } = setup({
+        effect: id,
+        music: { status: 'listening', bands: [63, 32, 0, 10], beat: 40 }
+      })
+      expect(screen.getByText(/Listening to the sound/)).toBeTruthy()
+      expect(screen.getByTestId('band-0').style.height).toBe('100%')
+      expect(screen.getByTestId('band-1').style.height).toBe('51%')
+      expect(screen.getByTestId('band-2').style.height).toBe('0%')
+      expect(screen.getByTestId('band-3').style.height).toBe('16%')
+      expect(screen.getByTestId('beat-dot').className).toContain('bg-accent')
+      expect(screen.queryByLabelText('Hex colour'), id).toBeNull()
+      view.unmount()
+    }
+  })
+
+  it('says what is going on while the music effect is starting, failing, or has no pad', () => {
+    const cases: [Partial<MusicState>, DeviceState, RegExp][] = [
+      [{ status: 'starting' }, connected, /Starting to listen/],
+      [{ status: 'error', error: 'No sound here' }, connected, /No sound here/],
+      [{ status: 'off' }, connected, /once the pad is connected/],
+      [{ status: 'off' }, { status: 'disconnected' }, /Connect your pad/]
+    ]
+    for (const [music, device, text] of cases) {
+      const { view } = setup({ effect: 'beat', music, device })
+      expect(screen.getByText(text)).toBeTruthy()
+      view.unmount()
+    }
   })
 
   it('has no colours to set for the effects that make their own', () => {

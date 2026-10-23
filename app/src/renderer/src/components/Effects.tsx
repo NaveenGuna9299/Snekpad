@@ -1,16 +1,19 @@
 import { useState } from 'react'
-import { EFFECTS, type EffectId, type Profile } from '../../../shared/config'
+import { EFFECTS, isMusicEffect, type EffectId, type Profile } from '../../../shared/config'
 import type { DeviceState } from '../../../shared/api'
 import type { SyncStatus } from '../../../shared/sync'
 import { EFFECTS_FIRMWARE } from '../../../shared/firmware'
 import { isNewer } from '../../../shared/update'
 import { PadView } from './PadView'
 import { ColorPicker } from './Inspector'
+import type { MusicState } from '../lib/useMusic'
 
 type Props = {
   profiles: Profile[]
   effect: EffectId
   onEffect: (effect: EffectId) => void
+  /** What Studio is hearing, for the music effects. */
+  music: MusicState
   onKeyColor: (profile: number, key: number, color: string) => void
   onAllColors: (profile: number, color: string) => void
   device: DeviceState
@@ -63,6 +66,35 @@ const GLYPHS: Record<EffectId, React.JSX.Element> = {
       />
     </>
   ),
+  equalizer: (
+    <>
+      <rect x="7" y="22" width="7" height="20" rx="2" fill="currentColor" />
+      <rect x="17" y="10" width="7" height="32" rx="2" fill="currentColor" />
+      <rect x="27" y="16" width="7" height="26" rx="2" fill="currentColor" />
+      <rect x="37" y="28" width="7" height="14" rx="2" fill="currentColor" />
+    </>
+  ),
+  beat: (
+    <>
+      <path
+        d="M4 26h9l4-11 6 22 5-17 3 6h13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx="24"
+        cy="24"
+        r="20"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        opacity="0.5"
+      />
+    </>
+  ),
   starry: (
     <>
       <path
@@ -80,6 +112,7 @@ export function Effects({
   profiles,
   effect,
   onEffect,
+  music,
   onKeyColor,
   onAllColors,
   device,
@@ -183,7 +216,9 @@ export function Effects({
           >
             {current.label}
           </h2>
-          {current.colors === 'none' ? (
+          {isMusicEffect(effect) ? (
+            <MusicPanel music={music} connected={connected} />
+          ) : current.colors === 'none' ? (
             <p className="rounded-md border border-line bg-surface p-3 text-sm text-muted">
               {current.label} makes its own colours, so there is nothing to set here. Your per-key
               colours are used by Static.
@@ -222,6 +257,64 @@ export function Effects({
           )}
         </section>
       </main>
+    </div>
+  )
+}
+
+const BAND_NAMES = ['Bass', 'Low', 'High', 'Treble']
+
+/** What Studio hears while a music effect is chosen: a small version of the lights, so it is clear it is working. */
+function MusicPanel({
+  music,
+  connected
+}: {
+  music: MusicState
+  connected: boolean
+}): React.JSX.Element {
+  const text = !connected
+    ? 'Connect your pad: Studio sends it the music while the pad is connected.'
+    : music.status === 'listening'
+      ? 'Listening to the sound your computer plays.'
+      : music.status === 'starting'
+        ? 'Starting to listen…'
+        : music.status === 'error'
+          ? (music.error ?? 'Studio could not listen to the sound.')
+          : 'Studio listens once the pad is connected.'
+  return (
+    <div className="flex flex-col gap-3">
+      <p
+        role="status"
+        className={`rounded-md border border-line bg-surface p-3 text-sm ${music.status === 'error' ? 'text-danger' : 'text-muted'}`}
+      >
+        {text}
+      </p>
+      <div className="flex items-end gap-3" aria-label="What Studio hears" role="img">
+        {BAND_NAMES.map((name, i) => (
+          <div key={name} className="flex flex-col items-center gap-1">
+            <div className="flex h-24 w-9 items-end overflow-hidden rounded-md border border-line bg-input">
+              <div
+                data-testid={`band-${i}`}
+                className="w-full bg-accent transition-[height] duration-100"
+                style={{ height: `${Math.round((music.bands[i] / 63) * 100)}%` }}
+              />
+            </div>
+            <span className="text-xs text-muted">{name}</span>
+          </div>
+        ))}
+        <div className="flex flex-col items-center gap-1">
+          <div className="flex h-24 w-9 items-center justify-center rounded-md border border-line bg-input">
+            <span
+              data-testid="beat-dot"
+              className={`h-4 w-4 rounded-full ${music.beat > 0 ? 'bg-accent' : 'bg-line'}`}
+            />
+          </div>
+          <span className="text-xs text-muted">Beat</span>
+        </div>
+      </div>
+      <p className="text-xs text-muted">
+        Keep Studio open (you can minimise it). Push to pad after choosing the effect. It listens to
+        the computer&apos;s own sound, so it needs Windows and no microphone.
+      </p>
     </div>
   )
 }

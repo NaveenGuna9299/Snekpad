@@ -239,5 +239,91 @@ class UnchangedBehaviour(unittest.TestCase):
         self.assertEqual(sent(), "")
 
 
+class FakeLeds:
+    """Stands in for RgbKeys: remembers the music numbers it was given."""
+
+    def __init__(self, effect="equalizer"):
+        self.effect = effect
+        self.calls = []
+
+    def music(self, *numbers):
+        self.calls.append(numbers)
+
+
+def make_music_pad(effect="equalizer", leds=True):
+    SERIAL.incoming = b""
+    SERIAL.out = b""
+    SERIAL.connected = True
+    SERIAL.out_waiting = 0
+    fake = FakeLeds(effect) if leds else None
+    pad = app_profiles.AppProfiles([("General", [], []), ("Code", ["code"], [])], leds=fake)
+    kb = Keyboard()
+    pad.during_bootup(kb)
+    return pad, kb, fake
+
+
+def music_line(*numbers):
+    """What Studio sends: M and one character per number, 48 + the number."""
+    return b"M" + bytes(48 + n for n in numbers) + b"\n"
+
+
+class MusicLineTests(unittest.TestCase):
+    def test_the_five_numbers_reach_the_lights(self):
+        pad, kb, leds = make_music_pad()
+        SERIAL.incoming += music_line(0, 12, 33, 63, 7)
+        scan(pad, kb)
+        self.assertEqual(leds.calls, [(0, 12, 33, 63, 7)])
+
+    def test_several_lines_in_one_read_are_all_used_in_order(self):
+        pad, kb, leds = make_music_pad()
+        SERIAL.incoming += music_line(1, 1, 1, 1, 0) + music_line(2, 2, 2, 2, 0) + music_line(3, 3, 3, 3, 9)
+        scan(pad, kb)
+        self.assertEqual([c[0] for c in leds.calls], [1, 2, 3])
+        self.assertEqual(leds.calls[-1][4], 9)
+
+    def test_a_line_split_across_two_reads_is_put_together(self):
+        pad, kb, leds = make_music_pad()
+        line = music_line(5, 6, 7, 8, 9)
+        SERIAL.incoming += line[:3]
+        scan(pad, kb)
+        self.assertEqual(leds.calls, [])
+        SERIAL.incoming += line[3:]
+        scan(pad, kb)
+        self.assertEqual(leds.calls, [(5, 6, 7, 8, 9)])
+
+    def test_the_numbers_are_not_answered_and_not_mistaken_for_other_commands(self):
+        pad, kb, leds = make_music_pad()
+        SERIAL.incoming += music_line(63, 63, 63, 63, 63)
+        scan(pad, kb)
+        self.assertEqual(sent(), "")
+
+    def test_a_pad_without_lights_just_ignores_them(self):
+        pad, kb, _ = make_music_pad(leds=False)
+        SERIAL.incoming += music_line(10, 10, 10, 10, 10)
+        scan(pad, kb)                                                   # no error
+
+    def test_a_short_or_broken_line_is_ignored_and_the_pad_keeps_working(self):
+        pad, kb, leds = make_music_pad()
+        SERIAL.incoming += b"M12\n" + b"M\n"
+        scan(pad, kb)
+        self.assertEqual(leds.calls, [])
+        SERIAL.incoming += b"PING\n"
+        scan(pad, kb)
+        self.assertEqual(sent(), "PONG\n")
+
+    def test_the_port_is_read_faster_with_a_music_effect(self):
+        self.assertEqual(make_music_pad("equalizer")[0]._poll_ms, 20)
+        self.assertEqual(make_music_pad("beat")[0]._poll_ms, 20)
+        self.assertEqual(make_music_pad("rainbow")[0]._poll_ms, 50)
+        self.assertEqual(make_music_pad(leds=False)[0]._poll_ms, 50)
+
+    def test_other_commands_still_work_next_to_the_music(self):
+        pad, kb, leds = make_music_pad()
+        SERIAL.incoming += music_line(1, 2, 3, 4, 5) + b"APP\tCode.exe\tmain.py\n"
+        scan(pad, kb)
+        self.assertEqual(len(leds.calls), 1)
+        self.assertEqual(kb.active_layers[-1], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

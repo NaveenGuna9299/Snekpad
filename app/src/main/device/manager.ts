@@ -10,7 +10,14 @@ import type {
   FirmwareUpdateResult,
   FwInfoResult
 } from '../../shared/firmwareUpdate'
-import { appLine, osLine, hostOsFrom, testLine, type PadEvent } from '../../shared/protocol'
+import {
+  appLine,
+  musicLine,
+  osLine,
+  hostOsFrom,
+  testLine,
+  type PadEvent
+} from '../../shared/protocol'
 import type { Link } from './link'
 import { MockLink, RESTARTING } from './mockLink'
 import { findPad } from './serialLink'
@@ -203,6 +210,12 @@ export class DeviceManager extends EventEmitter {
   sendApp(proc: string, title: string): void {
     if (this.session?.updating) return
     this.session?.send(appLine(proc, title))
+  }
+
+  /** The music levels for the pad's Equalizer and Beat pulse effects. Dropped during a firmware update. */
+  sendMusic(bands: readonly number[], beat: number): void {
+    if (this.session?.updating) return
+    this.session?.send(musicLine(bands, beat))
   }
 
   /** What the pad says about itself and its last firmware update (FW_INFO). */

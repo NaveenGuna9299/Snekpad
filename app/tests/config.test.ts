@@ -6,6 +6,7 @@ import {
   DEFAULT_SLEEP_MINUTES,
   defaultConfig,
   EFFECTS,
+  isMusicEffect,
   MAX_PROFILES,
   MAX_SLEEP_MINUTES,
   migrateConfig,
@@ -197,8 +198,15 @@ describe('key LED effect setting', () => {
     expect(defaultConfig().settings.effect).toBe('static')
   })
 
-  it('lists the four effects Studio offers, with the names the firmware knows', () => {
-    expect(EFFECTS.map((e) => e.id)).toEqual(['static', 'rainbow', 'ripple', 'starry'])
+  it('lists the effects Studio offers, with the names the firmware knows', () => {
+    expect(EFFECTS.map((e) => e.id)).toEqual([
+      'static',
+      'equalizer',
+      'beat',
+      'rainbow',
+      'ripple',
+      'starry'
+    ])
   })
 
   it('accepts every effect', () => {
@@ -231,7 +239,21 @@ describe('key LED effect setting', () => {
 
   it('says where each effect gets its colours', () => {
     const colors = Object.fromEntries(EFFECTS.map((e) => [e.id, e.colors]))
-    expect(colors).toEqual({ static: 'perKey', rainbow: 'none', ripple: 'none', starry: 'none' })
+    expect(colors).toEqual({
+      static: 'perKey',
+      equalizer: 'none',
+      beat: 'none',
+      rainbow: 'none',
+      ripple: 'none',
+      starry: 'none'
+    })
+  })
+
+  it('knows which effects follow the music', () => {
+    expect(EFFECTS.filter((e) => isMusicEffect(e.id)).map((e) => e.id)).toEqual([
+      'equalizer',
+      'beat'
+    ])
   })
 
   it('turns an effect saved while Studio offered breathing or color cycle into static', () => {

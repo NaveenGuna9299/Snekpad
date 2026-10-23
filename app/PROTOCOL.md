@@ -40,6 +40,25 @@ Rules both sides follow:
 
 The firmware part is `AppProfiles._hello` and `_flush_events` in `Programs/app_profiles.py`. `Programs/tests/test_app_profiles_events.py` runs it on a normal Python with fake modules. It does not replace trying a real pad.
 
+## Music levels (`M`)
+
+For the pad's `equalizer` and `beat` effects, Studio listens to the sound the computer plays (Windows: system audio
+loopback) and sends the pad its levels about 25 times a second, only while a pad is connected and one of those effects is
+chosen:
+
+| App sends   | Pad replies | Notes                                                                                                                                                     |
+| ----------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `M`+5 chars | none        | Five characters, each `48 + n` with `n` 0 to 63: the loudness of four bands (bass, low, high, treble), then the strength of a beat just heard (0 = none). |
+
+- It is not tab separated and has no digits as text: the pad reads the five bytes straight off the line (`app_profiles.py`
+  `_line`, before anything else is decoded), because this arrives 25 times a second and must not make new strings on a
+  board with a few KB of free RAM. Characters run from `0` (n = 0) to `o` (n = 63); none of them can be a tab or a newline.
+- The pad smooths the numbers into its 40 frames a second: a bar rises at once and falls away over about half a second, a
+  beat flashes and fades in about 0.3 s. If no line arrives for 0.4 s (Studio closed, sound stopped) the lights go out.
+- A pad whose effect is not `equalizer` or `beat` ignores the line, and so does a pad from before firmware 0.4.0 (it
+  does not know the command). The pad polls its port every 20 ms instead of 50 ms while one of those effects is chosen.
+- Studio sends one line of zeros when the sound stops, then nothing until sound comes back.
+
 ## Development tools: `TEST` and knob events (development pads only)
 
 These exist only on a pad flashed with `flash_pad.ps1 -Dev`, which adds `Programs/dev/dev_tools.py`. A customer pad does not have them: it answers `HELLO` without the `dev` field, ignores `TEST` and sends no knob events. The production Studio never sends `TEST`.
@@ -87,11 +106,11 @@ Studio follows the pad after `FW_COMMIT`: it must reconnect on the new firmware 
 
 Under `settings`:
 
-| Field          | Meaning                                                                                                                                                                                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `brightness`   | Starting brightness of the key LEDs, 0.05 to 0.5.                                                                                                                                                                                                            |
-| `sleepMinutes` | Whole minutes of idle time (no key or knob touch) before the pad's screen and key LEDs switch off, 0 to 60, 0 = never. They dim at half that time. Optional: a config without it (an older app) means 2.                                                     |
-| `effect`       | The key LED effect: `static` (default; each profile's per-key colours), `rainbow`, `ripple` or `starry`. Optional: a config without it (an older app) means `static`. A config that still says `breathing` or `cycle` (taken out again) also means `static`. |
+| Field          | Meaning                                                                                                                                                                                                                                                                                                                |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `brightness`   | Starting brightness of the key LEDs, 0.05 to 0.5.                                                                                                                                                                                                                                                                      |
+| `sleepMinutes` | Whole minutes of idle time (no key or knob touch) before the pad's screen and key LEDs switch off, 0 to 60, 0 = never. They dim at half that time. Optional: a config without it (an older app) means 2.                                                                                                               |
+| `effect`       | The key LED effect: `static` (default; each profile's per-key colours), `equalizer` and `beat` (follow the music, see `M` above), `rainbow`, `ripple` or `starry`. Optional: a config without it (an older app) means `static`. A config that still says `breathing` or `cycle` (taken out again) also means `static`. |
 
 The pad refuses a push whose `sleepMinutes` is not a whole number from 0 to 60, or whose `effect` is not one of the names above, and a pad with older firmware (before 0.4.0 for `effect`) ignores the fields. The effect is part of `config.json`, so the pad keeps it across a power-off. `GET_CFG` reports it as `e` next to the sleep time `s`, so Studio shows the effect the pad really runs.
 

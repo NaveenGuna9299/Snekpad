@@ -68,6 +68,17 @@ export const appLine = (proc: string, title: string): string =>
   `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
 export const getCfgLine = (): string => 'GET_CFG'
 export const helloLine = (): string => 'HELLO'
+/**
+ * The levels the pad's music effects follow: `M` and five characters, each 48 + a number 0 to 63 (four bands from bass to
+ * treble, then the strength of a beat just heard, 0 = none). No tabs and no digits as text: the pad reads the bytes
+ * straight off the line, because this goes out about 25 times a second. No reply.
+ */
+export const musicLine = (bands: readonly number[], beat: number): string => {
+  const ch = (n: number): string =>
+    String.fromCharCode(48 + Math.max(0, Math.min(63, Math.round(n) || 0)))
+  return 'M' + [0, 1, 2, 3].map((i) => ch(bands[i] ?? 0)).join('') + ch(beat)
+}
+
 /** Key test heartbeat: for about 3 s after each one the pad reports keys but types nothing. No reply. */
 export const testLine = (): string => 'TEST'
 

@@ -22,13 +22,26 @@ export const MAX_SLEEP_MINUTES = 60 // 0 = never sleep
 
 // How the key LEDs behave. The names are the same as EFFECTS in Programs/config_loader.py (the firmware also knows
 // 'breathing' and 'cycle', which Studio does not offer). `colors` says where an effect's colours come from:
-// 'perKey' (each profile's key colours) or 'none' (the effect makes its own).
+// 'perKey' (each profile's key colours) or 'none' (the effect makes its own). Equalizer and Beat pulse react to
+// the sound the computer plays: Studio listens and sends the pad the levels.
 export const EFFECTS = [
   {
     id: 'static',
     label: 'Static',
     colors: 'perKey',
     text: 'Each key keeps the colour you gave it.'
+  },
+  {
+    id: 'equalizer',
+    label: 'Equalizer',
+    colors: 'none',
+    text: 'The four columns are bass to treble and fill up from the bottom row as the music gets louder.'
+  },
+  {
+    id: 'beat',
+    label: 'Beat pulse',
+    colors: 'none',
+    text: 'All the keys flash on the beat of the music, and the colour moves on with every beat.'
   },
   {
     id: 'rainbow',
@@ -51,6 +64,8 @@ export const EFFECTS = [
 ] as const
 export type EffectId = (typeof EFFECTS)[number]['id']
 export const DEFAULT_EFFECT: EffectId = 'static'
+/** Effects that follow the sound the computer plays (Studio has to be running to feed them). */
+export const isMusicEffect = (id: EffectId): boolean => id === 'equalizer' || id === 'beat'
 const effectIds = EFFECTS.map((e) => e.id) as [EffectId, ...EffectId[]]
 
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'colour must look like #RRGGBB')

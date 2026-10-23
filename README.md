@@ -39,9 +39,11 @@ the pad to allow it).
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
 - Lighting effects: in Studio, **Home → Lighting effects** picks how the key LEDs look: Static (your per-key colours),
-  Rainbow (a wave of colour from left to right), Ripple (a ring of a random colour from the key you press) or Starry
-  night (random keys twinkle in random colours). Push to pad after choosing; the pad remembers the effect across a
-  power-off and Studio shows the one the pad runs.
+  Rainbow (a wave of colour from left to right), Ripple (a ring of a random colour from the key you press), Starry
+  night (random keys twinkle in random colours), and two that follow the music: Equalizer (the four columns are bass
+  to treble and fill up from the bottom row) and Beat pulse (all keys flash on the beat). The music effects listen
+  to the sound your computer plays (Windows, no microphone) and need Studio to be open, minimised is fine. Push to
+  pad after choosing; the pad remembers the effect across a power-off and Studio shows the one the pad runs.
 - The screen and the key LEDs sleep together: after the sleep time (2 minutes by default) both switch off, the screen
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
   dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps

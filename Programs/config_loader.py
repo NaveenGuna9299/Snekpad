@@ -35,7 +35,7 @@ KEYS = 12
 MAX_BYTES = 24000              # bigger than any real config; guards RAM
 DEFAULT_SLEEP_MINUTES = 2      # settings.sleepMinutes when the config has none (an older app)
 MAX_SLEEP_MINUTES = 60
-EFFECTS = ("static", "rainbow", "ripple", "starry")   # the same names as in rgb_keys.py
+EFFECTS = ("static", "rainbow", "ripple", "starry", "equalizer", "beat")   # the same names as in rgb_keys.py
 RETIRED_EFFECTS = ("breathing", "cycle")   # Studio no longer offers these; a config that still has one means static
 DEFAULT_EFFECT = "static"      # settings.effect when the config has none (an older app)
 
