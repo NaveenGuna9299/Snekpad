@@ -26,8 +26,13 @@ export const FW_MAX_TOTAL = 150000
 export const FW_SPACE_MARGIN = 16384
 export const FW_CONFIRM_MS = 30000
 
-/** Bytes per FW_DATA line: 96 bytes are 128 characters of base64, a line the pad reads comfortably. */
-export const FW_CHUNK_BYTES = 96
+/**
+ * Bytes per FW_DATA line: 48 bytes are 64 characters of base64. The pad has only a few KB of free RAM while it
+ * receives (and what is free is in small pieces), so a line is kept short, and Studio sends one line at a time and
+ * waits for the pad (see FW_PACE below). With 96-byte lines sent back to back, a pad on firmware 0.4.0 read several
+ * lines at once, ran out of memory on the second file and stopped answering.
+ */
+export const FW_CHUNK_BYTES = 48
 
 const dotted = z.string().regex(/^\d{1,4}\.\d{1,4}\.\d{1,4}$/)
 

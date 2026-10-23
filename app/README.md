@@ -191,6 +191,10 @@ How it works, and the rules, are in [PROTOCOL.md](PROTOCOL.md#firmware-update-fw
   first time (pads before firmware 0.3.4 do not have it).
 - To try an update on a development build: set `SNEKPAD_FIRMWARE_DIR` to a folder with another bundle (it is ignored in
   the production build).
+- While the files are sent, Studio sends one small data line at a time and waits for the pad's `PONG` after each (the pad has
+  only a few KB of free RAM while it receives; see "Pacing" in [PROTOCOL.md](PROTOCOL.md#firmware-update-fw_)). An update that
+  stops with "no reply from pad" and leaves the screen on the prompt means the pad ran out of memory: unplug and replug it,
+  it keeps its old firmware, and update with Studio v1.1.2 or later.
 - A new firmware that hangs in the first seconds after start (before the watchdog is armed) does not undo itself;
   unplugging and replugging the pad 3 times does.
 

@@ -16,6 +16,7 @@ import {
   parseEvent,
   parseHello,
   parseReply,
+  pingLine,
   EVT_PREFIX,
   type HelloInfo,
   type PadEvent,
@@ -282,6 +283,12 @@ export class DeviceSession {
       const chunk = f.size / Math.max(lines.length, 1)
       for (let i = 0; i < lines.length; i++) {
         this.link.write(lines[i])
+        // One line at a time: the pad answers PING after it has dealt with everything sent before it, so it never
+        // has more than one data line waiting (its RAM is too small to read several at once).
+        const paced = await this.exchange(pingLine(), REPLY_TIMEOUT_MS)
+        if (this.fwCancelled) return fail('')
+        if (paced.kind !== 'pong')
+          return fail(reasonOf(paced), paced.kind === 'err' && paced.reason === 'no reply from pad')
         if (i % 16 === 15) {
           onProgress({
             phase: 'sending',
@@ -289,8 +296,6 @@ export class DeviceSession {
             sent: Math.round(sent + chunk * (i + 1)),
             total
           })
-          await new Promise((r) => setImmediate(r)) // let the progress reach the window and a cancel reach us
-          if (this.fwCancelled) return fail('')
         }
       }
       const closed = await this.exchange(fwFileEndLine(), REPLY_TIMEOUT_MS * 2)

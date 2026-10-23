@@ -325,5 +325,48 @@ class MusicLineTests(unittest.TestCase):
         self.assertEqual(kb.active_layers[-1], 1)
 
 
+class ReadSizeTests(unittest.TestCase):
+    """During a firmware update the pad reads from its port a little at a time (its RAM is too small for more)."""
+
+    def setUp(self):
+        self.sizes = []
+        self._read = SERIAL.read
+
+        def recording(n):
+            self.sizes.append(n)
+            return self._read(n)
+
+        SERIAL.read = recording
+        self.addCleanup(lambda: setattr(SERIAL, "read", self._read))
+
+    def test_a_pile_of_lines_is_read_in_small_pieces_while_an_update_is_running(self):
+        pad, kb = make_pad()
+        pad._fw = types.SimpleNamespace(state=2, tick=lambda now: None)       # an update is receiving
+        SERIAL.incoming += b"PING\n" * 200                                      # 1000 bytes waiting at once
+        scan(pad, kb, 10)
+        self.assertTrue(self.sizes)
+        self.assertLessEqual(max(self.sizes), app_profiles.READ_MAX_WHILE_UPDATING)
+        self.assertEqual(SERIAL.out.count(b"PONG\n"), 200)                      # nothing lost: all of it was answered
+
+    def test_normally_everything_waiting_is_read_at_once(self):
+        pad, kb = make_pad()
+        SERIAL.incoming += b"PING\n" * 100
+        scan(pad, kb)
+        self.assertEqual(self.sizes, [500])
+        self.assertEqual(SERIAL.out.count(b"PONG\n"), 100)
+
+    def test_a_line_longer_than_the_limit_still_arrives_whole(self):
+        pad, kb = make_pad()
+        pad._fw = types.SimpleNamespace(state=2, tick=lambda now: None)
+        line = b"FW_DATA\t" + b"A" * 300 + b"\n"                                # longer than one read
+        SERIAL.incoming += line + b"PING\n"
+        scan(pad, kb, 10)
+        self.assertEqual(SERIAL.out.count(b"PONG\n"), 1)
+
+    def test_the_limit_is_small_enough_for_a_pad_with_a_few_kb_free(self):
+        self.assertLessEqual(app_profiles.READ_MAX_WHILE_UPDATING, 192)
+        self.assertGreaterEqual(app_profiles.READ_MAX_WHILE_UPDATING, 96)       # a whole data line (about 72 bytes) fits
+
+
 if __name__ == "__main__":
     unittest.main()

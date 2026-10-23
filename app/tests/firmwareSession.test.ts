@@ -88,6 +88,30 @@ describe('sending a firmware update', () => {
     }
   })
 
+  it('sends one data line at a time and waits for the pad to answer PING after each', async () => {
+    // a pad on firmware 0.4.0 has only a few KB of free RAM while it receives: several lines read at once ran it out
+    const { link, s } = pad()
+    await s.updateFirmware(bundle())
+    const lines = link.log
+    let data = 0
+    lines.forEach((l, i) => {
+      if (l.startsWith('FW_DATA	')) {
+        data++
+        expect(lines[i + 1], `after data line ${data}`).toBe('PING')
+      }
+    })
+    expect(data).toBeGreaterThan(50)
+    // and never two data lines in a row without a PING between them
+    for (let i = 1; i < lines.length; i++)
+      expect(lines[i].startsWith('FW_DATA	') && lines[i - 1].startsWith('FW_DATA	')).toBe(false)
+  })
+
+  it('keeps every data line short', async () => {
+    const { link, s } = pad()
+    await s.updateFirmware(bundle())
+    for (const l of frames(link, 'FW_DATA	')) expect(l.length).toBeLessThanOrEqual(8 + 64)
+  })
+
   it('reports progress: checking, waiting for the knob, sending, finishing', async () => {
     const { s } = pad()
     const seen: FirmwareProgress[] = []
@@ -262,6 +286,21 @@ describe('when something goes wrong on the way', () => {
     expect(r.error).toBe('no reply from pad')
     expect(frames(link, 'FW_ABORT').length).toBeGreaterThan(0)
     expect(link.restartAs).toBeNull()
+  })
+
+  it('stops with a plain error when the pad stops answering the pacing PING', async () => {
+    vi.useFakeTimers()
+    const { link, s } = pad()
+    let pings = 0
+    tamper(link, (line) => (line === 'PING' && ++pings > 5 ? null : line))
+    const run = s.updateFirmware(bundle())
+    await vi.advanceTimersByTimeAsync(10000)
+    const r = (await run) as Extract<FirmwareUpdateResult, { ok: false }>
+    expect(r.ok).toBe(false)
+    expect(r.error).toBe('no reply from pad')
+    expect(frames(link, 'FW_ABORT').length).toBeGreaterThan(0)
+    expect(link.restartAs).toBeNull()
+    expect(frames(link, 'FW_DATA	').length).toBeLessThan(10) // it did not carry on sending
   })
 })
 
