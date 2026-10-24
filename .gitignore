@@ -11,3 +11,4 @@ __pycache__/
 .claude/
 snekpad-app-prompt.md
 Programs/build/
+Programs/.uf2-cache/

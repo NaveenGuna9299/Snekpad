@@ -95,9 +95,10 @@ See [`app/README.md`](app/README.md) for tests, builds, the knob modes and the c
 
 **The pad**
 
-A new pad is set up by hand: install CircuitPython, KMK and three Adafruit libraries, then copy the files from
-`Programs/` onto the pad. The step-by-step instructions are in
-[`app/README.md`](app/README.md#setting-up-a-new-pad).
+From the next release on, a new pad is set up in one step: hold BOOT while plugging it in and drag the release's
+`SnekPad-pad-vX.Y.Z.uf2` onto the `RPI-RP2` drive. It brings CircuitPython, KMK, the libraries and the firmware at once.
+It can also be set up by hand: install CircuitPython, KMK and three Adafruit libraries, then copy the files from
+`Programs/` onto the pad. Both ways are in [`app/README.md`](app/README.md#setting-up-a-new-pad).
 
 ## Documentation
 

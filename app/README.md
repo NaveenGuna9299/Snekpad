@@ -102,7 +102,34 @@ of silencing anything, and a production Studio has no key test at all. The pad-s
 
 ## Setting up a new pad
 
-A new pad (Waveshare RP2040-Zero) is set up by hand once, on Windows, in the order below. After that, firmware updates
+### The quick way: the ready-made image
+
+Every release has a `SnekPad-pad-vX.Y.Z.uf2` next to the installers. It holds CircuitPython 10.3.1 and a complete
+`CIRCUITPY` drive: the compiled firmware and KMK, the three Adafruit libraries, the logo, `boot.py` and the license texts.
+
+1. Hold **BOOT** on the RP2040-Zero while plugging in USB, then let go. A drive named **`RPI-RP2`** appears.
+2. Drag `SnekPad-pad-vX.Y.Z.uf2` onto `RPI-RP2`. The file is 4 MB, so copying can take up to a minute. The pad then
+   restarts by itself: the logo shows, the keys light up, and no drive appears (`boot.py` hides it).
+3. Unplug the pad and plug it in again, so the second serial port that `boot.py` turns on is there. Open SnekPad Studio:
+   it finds the pad, and the pad runs the built-in profiles until Studio sends its own.
+
+The image replaces everything on the pad, including a `config.json` it had, and starts from erased `nvm`, as after
+`flash_nuke.uf2`. A pad that was used before needs no wipe first. To make the image yourself, or a development one:
+
+```powershell
+cd "G:\SnekPad\Programs"
+py -3 build_uf2.py          # dist\SnekPad-pad-<firmware version>.uf2
+py -3 build_uf2.py --dev    # dist\SnekPad-pad-<firmware version>-DEV.uf2: dev_tools.mpy and /nowatchdog, like flash_pad.ps1 -Dev
+```
+
+It downloads the pinned CircuitPython, KMK, Adafruit bundle and mpy-cross (each checked against its SHA-256 in
+`build_uf2.py`), keeps them in `Programs/.uf2-cache/`, and rebuilds `Programs/build` on the way. To move to a newer
+CircuitPython, KMK or bundle, change the version and the hash together, in `build_uf2.py`, `firmware.yml` and
+`release.yml`.
+
+### By hand
+
+A new pad (Waveshare RP2040-Zero) can also be set up by hand, on Windows, in the order below. After that, firmware updates
 run from the app (see [below](#updating-the-pads-firmware-from-studio)). You need Python 3 (from python.org: on Windows
 the `python` command of the Microsoft Store is only a stub and does not work, use `py -3` or the real install) and the
 `Programs/` folder of this repository.

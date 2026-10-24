@@ -41,6 +41,45 @@ jobs:
           path: Programs/build/ota
           if-no-files-found: error
 
+  pad-image:
+    # The ready-made .uf2 that sets up a new pad in one step: CircuitPython plus a complete CIRCUITPY drive
+    # (Programs/build_uf2.py, which pins everything it downloads). Shipped with the release, next to the installers.
+    runs-on: ubuntu-latest
+    env:
+      MTOOLS_SKIP_CHECK: 1
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+      - name: The image pins the same CircuitPython
+        run: grep -q "^CIRCUITPYTHON_VERSION = \"${CIRCUITPYTHON_VERSION}\"" Programs/build_uf2.py
+      - name: Build the pad image
+        working-directory: Programs
+        run: |
+          name="$GITHUB_REF_NAME"
+          [[ "$GITHUB_REF" == refs/tags/* ]] || name="$(git rev-parse --short HEAD)"
+          python build_uf2.py --out "dist/SnekPad-pad-$name.uf2" --fat-out drive.img
+      - name: Check the CIRCUITPY drive with other FAT tools
+        # build_uf2.py writes the file system itself, so a second opinion: fsck, then copy everything back out
+        run: |
+          sudo apt-get install -y -q dosfstools mtools
+          fsck.fat -n -v Programs/drive.img
+          mkdir drive
+          mcopy -s -n -i Programs/drive.img "::*" drive/
+          cd Programs/build
+          find . -type f -not -path './ota/*' | while read -r f; do cmp "$f" "../../drive/$f"; done
+          cd ../../drive
+          for f in lib/neopixel.mpy lib/adafruit_displayio_ssd1306.mpy lib/adafruit_display_text/label.mpy snekpad32.bmp; do
+            test -s "$f" || { echo "missing on the drive: $f"; exit 1; }
+          done
+          test ! -e dev_tools.mpy && test ! -e nowatchdog && test ! -e config.json
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installer-pad-image   # installer-* so that publish picks it up
+          path: Programs/dist/*.uf2
+          if-no-files-found: error
+
   build:
     needs: firmware
     strategy:
@@ -107,14 +146,14 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: build
+    needs: [build, pad-image]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: installers
-          pattern: installer-*   # not the firmware bundle: it is inside the installers already
+          pattern: installer-*   # the installers and the pad image; not the firmware bundle, it is inside the installers
           merge-multiple: true
       - run: gh release create "$GITHUB_REF_NAME" $(find installers -type f) --title "SnekPad $GITHUB_REF_NAME" --notes-file RELEASE_NOTES_$GITHUB_REF_NAME.md
         env:
