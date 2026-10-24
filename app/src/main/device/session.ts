@@ -127,6 +127,20 @@ export class DeviceSession {
     return this.exclusive(() => this.collect(), true)
   }
 
+  /**
+   * Put a profile on the pad's Studio slot (SLOT_BEGIN, SLOT_KEY x 15, SLOT_END; see PROTOCOL.md). The pad answers every
+   * line and has little RAM, so the lines go one at a time. If any fails the pad drops the half-built profile by itself.
+   */
+  loadSlot(frames: string[]): Promise<PushResult> {
+    return this.exclusive(async (): Promise<PushResult> => {
+      for (const line of frames) {
+        const r = await this.exchange(line, REPLY_TIMEOUT_MS)
+        if (r.kind !== 'ok') return { ok: false, error: reasonOf(r) }
+      }
+      return { ok: true }
+    }, false)
+  }
+
   /** True while a firmware update is queued or running: nothing else should be sent to the pad then. */
   get updating(): boolean {
     return this.fwOps > 0

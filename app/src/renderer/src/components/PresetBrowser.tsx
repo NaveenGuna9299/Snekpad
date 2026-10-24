@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { COLS, MAX_PROFILES, type KeyConfig, type Profile } from '../../../shared/config'
+import { COLS, MAX_ALL_PROFILES, type KeyConfig, type Profile } from '../../../shared/config'
 import { describeAction } from '../lib/describe'
 import { PRESETS, type Preset } from '../lib/presets'
 import { chipsFor } from '../lib/programs'
@@ -35,7 +35,7 @@ export function PresetBrowser({
   const [mine, setMine] = useState<Preset[]>([])
   const [saveName, setSaveName] = useState(currentName)
   const [error, setError] = useState('')
-  const full = profileCount >= MAX_PROFILES
+  const full = profileCount >= MAX_ALL_PROFILES
 
   useEffect(() => {
     window.api.loadTemplates().then(setMine)
@@ -263,7 +263,11 @@ export function PresetBrowser({
               <button
                 disabled={full}
                 onClick={() => onAdd(draft)}
-                title={full ? 'The pad holds at most 4 profiles. Replace one instead.' : undefined}
+                title={
+                  full
+                    ? `Studio holds at most ${MAX_ALL_PROFILES} profiles. Replace one instead.`
+                    : undefined
+                }
                 className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accentfg hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Add as new profile

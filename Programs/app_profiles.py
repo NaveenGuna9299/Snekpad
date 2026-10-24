@@ -42,12 +42,14 @@ CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/proto
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
 PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
-FIRMWARE_VERSION = "0.4.2"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
+FIRMWARE_VERSION = "0.5.0"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
                             # at or above REQUIRED_FIRMWARE in app/src/shared/firmware.ts (a test checks this).
 FS_ROOT = ""            # root of the pad's filesystem; tests point it at a temporary folder
 EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
 READ_MAX_WHILE_UPDATING = 160    # bytes read from the port at a time during a firmware update (see _read)
 EVENT_BACKLOG = 256     # if the host has left this many bytes unread, stop sending events
+SLOT_MIN_FREE = 2000    # a Studio profile that would leave the pad less free RAM than this is refused: measured on a real
+                        # pad, a profile that leaves 1-2 KB makes the next swap fail at random (the heap is fragmented)
 
 
 class AppProfiles(Module):
@@ -91,6 +93,10 @@ class AppProfiles(Module):
         self.events = False         # the app said HELLO, so tell it about profile changes and key presses
         self._evq = []              # EVT lines waiting to be written
         self._reported_layer = None # last profile reported to the app
+        self.slot = None            # set by code.py: (layer, keymap, labels, colors, names, knob_text, enc_map, FN key)
+        self.slot_ready = False     # the slot holds a profile from Studio
+        self._sb = None             # config_loader.SlotBuilder while a slot is arriving
+        self._sb_t = 0
 
     # ------------------------------------------------------------ matching
     def _clean(self, proc):
@@ -193,7 +199,7 @@ class AppProfiles(Module):
     def _flush_events(self):
         # Never during a config transfer (replies must not be mixed with events), never to a host that
         # closed the port, and never into a full buffer: events are dropped rather than ever blocking keys.
-        if not self._evq or self._rx is not None or self._fw_busy():
+        if not self._evq or self._rx is not None or self._sb is not None or self._fw_busy():
             return
         if not getattr(self.ser, "connected", True):
             self.events = False         # the app is gone; it says HELLO again when it comes back
@@ -307,6 +313,86 @@ class AppProfiles(Module):
                 self._write("ERR\tcould not read config\n")
             except Exception:
                 pass
+
+    # ------------------------------------------------------------ SLOT_* (the profile Studio sends for one app)
+    def _slot_cmd(self, parts, now):
+        # SLOT_BEGIN<TAB>name<TAB>knob text            -> OK | ERR<TAB>reason
+        # SLOT_KEY<TAB>n<TAB>label<TAB>#RRGGBB<TAB>action as JSON   (n 0-11 = keys, 12 = turn right, 13 = turn left, 14 = press)
+        # SLOT_STEP<TAB>n<TAB>KEY+KEY<TAB>pause ms      one step of the sequence that key n announced as {"type":"sequence"}
+        # SLOT_END                                      the profile is complete: it replaces the old slot
+        # Every line is answered, so Studio sends one at a time. The old slot is let go at SLOT_BEGIN, before the new
+        # one is built: the pad has no RAM for both. A failure leaves the slot as General, never half a profile.
+        try:
+            if self.slot is None or self._rx is not None or self._fw_busy():
+                raise OSError("no Studio slot")
+            cmd = parts[0]
+            if cmd == "SLOT_BEGIN":
+                self._slot_free()
+                self._sb = config_loader.SlotBuilder(parts[1], parts[2] if len(parts) > 2 else "")
+            elif self._sb is None:
+                raise OSError("no SLOT_BEGIN")
+            elif cmd == "SLOT_KEY":
+                self._sb.add(int(parts[1]), parts[2], parts[3], parts[4] if len(parts) == 5 else "\t".join(parts[4:]))
+            elif cmd == "SLOT_STEP":
+                self._sb.step(int(parts[1]), parts[2], parts[3])
+            elif cmd == "SLOT_END":
+                self._slot_apply()
+            else:
+                raise ValueError("unknown command")
+            self._sb_t = now
+            self._write("OK\n")
+        except Exception as e:
+            self._slot_drop()
+            print("app_profiles slot error:", e)
+            self._write("ERR\t" + "".join(c if " " <= c <= "~" else " " for c in str(e))[:60] + "\n")
+
+    def _slot_free(self):
+        # the slot shows General again, with the very same lists: nothing of the old profile stays in RAM
+        layer, keymap, labels, colors, names, knob_text, enc_map, _ = self.slot
+        g = self.general
+        keymap[layer] = keymap[g]
+        labels[layer] = labels[g]
+        colors[layer] = colors[g]
+        names[layer] = "Studio"
+        knob_text[layer] = knob_text[g]
+        enc_map[layer] = enc_map[g]
+        self.profiles[layer] = ("Studio", (), ())
+        self.slot_ready = False
+        self._sb = None
+        gc.collect()
+
+    def _slot_drop(self):
+        if self._sb is not None:        # a transfer that went wrong; a stray line must not undo a finished slot
+            self._slot_free()
+
+    def _slot_apply(self):
+        sb = self._sb.finish()
+        self._sb = None
+        layer, keymap, labels, colors, names, knob_text, enc_map, fn = self.slot
+        keymap[layer] = [fn if k == "FN" else k for k in sb.keys]
+        labels[layer] = sb.labels
+        colors[layer] = sb.colors
+        names[layer] = sb.name
+        knob_text[layer] = sb.knob_text
+        enc_map[layer] = (sb.knob[1], sb.knob[0], sb.knob[2])     # (turn left, turn right, press)
+        self.profiles[layer] = (sb.name, (), ())
+        self.slot_ready = True
+        gc.collect()
+        try:
+            free = gc.mem_free()
+        except AttributeError:      # a normal Python (the tests) has no mem_free
+            free = None
+        if free is not None:
+            print("app_profiles: slot", sb.name, "free RAM:", free)     # how much room a profile leaves
+            if free < SLOT_MIN_FREE:
+                self._slot_free()
+                raise MemoryError("profile too big for the pad")
+        # a pad that is showing the slot right now redraws it (a changed profile, sent while its app is in focus)
+        if layer in (self._kb.active_layers[0], self._kb.active_layers[-1]):
+            if self.leds is not None:
+                self.leds.layer = -1
+            if self.ui is not None:
+                self.ui.layer = -1
 
     # ------------------------------------------------------------ CFG_* (receive a config)
     def _cfg_begin(self, parts, now):
@@ -429,6 +515,8 @@ class AppProfiles(Module):
             self._hello()
         elif parts[0].startswith("FW_"):
             self._fw_cmd(parts, now)
+        elif parts[0].startswith("SLOT_"):
+            self._slot_cmd(parts, now)
         elif parts[0] == "OS" and len(parts) >= 2:
             self.host_os = parts[1]
             print("app_profiles: host os", self.host_os)
@@ -436,6 +524,8 @@ class AppProfiles(Module):
             proc = parts[1]
             title = parts[2] if len(parts) > 2 else ""
             idx = self._match(proc, title)
+            if len(parts) > 3 and parts[3] == "S" and self.slot_ready:
+                idx = self.slot[0]      # Studio has a profile for this app and has put it in the slot
             if not self.connected:
                 print("app_profiles: helper connected")
             self.connected = True
@@ -490,19 +580,23 @@ class AppProfiles(Module):
             return None
         ms = ticks_ms()
         # poll every scan while a config or a firmware update is arriving (the port's buffer is small), else every 50 ms
-        if (self._rx is None and not self._fw_busy() and self._reload_at is None and not self._evq
-                and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms):
+        if (self._rx is None and self._sb is None and not self._fw_busy() and self._reload_at is None
+                and not self._evq and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms):
             return None
         now = time.monotonic()
         if self._reload_at is not None and now >= self._reload_at:
             supervisor.reload()     # start again with the new config.json
         if self._evq:
             self._send_events()     # key events go out on the next scan, not on the 50 ms tick
-        if self._rx is None and not self._fw_busy() and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms:
+        if (self._rx is None and self._sb is None and not self._fw_busy()
+                and ((ms - self._last_ms) & 0x1FFFFFFF) < self._poll_ms):
             return None
         self._last_ms = ms
         try:
             self._read(now)
+            if self._sb is not None and now - self._sb_t > RX_TIMEOUT_S:
+                self._slot_drop()       # Studio went quiet in the middle of a profile
+                print("app_profiles: slot transfer timed out")
             if self._fw is not None:
                 self._fw.tick(now)
                 self._fw_check()

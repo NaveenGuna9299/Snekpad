@@ -5,8 +5,11 @@ import type { Config } from './config'
 
 export type SyncStatus = 'no-pad' | 'sending' | 'unsent' | 'in-sync'
 
+// The Studio-only profiles never go to the pad, so changing them does not make the config "unsent".
+const padPart = (c: Config): string => JSON.stringify({ ...c, studioProfiles: undefined })
+
 export const sameConfig = (a: Config | null, b: Config | null): boolean =>
-  a === b || (a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b))
+  a === b || (a !== null && b !== null && padPart(a) === padPart(b))
 
 export function syncStatus(
   connected: boolean,

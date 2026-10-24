@@ -10,7 +10,9 @@ export const SCHEMA_VERSION = 1
 export const ROWS = 3
 export const COLS = 4
 export const KEY_COUNT = ROWS * COLS // key index = row * COLS + column
-export const MAX_PROFILES = 4 // firmware memory limit, General included
+export const MAX_PROFILES = 3 // profiles the pad keeps itself (firmware memory limit), General included
+export const MAX_STUDIO_PROFILES = 7 // more profiles that only Studio keeps: the pad gets one when its app is in focus
+export const MAX_ALL_PROFILES = MAX_PROFILES + MAX_STUDIO_PROFILES
 export const LABEL_MAX = 5 // characters that fit one OLED legend cell
 export const MAX_COMBO = 6 // keys pressed together in one shortcut
 export const MAX_STEPS = 6 // keys / shortcuts in one sequence
@@ -162,7 +164,9 @@ export const configSchema = z
         z.enum(effectIds).default(DEFAULT_EFFECT)
       )
     }),
-    profiles: z.array(profileSchema).min(1).max(MAX_PROFILES)
+    profiles: z.array(profileSchema).min(1).max(MAX_PROFILES),
+    // Profiles that only Studio keeps (never sent in a push). A config saved before they existed has none.
+    studioProfiles: z.array(profileSchema).max(MAX_STUDIO_PROFILES).default([])
   })
   .superRefine((cfg, ctx) => {
     if (cfg.profiles[0].id !== 'general') {
@@ -173,22 +177,25 @@ export const configSchema = z
       })
     }
     const ids = new Set<string>()
-    cfg.profiles.forEach((p, i) => {
-      if (ids.has(p.id))
-        ctx.addIssue({
-          code: 'custom',
-          message: `duplicate profile id "${p.id}"`,
-          path: ['profiles', i]
-        })
-      ids.add(p.id)
-      if (p.keys[FN_KEY].action.type !== 'fn') {
-        ctx.addIssue({
-          code: 'custom',
-          message: `key ${FN_KEY} must stay the FN key`,
-          path: ['profiles', i, 'keys', FN_KEY]
-        })
-      }
-    })
+    const check = (list: 'profiles' | 'studioProfiles'): void =>
+      cfg[list].forEach((p, i) => {
+        if (ids.has(p.id))
+          ctx.addIssue({
+            code: 'custom',
+            message: `duplicate profile id "${p.id}"`,
+            path: [list, i]
+          })
+        ids.add(p.id)
+        if (p.keys[FN_KEY].action.type !== 'fn') {
+          ctx.addIssue({
+            code: 'custom',
+            message: `key ${FN_KEY} must stay the FN key`,
+            path: [list, i, 'keys', FN_KEY]
+          })
+        }
+      })
+    check('profiles')
+    check('studioProfiles')
   })
 export type Config = z.infer<typeof configSchema>
 
@@ -213,8 +220,13 @@ export function migrateConfig(input: unknown): unknown {
     keys?: { action?: Raw }[]
     encoder?: { press?: Raw; pressLabel?: string }
   }
-  const cfg = input as { profiles?: RawProfile[] }
-  for (const p of cfg?.profiles ?? []) {
+  const cfg = input as { profiles?: RawProfile[]; studioProfiles?: RawProfile[] }
+  // A config saved when the pad still kept 4 profiles: the ones that no longer fit on the pad move to Studio's own list.
+  if (Array.isArray(cfg?.profiles) && cfg.profiles.length > MAX_PROFILES) {
+    const extra = cfg.profiles.splice(MAX_PROFILES)
+    cfg.studioProfiles = [...extra, ...(cfg.studioProfiles ?? [])].slice(0, MAX_STUDIO_PROFILES)
+  }
+  for (const p of [...(cfg?.profiles ?? []), ...(cfg?.studioProfiles ?? [])]) {
     const enc = p.encoder
     if (enc?.press?.type === 'layer_next') {
       const d = p.id ? KNOB_PRESS_DEFAULTS[p.id] : undefined
@@ -222,7 +234,7 @@ export function migrateConfig(input: unknown): unknown {
       enc.pressLabel = d?.label ?? ''
     }
   }
-  for (const p of cfg?.profiles ?? [])
+  for (const p of [...(cfg?.profiles ?? []), ...(cfg?.studioProfiles ?? [])])
     for (const k of p.keys ?? []) {
       const a = k.action
       if (!a || (a.type !== 'macro' && a.type !== 'sequence') || !Array.isArray(a.steps)) continue
@@ -417,9 +429,16 @@ export function defaultConfig(): Config {
       sleepMinutes: DEFAULT_SLEEP_MINUTES,
       effect: DEFAULT_EFFECT
     },
-    profiles: [general(), vscode(), terminal(), browser()]
+    profiles: [general(), vscode(), terminal()],
+    studioProfiles: [browser()]
   }
 }
+
+/** Every profile Studio knows, the pad's own first, then the Studio-only ones (the order the editor lists them). */
+export const allProfiles = (config: Config): Profile[] => [
+  ...config.profiles,
+  ...config.studioProfiles
+]
 
 /**
  * Apply per-OS differences before a config is sent to the pad. On macOS, shortcuts marked
@@ -427,6 +446,16 @@ export function defaultConfig(): Config {
  */
 export function resolveForOs(config: Config, os: 'windows' | 'macos' | 'linux'): Config {
   if (os !== 'macos') return config
+  return {
+    ...config,
+    profiles: config.profiles.map((p) => resolveProfileForOs(p, os)),
+    studioProfiles: config.studioProfiles.map((p) => resolveProfileForOs(p, os))
+  }
+}
+
+/** The same per-OS differences for one profile (the one Studio puts on the pad's slot). */
+export function resolveProfileForOs(profile: Profile, os: 'windows' | 'macos' | 'linux'): Profile {
+  if (os !== 'macos') return profile
   const swap = (keys: string[]): string[] => keys.map((k) => (k === 'CTRL' ? 'GUI' : k))
   const fix = (a: Action): Action => {
     if (a.type === 'hotkey' && a.cmdOnMac) return { ...a, keys: swap(a.keys) }
@@ -435,18 +464,33 @@ export function resolveForOs(config: Config, os: 'windows' | 'macos' | 'linux'):
     return a
   }
   return {
-    ...config,
-    profiles: config.profiles.map((p) => ({
-      ...p,
-      keys: p.keys.map((k) => ({ ...k, action: fix(k.action) })),
-      encoder: {
-        ...p.encoder,
-        cw: fix(p.encoder.cw),
-        ccw: fix(p.encoder.ccw),
-        press: fix(p.encoder.press)
-      }
-    }))
+    ...profile,
+    keys: profile.keys.map((k) => ({ ...k, action: fix(k.action) })),
+    encoder: {
+      ...profile.encoder,
+      cw: fix(profile.encoder.cw),
+      ccw: fix(profile.encoder.ccw),
+      press: fix(profile.encoder.press)
+    }
   }
+}
+
+/**
+ * Which profile an app gets: the first whose rules match, or -1. The same rules as the pad's own matching
+ * (Programs/app_profiles.py `_match`): the process name without ".exe", lower case, equal to one of the profile's
+ * program names (a trailing * means "starts with"), or a profile word anywhere in the window title.
+ */
+export function matchProfile(profiles: readonly Profile[], proc: string, title: string): number {
+  let p = proc.toLowerCase()
+  if (p.endsWith('.exe')) p = p.slice(0, -4)
+  const t = title.toLowerCase()
+  return profiles.findIndex((prof) => {
+    if (prof.id === 'general') return false // General has no rules: it is what every other app gets
+    // like the pad: the names of both systems are tried (the other system's never match)
+    const names = [...prof.match.windows, ...prof.match.macos].map((s) => s.toLowerCase())
+    if (names.some((m) => (m.endsWith('*') ? p.startsWith(m.slice(0, -1)) : p === m))) return true
+    return prof.match.titles.some((w) => w !== '' && t.includes(w.toLowerCase()))
+  })
 }
 
 /** A blank profile for "New profile". */

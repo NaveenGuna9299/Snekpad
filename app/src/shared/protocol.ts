@@ -4,7 +4,8 @@
 //   app -> pad                                   pad -> app
 //   PING                                         PONG
 //   OS<TAB>windows|macos|linux                   (no reply)
-//   APP<TAB>process<TAB>title                    (no reply)
+//   APP<TAB>process<TAB>title[<TAB>S]            (no reply; S = use the Studio slot)
+//   SLOT_BEGIN<TAB>name<TAB>knob                 OK | ERR<TAB>reason   (the Studio slot: SLOT_KEY x 15, then SLOT_END)
 //   LED<TAB>layer<TAB>key<TAB>#RRGGBB            OK | ERR<TAB>reason
 //   CFG_BEGIN<TAB>length<TAB>crc32hex            OK | ERR<TAB>reason
 //   CFG_LINE<TAB>chunk                           (no reply)
@@ -23,7 +24,8 @@ import {
   MAX_SLEEP_MINUTES,
   EFFECTS,
   type EffectId,
-  type Config
+  type Config,
+  type Profile
 } from './config'
 import { isFirmwareVersion } from './firmware'
 
@@ -64,8 +66,32 @@ export function hostOsFrom(platform: string): HostOs {
 
 export const pingLine = (): string => 'PING'
 export const osLine = (os: HostOs): string => `OS\t${os}`
-export const appLine = (proc: string, title: string): string =>
-  `APP\t${clean(proc, 40)}\t${clean(title, 60)}`
+export const appLine = (proc: string, title: string, slot = false): string =>
+  `APP\t${clean(proc, 40)}\t${clean(title, 60)}${slot ? '\tS' : ''}`
+
+/**
+ * The lines that put a profile on the pad's Studio slot (firmware 0.5.0 and later): SLOT_BEGIN, SLOT_KEY x 15 (12 keys, then
+ * the knob turned right, turned left and pressed; a sequence is followed by its SLOT_STEP lines), SLOT_END. The pad answers each with OK or ERR, so they go one at a time.
+ * Text is cleaned to what the pad can show; the action is the same JSON a config holds.
+ */
+export function slotFrames(profile: Profile): string[] {
+  const lines = [`SLOT_BEGIN\t${clean(profile.name, 12)}\t${clean(profile.encoder.label, 10)}`]
+  profile.keys.forEach((k, i) => {
+    const a = k.action
+    // A sequence goes as the key line without its steps, then one SLOT_STEP per step: the pad has no RAM to parse all of
+    // them as one block of JSON (it fails for a long sequence), and a step at a time costs nothing.
+    const action = a.type === 'sequence' ? '{"type":"sequence"}' : JSON.stringify(a)
+    lines.push(`SLOT_KEY\t${i}\t${clean(k.label, LABEL_MAX)}\t${k.color}\t${action}`)
+    if (a.type === 'sequence')
+      for (const s of a.steps) lines.push(`SLOT_STEP\t${i}\t${s.keys.join('+')}\t${s.wait}`)
+  })
+  const { cw, ccw, press } = profile.encoder
+  ;[cw, ccw, press].forEach((a, i) =>
+    lines.push(`SLOT_KEY\t${KEY_COUNT + i}\t\t#000000\t${JSON.stringify(a)}`)
+  )
+  lines.push('SLOT_END')
+  return lines
+}
 export const getCfgLine = (): string => 'GET_CFG'
 export const helloLine = (): string => 'HELLO'
 /**
@@ -263,7 +289,7 @@ export function parseEvent(line: string): PadEvent | null {
   if (kind === 'knob') return KNOB_ACTIONS.includes(a) ? { kind, action: a as KnobAction } : null
   const index = Number(a)
   if (!Number.isInteger(index) || index < 0) return null
-  if (kind === 'layer') return index < MAX_PROFILES ? { kind, index } : null
+  if (kind === 'layer') return index <= MAX_PROFILES ? { kind, index } : null // MAX_PROFILES itself is the Studio slot
   if (kind === 'key')
     return index < KEY_COUNT && (b === '0' || b === '1') ? { kind, index, down: b === '1' } : null
   return null

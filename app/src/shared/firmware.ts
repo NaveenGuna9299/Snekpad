@@ -12,6 +12,13 @@ export const REQUIRED_FIRMWARE = '0.3.3'
 /** First firmware that draws the key LED effects (settings.effect) and reports the effect it runs. */
 export const EFFECTS_FIRMWARE = '0.4.0'
 
+/** First firmware with the Studio slot: the spare layer Studio fills with the profile of the app in focus (SLOT_*). */
+export const SLOT_FIRMWARE = '0.5.0'
+
+/** True when the connected pad has the Studio slot (a pad that has not said its firmware yet does not count). */
+export const hasSlot = (device: DeviceState): boolean =>
+  device.status === 'connected' && !!device.firmware && !isNewer(SLOT_FIRMWARE, device.firmware)
+
 /** First firmware that can receive an update from Studio (it has fw_update.py and fw_boot.py). */
 export const OTA_FIRMWARE = '0.3.4'
 

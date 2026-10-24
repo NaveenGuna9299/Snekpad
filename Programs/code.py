@@ -58,7 +58,8 @@ OWNER_LINE_1 = ""
 OWNER_LINE_2 = ""
 OWNER_DATE = ""
 
-MAX_PROFILES = 4               # memory limit: General + up to 3 more (a 5th is ignored)
+MAX_PROFILES = 3               # memory limit: General + up to 2 more (a 4th is ignored). One more layer, the Studio slot,
+                               # follows them: SnekPad Studio fills it with the profile of an app that has none of its own.
 
 ENCODER_REVERSE = False        # True if the knob turns the wrong way
 ENCODER_DIVISOR = 4            # raw pulses per click; 2 if a click needs two turns, 1 if it skips
@@ -280,7 +281,8 @@ if len(PROFILES) > MAX_PROFILES:
     PROFILES = PROFILES[:MAX_PROFILES]
 
 N = len(PROFILES)
-UTIL_LAYER = N                 # the utility layer sits after the last profile
+SLOT_LAYER = N                 # the Studio slot sits after the last profile ...
+UTIL_LAYER = N + 1             # ... and the utility layer after that
 FN = KC.MO(UTIL_LAYER)         # hold the bottom-right key for the utility layer
 
 # Utility layer: bootloader, reload, LED controls, jump to a layer.
@@ -315,6 +317,14 @@ for i, p in enumerate(PROFILES):
     left, right, press, text, _ = p["knob"]   # the press label is no longer shown on the pad
     KNOB_TEXT.append(text)
     ENC_MAP.append((left, right, press))
+
+# The Studio slot starts out as General (the very same lists: no extra RAM) until Studio sends it a profile.
+keymap.append(keymap[0])
+LABELS.append(LABELS[0])
+COLORS.append(COLORS[0])
+LAYER_NAMES.append("Studio")
+KNOB_TEXT.append(KNOB_TEXT[0])
+ENC_MAP.append(ENC_MAP[0])
 
 keymap.append(UTILITY_KEYS)
 LABELS.append(UTILITY_LABELS)
@@ -354,7 +364,7 @@ if ENABLE_ENCODER:
 # ---------------------------------------------------------------- RGB
 if ENABLE_RGB:
     leds.set_colors(COLORS)
-    leds.profile_layers = N         # a colour flash when the profile changes (not for the utility layer)
+    leds.profile_layers = N + 1     # a colour flash when the profile changes (not for the utility layer); the slot is one
 
 # ---------------------------------------------------------------- focused app
 apps = None
@@ -378,7 +388,10 @@ if ENABLE_APP_PROFILES:
             })
         return json.dumps({"h": OLED_HEIGHT, "s": SLEEP_MINUTES, "e": leds.effect if leds else "static", "p": profs})
 
-    apps = AppProfiles([(p["name"], p["proc"], p["title"]) for p in PROFILES], general=0, view=live_view, leds=leds)
+    # the slot is the last entry: it matches no app by itself, Studio sends APP lines that name it (app_profiles.py)
+    apps = AppProfiles([(p["name"], p["proc"], p["title"]) for p in PROFILES] + [("Studio", (), ())],
+                       general=0, view=live_view, leds=leds)
+    apps.slot = (SLOT_LAYER, keymap, LABELS, COLORS, LAYER_NAMES, KNOB_TEXT, ENC_MAP, FN)
     keyboard.modules.append(apps)
     if dev_tools is not None and encoder is not None:
         encoder.apps = apps     # knob events and the key test's silence
@@ -505,7 +518,7 @@ if ENABLE_WATCHDOG:
 
 # ---------------------------------------------------------------- go
 gc.collect()
-print("layers:", N + 1, "free RAM:", gc.mem_free())
+print("layers:", N + 2, "free RAM:", gc.mem_free())
 
 if __name__ == "__main__":
     keyboard.go()

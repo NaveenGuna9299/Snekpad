@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  allProfiles,
   blankProfile,
   defaultConfig,
   FN_KEY,
+  MAX_ALL_PROFILES,
   MAX_PROFILES,
+  MAX_STUDIO_PROFILES,
   type KeyConfig,
   type Profile
 } from '../../shared/config'
@@ -24,9 +27,11 @@ import { KeyTest } from './components/KeyTest'
 import { Effects } from './components/Effects'
 import { FirmwareNotice } from './components/FirmwareNotice'
 import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
-import { updateOffer } from '../../shared/firmware'
+import { hasSlot, updateOffer } from '../../shared/firmware'
 import { isMusicEffect } from '../../shared/config'
 import type { Preset } from './lib/presets'
+
+const newProfileId = (): string => `profile${Date.now().toString(36)}`
 
 function App(): React.JSX.Element {
   const { config, update, history, device, pressed, sync, push, pushing, message, flash, dismiss } =
@@ -59,14 +64,26 @@ function App(): React.JSX.Element {
   }
   const [browsing, setBrowsing] = useState(false)
 
+  // `selectedProfile` counts the pad's own profiles first, then the Studio-only ones
   const editProfile = useCallback(
     (fn: (p: Profile) => Profile) =>
-      update((c) => ({
-        ...c,
-        profiles: c.profiles.map((p, i) => (i === selectedProfile ? fn(p) : p))
-      })),
+      update((c) => {
+        const own = c.profiles.length
+        return selectedProfile < own
+          ? { ...c, profiles: c.profiles.map((p, i) => (i === selectedProfile ? fn(p) : p)) }
+          : {
+              ...c,
+              studioProfiles: c.studioProfiles.map((p, i) =>
+                i === selectedProfile - own ? fn(p) : p
+              )
+            }
+      }),
     [update, selectedProfile]
   )
+  // the live colour preview is for the pad's own profiles: a Studio-only profile is not on the pad until its app is in focus
+  const previewLed = (layer: number, key: number, color: string): void => {
+    if (config && layer < config.profiles.length) void window.api.previewLed(layer, key, color)
+  }
 
   const clipboard = useRef<KeyConfig | null>(null)
   const sel = selection.kind === 'key' ? selection.index : -1
@@ -77,16 +94,16 @@ function App(): React.JSX.Element {
       ;[keys[from], keys[to]] = [keys[to], keys[from]]
       return { ...p, keys }
     })
-    const keys = config?.profiles[selectedProfile]?.keys
+    const keys = config && allProfiles(config)[selectedProfile]?.keys
     if (keys) {
-      void window.api.previewLed(selectedProfile, from, keys[to].color)
-      void window.api.previewLed(selectedProfile, to, keys[from].color)
+      previewLed(selectedProfile, from, keys[to].color)
+      previewLed(selectedProfile, to, keys[from].color)
     }
     setSelection({ kind: 'key', index: to })
     flash(`Swapped keys ${from + 1} and ${to + 1}.`, false, true)
   }
   const copyKey = (): void => {
-    const key = config?.profiles[selectedProfile]?.keys[sel]
+    const key = config && allProfiles(config)[selectedProfile]?.keys[sel]
     if (!key || sel === FN_KEY) return
     clipboard.current = structuredClone(key)
     flash(`Copied key ${sel + 1}.`)
@@ -98,7 +115,7 @@ function App(): React.JSX.Element {
       ...p,
       keys: p.keys.map((k, i) => (i === sel ? structuredClone(key) : k))
     }))
-    void window.api.previewLed(selectedProfile, sel, key.color)
+    previewLed(selectedProfile, sel, key.color)
     flash(`Pasted onto key ${sel + 1}.`, false, true)
   }
 
@@ -140,37 +157,73 @@ function App(): React.JSX.Element {
   )
 
   if (!config) return <div className="p-6 text-muted">Loading…</div>
-  const profile = config.profiles[Math.min(selectedProfile, config.profiles.length - 1)]
+  const everyProfile = allProfiles(config)
+  const profile = everyProfile[Math.min(selectedProfile, everyProfile.length - 1)]
+
+  // A new profile goes on the pad while it has room (it then works without Studio), else it is a Studio-only one.
+  // It can be moved to the other group afterwards.
+  const putProfile = (next: Profile): void => {
+    if (everyProfile.length >= MAX_ALL_PROFILES) return
+    const toPad = config.profiles.length < MAX_PROFILES
+    update((c) =>
+      toPad
+        ? { ...c, profiles: [...c.profiles, next] }
+        : { ...c, studioProfiles: [...c.studioProfiles, next] }
+    )
+    setSelectedProfile(toPad ? config.profiles.length : everyProfile.length)
+  }
 
   const addProfile = (source?: Profile): void => {
-    if (config.profiles.length >= MAX_PROFILES) return
-    const n = config.profiles.length
-    const id = `profile${Date.now().toString(36)}`
-    const next = source
-      ? { ...structuredClone(source), id, name: `${source.name} 2`.slice(0, 12) }
-      : blankProfile(id, `Profile ${n}`)
-    update((c) => ({ ...c, profiles: [...c.profiles, next] }))
-    setSelectedProfile(n)
+    const id = newProfileId()
+    putProfile(
+      source
+        ? { ...structuredClone(source), id, name: `${source.name} 2`.slice(0, 12) }
+        : blankProfile(id, `Profile ${everyProfile.length}`)
+    )
   }
 
   const deleteProfile = (): void => {
     if (profile.id === 'general') return
-    update((c) => ({ ...c, profiles: c.profiles.filter((p) => p.id !== profile.id) }))
+    update((c) => ({
+      ...c,
+      profiles: c.profiles.filter((p) => p.id !== profile.id),
+      studioProfiles: c.studioProfiles.filter((p) => p.id !== profile.id)
+    }))
     setSelectedProfile(0)
     flash(`Deleted "${profile.name}".`, false, true)
   }
 
+  const moveProfile = (): void => {
+    if (profile.id === 'general') return
+    const onPad = selectedProfile < config.profiles.length
+    if (onPad && config.studioProfiles.length >= MAX_STUDIO_PROFILES) return
+    if (!onPad && config.profiles.length >= MAX_PROFILES) return
+    update((c) =>
+      onPad
+        ? {
+            ...c,
+            profiles: c.profiles.filter((p) => p.id !== profile.id),
+            studioProfiles: [...c.studioProfiles, profile]
+          }
+        : {
+            ...c,
+            studioProfiles: c.studioProfiles.filter((p) => p.id !== profile.id),
+            profiles: [...c.profiles, profile]
+          }
+    )
+    // it is now the last of its new group
+    setSelectedProfile(onPad ? everyProfile.length - 1 : config.profiles.length)
+    flash(
+      onPad
+        ? `"${profile.name}" is now Studio only. Send to the pad to take it off the pad.`
+        : `"${profile.name}" is now on the pad. Send to the pad to put it there.`,
+      false,
+      true
+    )
+  }
+
   const addPreset = (preset: Preset): void => {
-    if (config.profiles.length >= MAX_PROFILES) return
-    const n = config.profiles.length
-    update((c) => ({
-      ...c,
-      profiles: [
-        ...c.profiles,
-        { ...structuredClone(preset.profile), id: `profile${Date.now().toString(36)}` }
-      ]
-    }))
-    setSelectedProfile(n)
+    putProfile({ ...structuredClone(preset.profile), id: newProfileId() })
     setBrowsing(false)
   }
 
@@ -185,13 +238,26 @@ function App(): React.JSX.Element {
       ...p,
       keys: p.keys.map((k, i) => (i === index ? { ...k, ...patch } : k))
     }))
-    if (patch.color) void window.api.previewLed(selectedProfile, index, patch.color)
+    if (patch.color) previewLed(selectedProfile, index, patch.color)
   }
 
-  // the profile the pad itself says it is running (only pads with protocol 2 say)
+  // The profile the pad itself says it is running (only pads with protocol 2 say). The pad's number for the Studio slot is
+  // the number of its own profiles; which Studio profile is on it, the main process knows (device.slot).
+  const slotLayer = config.profiles.length
   const padProfile =
-    device.activeProfile === undefined ? undefined : config.profiles[device.activeProfile]
-  const selectedProfileIndex = config.profiles.indexOf(profile)
+    device.activeProfile === undefined
+      ? undefined
+      : device.activeProfile === slotLayer
+        ? config.studioProfiles.find((p) => p.id === device.slot)
+        : config.profiles[device.activeProfile]
+  // the pad's own number for the selected profile (the slot's for a Studio profile that is on it), -1 if it is not on the pad
+  const selectedPadLayer = config.profiles.includes(profile)
+    ? config.profiles.indexOf(profile)
+    : profile.id === device.slot
+      ? slotLayer
+      : -1
+  const activeStudio =
+    device.activeProfile === slotLayer && device.slot !== undefined ? device.slot : undefined
   const setMockPad = (on: boolean): void => {
     setMock(on)
     void window.api.useMock(on)
@@ -258,7 +324,7 @@ function App(): React.JSX.Element {
           padProfileName={padProfile?.name}
           pressed={pressed}
           device={device}
-          profileCount={config.profiles.length}
+          profileCount={everyProfile.length}
           onOpen={() => setView('editor')}
           onEffects={() => setView('effects')}
           onTestKeys={__DEV_TOOLS__ ? () => setView('test') : undefined}
@@ -295,13 +361,18 @@ function App(): React.JSX.Element {
           <div className="flex min-h-0 flex-1">
             {sidebarOpen && (
               <Sidebar
-                activeOnPad={device.activeProfile}
+                activeOnPad={device.activeProfile === slotLayer ? undefined : device.activeProfile}
+                activeStudio={activeStudio}
+                slotSupported={hasSlot(device) || device.status !== 'connected'}
+                slotError={device.slotError}
                 profiles={config.profiles}
-                selected={config.profiles.indexOf(profile)}
+                studioProfiles={config.studioProfiles}
+                selected={everyProfile.indexOf(profile)}
                 onSelect={setSelectedProfile}
                 onAdd={() => addProfile()}
                 onDuplicate={() => addProfile(profile)}
                 onDelete={deleteProfile}
+                onMove={moveProfile}
                 onRename={(name) => editProfile((p) => ({ ...p, name }))}
                 onMore={() => setBrowsing(true)}
               />
@@ -313,7 +384,11 @@ function App(): React.JSX.Element {
                 selection={selection}
                 onSelect={setSelection}
                 onSwap={swapKeys}
-                pressed={device.activeProfile === selectedProfileIndex ? pressed : undefined}
+                pressed={
+                  selectedPadLayer >= 0 && device.activeProfile === selectedPadLayer
+                    ? pressed
+                    : undefined
+                }
               />
               <p className="text-sm text-muted" aria-live="polite">
                 {selectedKey
@@ -350,7 +425,7 @@ function App(): React.JSX.Element {
       {browsing && (
         <PresetBrowser
           current={profile}
-          profileCount={config.profiles.length}
+          profileCount={everyProfile.length}
           currentName={profile.name}
           canReplace={profile.id !== 'general'}
           onAdd={addPreset}

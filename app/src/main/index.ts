@@ -174,7 +174,10 @@ function registerIpc(): void {
 
   ipcMain.handle('config:save', (_e, config: Config) => {
     const v = validateConfig(config)
-    if (v.ok) saveConfig(v.config)
+    if (v.ok) {
+      saveConfig(v.config)
+      device.setConfig(v.config) // the Studio-only profiles are kept here: the pad gets one when its app is in focus
+    }
     return v
   })
 
@@ -182,6 +185,7 @@ function registerIpc(): void {
     const v = validateConfig(config)
     if (!v.ok) return { ok: false, error: v.errors.join('; ') }
     saveConfig(v.config)
+    device.setConfig(v.config)
     const r = await device.push(v.config)
     if (r.ok) backupPushed(v.config)
     return r
@@ -329,6 +333,7 @@ app.whenReady().then(() => {
   // At login the app stays out of Windows' way: no window or renderer is created, and the pad
   // connection and focus watcher wait until the desktop has settled.
   const startWork = (): void => {
+    device.setConfig(loadConfig()) // so the Studio-only profiles work from the tray, before any window is opened
     device.start()
     focus.start()
   }

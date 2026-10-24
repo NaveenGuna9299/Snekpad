@@ -2,7 +2,14 @@
 // the few things the UI needs (push config, live LED preview, focused-app events).
 
 import { EventEmitter } from 'events'
-import { resolveForOs, type Config } from '../../shared/config'
+import {
+  matchProfile,
+  resolveForOs,
+  resolveProfileForOs,
+  type Config,
+  type Profile
+} from '../../shared/config'
+import { hasSlot } from '../../shared/firmware'
 import type { DeviceState, PullResult, PushResult } from '../../shared/api'
 import type {
   FirmwareBundle,
@@ -15,6 +22,7 @@ import {
   musicLine,
   osLine,
   hostOsFrom,
+  slotFrames,
   testLine,
   type PadEvent
 } from '../../shared/protocol'
@@ -30,7 +38,11 @@ const TEST_EVERY_MS = 1000 // the pad leaves test mode about 3 s after the last 
 const HELLO_TRIES = 3 // after this many unanswered HELLOs the pad runs firmware from before protocol 2
 const HELLO_RESTART_TRIES = 60 // a pad that restarted (after a push or a firmware update) gets this many seconds to answer
 const RESTART_GRACE_MS = 1500 // the pad restarts about half a second after it says OK: greet only after that
+const SLOT_RETRY_MS = 10000 // after the pad refused a Studio profile, wait this long before trying again
 const NOT_CONNECTED = { ok: false, error: 'pad not connected' } as const
+
+/** What the pad's slot holds of a profile: everything it shows or does, but not which apps it belongs to. */
+const fingerprint = (p: Profile): string => JSON.stringify([p.name, p.keys, p.encoder])
 
 export class DeviceManager extends EventEmitter {
   state: DeviceState = { status: 'disconnected' }
@@ -42,6 +54,15 @@ export class DeviceManager extends EventEmitter {
   private scanning = false
   private autoScan = true
   readonly os = hostOsFrom(process.platform) // the computer the pad is plugged into
+  // The Studio slot: the profiles Studio keeps itself, and what the pad's slot holds right now. The pad forgets the slot
+  // whenever it restarts or reconnects, so `slotHeld` is cleared then and the profile is sent again.
+  private padProfiles: Profile[] = []
+  private studioProfiles: Profile[] = []
+  private slotHeld: string | null = null // fingerprint of the profile on the pad's slot (null = none known)
+  private slotBusy = false // a slot is being sent: the focus lines go out without it meanwhile
+  private slotRetryAt = 0 // after a failure, wait a little before sending it again
+  private slotRefused: string | null = null // fingerprint of a profile the pad said is too big for it
+  private lastFocus: { proc: string; title: string } | null = null
 
   start(): void {
     this.scan()
@@ -81,11 +102,15 @@ export class DeviceManager extends EventEmitter {
       })
     })
     session.onEvent((e) => this.onPadEvent(session, e))
+    this.slotHeld = null
+    this.slotBusy = false
+    this.slotRefused = null
     link.onClose((reason) => {
       if (this.link !== link) return
       this.clearHelloTimer()
       this.link = null
       this.session = null
+      this.slotHeld = null
       // a pad restarting for a firmware update is not an error
       this.setState({ status: 'disconnected', error: reason === RESTARTING ? undefined : reason })
       if (reason === RESTARTING && link instanceof MockLink) this.restartMock(link)
@@ -123,13 +148,17 @@ export class DeviceManager extends EventEmitter {
   private afterRestart(session: DeviceSession): void {
     if (this.session !== session) return
     this.clearHelloTimer()
+    this.slotHeld = null // the slot is RAM: a restarted pad has none
+    this.slotRefused = null // and its RAM is free again
     this.setState({
       ...this.state,
       events: undefined,
       firmware: undefined,
       dev: undefined,
       legacy: undefined,
-      activeProfile: undefined
+      activeProfile: undefined,
+      slot: undefined,
+      slotError: undefined
     })
     this.helloTimer = setTimeout(
       () => this.greet(session, 0, HELLO_RESTART_TRIES),
@@ -174,10 +203,32 @@ export class DeviceManager extends EventEmitter {
     }
   }
 
+  /** The profiles Studio can put on the pad: called when the saved config loads and whenever it changes. */
+  setConfig(config: Config): void {
+    this.padProfiles = config.profiles
+    this.studioProfiles = config.studioProfiles
+    // a profile that was edited is sent again the next time its app is in focus (the fingerprint differs)
+    if (
+      this.slotHeld !== null &&
+      !this.studioProfiles.some((p) => fingerprint(p) === this.slotHeld)
+    )
+      this.slotHeld = null
+    // a profile the pad found too big was edited (or deleted): it gets another try, and the warning goes
+    if (
+      this.slotRefused !== null &&
+      !this.studioProfiles.some((p) => fingerprint(p) === this.slotRefused)
+    ) {
+      this.slotRefused = null
+      if (this.state.slotError) this.setState({ ...this.state, slotError: undefined })
+    }
+  }
+
   async push(config: Config): Promise<PushResult> {
     const session = this.session
     if (!session) return NOT_CONNECTED
-    const r = await session.push(JSON.stringify(resolveForOs(config, this.os)))
+    // the pad only gets its own profiles; the Studio-only ones stay here
+    const forPad = { ...resolveForOs(config, this.os), studioProfiles: undefined }
+    const r = await session.push(JSON.stringify(forPad))
     if (r.ok) this.afterRestart(session) // the pad restarts to use the new config
     return r
   }
@@ -206,10 +257,59 @@ export class DeviceManager extends EventEmitter {
     this.testTimer = setInterval(() => this.session?.send(testLine()), TEST_EVERY_MS)
   }
 
-  /** Tell the pad which app has focus (for automatic profile switching). Paused during a firmware update. */
+  /**
+   * Tell the pad which app has focus (for automatic profile switching). Paused during a firmware update.
+   * The pad's own profiles come first (it matches those itself). If the app has none there but has a Studio-only profile,
+   * that profile goes onto the pad's slot (only when it is not there already) and the line says to use the slot.
+   */
   sendApp(proc: string, title: string): void {
-    if (this.session?.updating) return
-    this.session?.send(appLine(proc, title))
+    const session = this.session
+    if (!session || session.updating) return
+    this.lastFocus = { proc, title }
+    const profile = this.studioProfileFor(proc, title)
+    if (!profile || !hasSlot(this.state)) return session.send(appLine(proc, title))
+
+    const held = fingerprint(profile)
+    if (this.slotHeld === held) {
+      session.send(appLine(proc, title, true))
+      if (this.state.slot !== profile.id) this.setState({ ...this.state, slot: profile.id })
+      return
+    }
+    // Being sent, or refused (this very profile was too big: it is tried again when it changes, or the pad restarts) or just
+    // failed (tried again after a pause): until the profile is there the pad matches by itself (General).
+    if (this.slotBusy || this.slotRefused === held || Date.now() < this.slotRetryAt)
+      return session.send(appLine(proc, title))
+    this.slotBusy = true
+    void session.loadSlot(slotFrames(resolveProfileForOs(profile, this.os))).then((r) => {
+      this.slotBusy = false
+      if (this.session !== session) return // the pad went away meanwhile
+      if (r.ok) {
+        this.slotHeld = held
+        this.setState({ ...this.state, slot: profile.id, slotError: undefined })
+        const f = this.lastFocus // the app in focus now, which may no longer be the one that asked for this profile
+        if (f) this.sendApp(f.proc, f.title)
+      } else {
+        this.slotHeld = null
+        // not enough RAM for its macros: the same profile would fail again, so wait until it is changed
+        const tooBig = /too big|memory/i.test(r.error)
+        if (tooBig) this.slotRefused = held
+        else this.slotRetryAt = Date.now() + SLOT_RETRY_MS
+        this.setState({
+          ...this.state,
+          slot: undefined,
+          slotError: { id: profile.id, reason: tooBig ? 'too big' : r.error }
+        })
+        console.warn('[slot] the pad refused the profile:', r.error)
+      }
+    })
+    session.send(appLine(proc, title))
+  }
+
+  private studioProfileFor(proc: string, title: string): Profile | null {
+    if (this.studioProfiles.length === 0) return null
+    if (matchProfile(this.padProfiles, proc, title) >= 0) return null // the pad has a profile of its own for this app
+    const i = matchProfile(this.studioProfiles, proc, title)
+    return i >= 0 ? this.studioProfiles[i] : null
   }
 
   /** The music levels for the pad's Equalizer and Beat pulse effects. Dropped during a firmware update. */

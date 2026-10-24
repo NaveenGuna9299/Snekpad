@@ -7,7 +7,7 @@ One message per line, `\n` terminated, fields separated by TAB. ASCII only.
 | -------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `PING`                                 | `PONG`                                                       | Used to find the data port (the console port never answers). Implemented in firmware.                                                                                                                                                                                                                                                                                                                                                         |
 | `OS<TAB>windows` (or `macos`, `linux`) | none                                                         | Sent once right after the app connects. The pad stores it in `AppProfiles.host_os`. The app already swaps CTRL for GUI in "use Cmd on macOS" shortcuts before pushing a config on a Mac.                                                                                                                                                                                                                                                      |
-| `APP<TAB>process<TAB>title`            | none                                                         | Focused app. Resend about every 1.5 s as a heartbeat; the pad forgets the app after 5 s of silence. Implemented in firmware.                                                                                                                                                                                                                                                                                                                  |
+| `APP<TAB>process<TAB>title[<TAB>S]`    | none                                                         | Focused app. Resend about every 1.5 s as a heartbeat; the pad forgets the app after 5 s of silence. Implemented in firmware. A fourth field `S` (firmware 0.5.0) means "use the Studio slot", see "The Studio slot" below.                                                                                                                                                                                                                    |
 | `LED<TAB>layer<TAB>key<TAB>#RRGGBB`    | `OK` / `ERR<TAB>reason`                                      | Live colour preview, not saved. `key` is 0-11 (row * 4 + column). Firmware: call `RgbKeys.set_key`.                                                                                                                                                                                                                                                                                                                                           |
 | `CFG_BEGIN<TAB>length<TAB>crc32hex`    | `OK` / `ERR<TAB>reason`                                      | Start of a config transfer. `length` = characters of compact JSON, `crc32hex` = 8 lower-case hex digits (zlib CRC-32).                                                                                                                                                                                                                                                                                                                        |
 | `CFG_LINE<TAB>chunk`                   | none                                                         | Up to 160 characters of the JSON per line, in order.                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -33,7 +33,7 @@ Rules both sides follow:
 - `EVT` and `HELLO` lines can arrive at any moment, even in the middle of a request. The app handles them before it matches replies, so they are never mistaken for an `OK` or `ERR`.
 - The pad sends events only after `HELLO`, never while a config transfer is running, and never to a host that has closed the port. It keeps at most 24 queued events and drops them (never blocks the keys) when the host has left more than 256 bytes unread.
 - Events are a courtesy: if sending one fails, the pad stops sending events and keeps switching profiles.
-- Lines the app cannot parse, or values out of range (`layer` above 3, `key` above 11), are dropped.
+- Lines the app cannot parse, or values out of range (`layer` above 3, `key` above 11), are dropped. (`layer` 3 is the Studio slot.)
 - The app asks again with `HELLO` each time it connects, so a pad that stopped sending events starts again. Repeating `HELLO` is harmless: the pad answers again and re-reports its current profile.
 - The firmware field is optional: pads from before it existed answer `HELLO<TAB>2`, and the app treats them as older than any numbered firmware. A firmware field that is not three dot-separated numbers is ignored. A pad that never answers `HELLO` runs firmware from before protocol 2.
 - The app compares the firmware version with the one it needs (`REQUIRED_FIRMWARE` in `src/shared/firmware.ts`, bumped only when the app starts to rely on a firmware change) and shows a warning when the pad is older. The pad's own number is `FIRMWARE_VERSION` in `Programs/app_profiles.py`; bump it with every firmware change.
@@ -140,5 +140,37 @@ The direction and the clicks-per-step are settings in the firmware's `code.py`, 
 The old `{ "type": "layer_next" }` press action (a press stepped to the next profile) is no longer used. The app converts
 it when it loads an old config, and the pad treats it as "nothing" if it still receives one.
 
-Limits: at most 4 profiles (General first), 12 keys per profile, labels up to 5 characters.
-The JSON shape is `Config` in `src/shared/config.ts`; the starter config is about 5.3 KB.
+Limits: at most 3 profiles on the pad (General first; a config saved by an older app with 4 is still accepted, the pad runs
+the first 3), 12 keys per profile, labels up to 5 characters. Studio keeps up to 7 more profiles of its own
+(`studioProfiles`, never sent in a push) and puts one of them on the pad's Studio slot when its app is in focus, see below.
+The JSON shape is `Config` in `src/shared/config.ts`; the starter config is about 4 KB.
+
+## The Studio slot (`SLOT_*`, firmware 0.5.0 and later)
+
+The pad has room for 3 profiles of its own. Studio keeps up to 7 more and puts the one that fits the app in focus on a
+spare layer, the **slot**. The slot is layer `N` (right after the pad's own `N` profiles; the utility layer follows it).
+It starts as General (the very same lists, so it costs no RAM) and is lost at every restart: Studio sends it again after
+each connect and after each restart of the pad.
+
+| App sends                                              | Pad replies             | Notes                                                                                                                                                                                                                    |
+| ------------------------------------------------------ | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SLOT_BEGIN<TAB>name<TAB>knob text`                    | `OK` / `ERR<TAB>reason` | Starts a new slot profile and lets go of the old one at once (the pad has no RAM for both). `name` up to 12 characters, `knob text` up to 10.                                                                            |
+| `SLOT_KEY<TAB>n<TAB>label<TAB>#RRGGBB<TAB>action JSON` | `OK` / `ERR<TAB>reason` | `n` 0-11: a key (label up to 5 characters, colour, action). `n` 12, 13, 14: the knob turned right, turned left, pressed (label and colour are ignored). The action JSON is the same as in a config and is built at once. |
+| `SLOT_END`                                             | `OK` / `ERR<TAB>reason` | All 15 `SLOT_KEY` lines must have arrived (`profile incomplete` otherwise). Only now does the slot change.                                                                                                               |
+| `APP<TAB>process<TAB>title<TAB>S`                      | none                    | The same `APP` line as always, with a fourth field `S`: use the slot for this app. Ignored while the slot is empty (the pad then matches by itself). Without `S` nothing changes.                                        |
+
+- A **sequence** is sent as `SLOT_KEY` with the action `{"type":"sequence"}` (no steps) followed by one
+  `SLOT_STEP<TAB>n<TAB>KEY+KEY<TAB>pause` line per step (`n` is the key, the keys are joined with `+`, the pause is
+  0 to 2000 ms and is only used when another step follows). The pad builds the macro when the next key or `SLOT_END`
+  arrives. This is not for looks: parsing a long sequence as one block of JSON needs several KB of RAM for a moment,
+  which the pad does not have (measured on a real pad: a 6-step sequence of two-key shortcuts failed on its second
+  key), while a step at a time needs next to nothing. A sequence on the knob (`n` 12 to 14) is refused.
+- Studio sends one line at a time and waits for each `OK`. The pad reads its port on every scan while a slot arrives, and
+  holds back `EVT` lines until it is complete. A transfer that goes quiet for 3 s is dropped.
+- Any `ERR` leaves the slot as General (never half a profile), and so does a transfer that was cut off. A stray `SLOT_*`
+  line while no transfer is open is refused and does not touch a finished slot.
+- Studio decides which profile an app gets: the pad's own 3 profiles come first (the pad matches them itself), then the
+  Studio-only profiles in order. It sends the slot only when the profile changed, then the `APP` line with `S`.
+- `EVT<TAB>layer<TAB>N` (the slot's number) means a Studio profile is on the pad; which one is Studio's own knowledge.
+- The firmware part is `AppProfiles._slot_cmd` and `config_loader.SlotBuilder`;
+  `Programs/tests/test_slot.py` checks it on a normal Python.

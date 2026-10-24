@@ -117,7 +117,9 @@ function Pad-Put([string]$local, [string]$remote) {
 Write-Host "Building..."
 $buildArgs = @('--mpy-cross', $MpyCross)
 if ($Dev) { $buildArgs += '--dev' }
-& python (Join-Path $here 'build_mpy.py') @buildArgs
+# On Windows "python" can be the Microsoft Store stub that only prints a message; the py launcher is the real install.
+if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 (Join-Path $here 'build_mpy.py') @buildArgs }
+else { & python (Join-Path $here 'build_mpy.py') @buildArgs }
 if ($LASTEXITCODE) { throw "build_mpy.py failed" }
 $expected = if ($Dev) { $files + 'dev_tools.mpy' } else { $files }
 foreach ($f in $expected) { if (-not (Test-Path (Join-Path $build $f))) { throw "Build is missing $f" } }

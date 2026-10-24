@@ -30,7 +30,7 @@ except ImportError:
 PATH = "/config.json"
 TMP = "/config.json.tmp"       # complete new file, until it replaces PATH
 SCHEMA_VERSION = 1
-MAX_PROFILES = 4
+MAX_PROFILES = 4               # still accepted so a config saved by an older app loads; code.py runs the first 3 (+ the Studio slot)
 KEYS = 12
 MAX_BYTES = 24000              # bigger than any real config; guards RAM
 DEFAULT_SLEEP_MINUTES = 2      # settings.sleepMinutes when the config has none (an older app)
@@ -296,6 +296,87 @@ def build_profiles(cfg):
                   enc["label"], enc.get("pressLabel", "")),
         ))
     return out
+
+
+class SlotBuilder:
+    """The profile that SnekPad Studio sends for an app that has none of its own on the pad, built one line at a time.
+
+    Studio keeps more profiles than the pad has room for and sends the one that fits the app in focus (SLOT_BEGIN,
+    SLOT_KEY x 15, SLOT_END; see app_profiles.py). Each key is built as its line arrives, so the pad never holds the
+    text of a whole profile. Keys 0-11 are the pad's keys (label, colour, action), 12-14 the knob (turn right, turn
+    left, press; their label and colour are not used).
+
+    A sequence is sent as {"type":"sequence"} (no steps) and then one SLOT_STEP line per step. Parsing all the steps as one
+    block of JSON needs several KB of RAM for a moment, which the pad does not have; a step at a time needs next to
+    nothing, and the macro is made when the next key (or the end) arrives."""
+
+    COUNT = KEYS + 3
+
+    def __init__(self, name, knob_text):
+        self.name = name[:12] or "Studio"
+        self.knob_text = knob_text[:10]
+        self.keys = [None] * KEYS
+        self.labels = [""] * KEYS
+        self.colors = [0] * KEYS
+        self.knob = [None] * 3
+        self.got = 0
+        self.seq = -1       # the key whose steps are arriving, -1 = none
+        self.acts = None    # the macro steps so far
+        self.wait = 0       # pause after the last step so far (only used if another step follows)
+
+    def _store(self, index, action):
+        if index < KEYS:
+            if self.keys[index] is None:
+                self.got += 1
+            self.keys[index] = action
+        else:
+            if self.knob[index - KEYS] is None:
+                self.got += 1
+            self.knob[index - KEYS] = action
+
+    def _end_seq(self):
+        if self.seq >= 0:
+            index, acts = self.seq, self.acts
+            self.seq = -1
+            self.acts = None
+            if not acts:
+                raise ValueError("empty sequence")
+            self._store(index, KC.MACRO(*acts))
+
+    def add(self, index, label, color, action_text):
+        self._end_seq()
+        if not 0 <= index < self.COUNT:
+            raise ValueError("bad key number")
+        a = json.loads(action_text)
+        if a["type"] == "sequence" and "steps" not in a:
+            if index >= KEYS:
+                raise ValueError("no sequence on the knob")
+            self.seq = index
+            self.acts = []
+            self.wait = 0
+        else:
+            self._store(index, _action(a))
+        if index < KEYS:
+            self.labels[index] = label[:5]
+            self.colors[index] = _rgb(color)
+
+    def step(self, index, keys, wait):
+        """One step of the sequence that SLOT_KEY just announced: keys joined with '+', pause after it in ms."""
+        if index != self.seq:
+            raise ValueError("no sequence")
+        pause = int(wait)
+        if not 0 <= pause <= 2000:
+            raise ValueError("bad pause")
+        if self.wait:
+            self.acts.append(Delay(self.wait))      # same rule as a pushed sequence: a pause only between steps
+        self.acts.extend(_hold(keys.split("+")))
+        self.wait = pause
+
+    def finish(self):
+        self._end_seq()
+        if self.got != self.COUNT:
+            raise ValueError("profile incomplete")
+        return self
 
 
 def level_for(brightness, levels):

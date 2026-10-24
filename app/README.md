@@ -35,6 +35,17 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
   (asks twice; it starts the uninstaller that sits next to the app, so it works even when Windows' own list of installed apps does not
   show Studio yet). The
   **Profiles** button hides the profile list to give the pad more room.
+- **Ten profiles: 3 on the pad, 7 only in Studio.** The list has two groups. **On the pad** (General and two more) are
+  kept by the pad itself, so they work with Studio closed and are sent with **Push to pad**. **Studio only** (up to
+  seven) stay in Studio and are never pushed: when an app with one of them comes to the front, Studio puts that profile
+  on the pad's spare "Studio slot" (about a second the first time, then it is already there) and the pad switches to
+  it, marked "On pad". The pad's own profiles are tried first, then the Studio-only ones in list order, then General.
+  **New** and **Copy** fill the pad's group first; **Move to Studio only / Move to the pad** changes a profile's
+  group (General stays on the pad). Studio-only profiles need Studio running (the tray is enough) and pad firmware
+  0.5.0; with older firmware the list warns about it and those apps get General. They have no live colour preview
+  while they are not on the pad, and editing one does not make the pad "not up to date". A config saved when the pad
+  still held four profiles keeps the first three on the pad and moves the fourth to Studio only. Details:
+  [PROTOCOL.md](PROTOCOL.md#the-studio-slot-slot_-firmware-050-and-later).
 - **Keys.** Pick the action type with the buttons in the inspector. A sequence lets you re-record a step and move steps
   up or down. Drag a key onto another to swap them (the FN key, bottom right, always stays put). Deleting a profile,
   restoring the starter profiles, pasting and swapping show a message with **Undo**.
@@ -263,7 +274,7 @@ profiles in `code.py`.
 ## Layout
 
 ```
-src/shared/config.ts     config types, limits (4 profiles, 3x4 keys, 5-char labels), validation, starter profiles
+src/shared/config.ts     config types, limits (3 pad + 7 Studio-only profiles, 3x4 keys, 5-char labels), validation, starter profiles
 src/shared/protocol.ts   serial line protocol: framing, CRC32, reply parsing, HELLO / EVT parsing, config receiver
 src/shared/firmware.ts   the firmware version the app needs and how a pad's reported version is judged
 src/shared/music.ts      MusicAnalyzer: the sound's frequency picture -> four band levels and a beat (0 to 63)
