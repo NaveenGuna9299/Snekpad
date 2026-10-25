@@ -8,16 +8,16 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 ## Download
 
-SnekPad Studio v1.2.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+SnekPad Studio v1.3.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
 | OS                      | Download                                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows                 | [SnekPad-Studio-Setup-1.2.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-Studio-Setup-1.2.0.exe)                       |
-| Windows (portable)      | [SnekPad-Studio-1.2.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-Studio-1.2.0-windows-portable.zip) |
-| macOS                   | [snekpad-studio-1.2.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio-1.2.0.dmg)                                   |
-| Linux (any distro)      | [snekpad-studio-1.2.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio-1.2.0.AppImage)                         |
-| Linux (Debian / Ubuntu) | [snekpad-studio_1.2.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio_1.2.0_amd64.deb)                       |
-| Pad image (new pad)     | [SnekPad-pad-v1.2.0.uf2](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-pad-v1.2.0.uf2)                                       |
+| Windows                 | [SnekPad-Studio-Setup-1.3.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-Studio-Setup-1.3.0.exe)                       |
+| Windows (portable)      | [SnekPad-Studio-1.3.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-Studio-1.3.0-windows-portable.zip) |
+| macOS                   | [snekpad-studio-1.3.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio-1.3.0.dmg)                                   |
+| Linux (any distro)      | [snekpad-studio-1.3.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio-1.3.0.AppImage)                         |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.3.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio_1.3.0_amd64.deb)                       |
+| Pad image (new pad)     | [SnekPad-pad-v1.3.0.uf2](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-pad-v1.3.0.uf2)                                       |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
@@ -110,7 +110,7 @@ It can also be set up by hand: install CircuitPython, KMK and three Adafruit lib
 
 - [`app/README.md`](app/README.md): running the app, setting up a pad, the knob.
 - [`app/PROTOCOL.md`](app/PROTOCOL.md): the serial messages between the app and the pad.
-- [Release notes](RELEASE_NOTES_v1.2.0.md): what is new in this version (older ones are in the same folder).
+- [Release notes](RELEASE_NOTES_v1.3.0.md): what is new in this version (older ones are in the same folder).
 
 ## License
 
