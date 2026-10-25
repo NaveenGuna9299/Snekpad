@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SnekApi, DeviceState } from '../shared/api'
 import type { PadInput } from '../shared/protocol'
+import type { HudPref } from '../shared/hud'
 import type { FirmwareProgress } from '../shared/firmwareUpdate'
 
 const api: SnekApi = {
@@ -16,6 +17,13 @@ const api: SnekApi = {
   exportBackup: (config) => ipcRenderer.invoke('file:exportBackup', config),
   importBackup: () => ipcRenderer.invoke('file:importBackup'),
   tryProfile: (profile) => ipcRenderer.invoke('device:try', profile),
+  getHud: () => ipcRenderer.invoke('hud:get'),
+  setHud: (pref) => ipcRenderer.invoke('hud:set', pref),
+  onHud: (cb) => {
+    const handler = (_: unknown, p: HudPref): void => cb(p)
+    ipcRenderer.on('hud:pref', handler)
+    return () => ipcRenderer.removeListener('hud:pref', handler)
+  },
   loadTemplates: () => ipcRenderer.invoke('templates:load'),
   saveTemplates: (list) => ipcRenderer.invoke('templates:save', list),
   getTheme: () => ipcRenderer.invoke('theme:get'),

@@ -2,6 +2,7 @@
 
 import type { Config, Profile, Template, ValidationResult } from './config'
 import type { ThemePref } from './theme'
+import type { HudPref } from './hud'
 import type { UpdateInfo } from './update'
 import type { LiveView, PadInput } from './protocol'
 import type { FirmwareProgress, FirmwareUpdateResult, FwInfoResult } from './firmwareUpdate'
@@ -72,6 +73,11 @@ export interface SnekApi {
   /** The colour theme choice; `system` follows the OS. */
   getTheme(): Promise<ThemePref>
   setTheme(theme: ThemePref): Promise<void>
+  /** The keys HUD over other apps: off, shown for a moment on each profile switch, or always; and its corner. */
+  getHud(): Promise<HudPref>
+  setHud(patch: Partial<HudPref>): Promise<void>
+  /** The HUD settings changed (from the HUD's own menu or the tray), so an open settings menu can follow. */
+  onHud(cb: (pref: HudPref) => void): () => void
   useMock(on: boolean): Promise<void>
   previewLed(layer: number, key: number, color: string): Promise<void>
   /** "Try on pad": show a Studio-only profile on the pad for about 15 seconds, whatever app is in focus. */

@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { defaultConfig } from '../../src/shared/config'
+import { DEFAULT_HUD } from '../../src/shared/hud'
 import type { DeviceState, SnekApi } from '../../src/shared/api'
 import type { KnobAction, PadInput } from '../../src/shared/protocol'
 import type { FirmwareProgress } from '../../src/shared/firmwareUpdate'
@@ -50,6 +51,8 @@ export function installApi(
     getStartup: () => Promise.resolve({ supported: false, enabled: false }),
     getTheme: () => Promise.resolve('system'),
     getAutoUpdateCheck: () => Promise.resolve(false),
+    getHud: () => Promise.resolve({ ...DEFAULT_HUD }),
+    setHud: () => Promise.resolve(),
     openReleasePage: vi.fn(() => Promise.resolve()),
     firmwareBundle: () => Promise.resolve({ ok: false, error: 'no bundle', missing: true }),
     onFirmwareProgress: (cb) => {

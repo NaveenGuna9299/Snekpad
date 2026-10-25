@@ -9,7 +9,15 @@ export default defineConfig(({ mode }) => {
   const define = { __DEV_TOOLS__: JSON.stringify(mode !== 'production') }
   return {
     main: { define },
-    preload: { define },
+    // two preload scripts: the window's, and the small one for the HUD overlay
+    preload: {
+      define,
+      build: {
+        rollupOptions: {
+          input: { index: resolve('src/preload/index.ts'), hud: resolve('src/preload/hud.ts') }
+        }
+      }
+    },
     renderer: {
       define,
       resolve: {

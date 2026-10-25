@@ -5,6 +5,7 @@ import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { z } from 'zod'
 import { themePrefSchema, type ThemePref } from '../shared/theme'
+import { DEFAULT_HUD, hudPrefSchema, type HudPref } from '../shared/hud'
 import { rollingBackup } from './autoBackup'
 import {
   defaultConfig,
@@ -124,4 +125,14 @@ export function loadAutoUpdateCheck(): boolean {
 
 export function saveAutoUpdateCheck(on: boolean): void {
   writeSetting('autoUpdateCheck', on)
+}
+
+/** The HUD over other apps: when it shows and in which corner. */
+export function loadHud(): HudPref {
+  const v = hudPrefSchema.safeParse(readSettings().hud)
+  return v.success ? v.data : DEFAULT_HUD
+}
+
+export function saveHud(pref: HudPref): void {
+  writeSetting('hud', pref)
 }

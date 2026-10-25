@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsMenu } from '../../src/renderer/src/components/SettingsMenu'
 import { MAX_SLEEP_MINUTES } from '../../src/shared/config'
+import { DEFAULT_HUD } from '../../src/shared/hud'
 import type { SyncStatus } from '../../src/shared/sync'
 import { installApi } from './stubApi'
 
@@ -195,5 +196,39 @@ describe('Settings: uninstall', () => {
     await openMenu()
     await new Promise((r) => setTimeout(r, 20))
     expect(screen.queryByRole('button', { name: /Uninstall SnekPad Studio/ })).toBeNull()
+  })
+})
+
+describe('Settings: keys HUD', () => {
+  it('sends what changed: mode, size, opacity and corner', async () => {
+    const setHud = vi.fn(() => Promise.resolve())
+    installApi(undefined, { setHud })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    await userEvent.click(await screen.findByRole('radio', { name: 'Always' }))
+    expect(setHud).toHaveBeenLastCalledWith({ mode: 'pinned' })
+    await userEvent.click(screen.getByRole('radio', { name: 'Slim' }))
+    expect(setHud).toHaveBeenLastCalledWith({ size: 'slim' })
+    fireEvent.change(screen.getByRole('slider', { name: 'HUD opacity' }), {
+      target: { value: '50' }
+    })
+    expect(setHud).toHaveBeenLastCalledWith({ opacity: 0.5 })
+    // picking a corner also forgets a dragged position
+    await userEvent.click(screen.getByRole('radio', { name: 'Top left' }))
+    expect(setHud).toHaveBeenLastCalledWith({ corner: 'top-left', pos: null })
+    await userEvent.click(screen.getByRole('radio', { name: 'Off' }))
+    expect(screen.queryByRole('radio', { name: 'Top left' })).toBeNull()
+  })
+
+  it('says when the HUD was dragged somewhere', async () => {
+    installApi(undefined, {
+      getHud: () => Promise.resolve({ ...DEFAULT_HUD, pos: { x: 10, y: 20 } })
+    })
+    render(<Harness onChange={() => {}} />)
+    await openMenu()
+    expect(await screen.findByText(/Placed where you dragged it/)).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Bottom right' }).getAttribute('aria-checked')).toBe(
+      'false'
+    )
   })
 })

@@ -90,6 +90,7 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
   the tray menu stops it. If Studio started with Windows it makes the hidden window by itself about 20 seconds after
   login. The sleep time does not apply to the lights while a music effect is chosen (the screen still sleeps). Nothing is recorded or stored: the sound is analysed in memory and thrown away. On macOS and Linux Studio
   cannot listen to the system sound yet and says so on the page.
+- **Keys HUD.** A small see-through panel over your other apps that shows the keys of the profile the pad is on (Windows). A key lights up on it while you hold it on the pad. It never takes focus and clicks go through it, except while the mouse is over the panel. It comes in three sizes (**Compact**: labels only; **Slim**: one row of keys along the top or bottom edge; **Comfy**: labels and shortcuts), with an opacity from 20 to 100%. It can be off, shown for a moment each time the pad changes profile (the default), or always. Drag its top bar to put it anywhere (Studio remembers the spot), or pick a corner to snap it back. The three dots on the panel open the same settings there; they are also under **Settings → Keys HUD over apps** and in the tray menu. It needs a pad that reports its profile (protocol 2).
 - **Firmware update.** The pad reports its firmware version when the app connects. Every Studio carries the matching
   firmware, and when the pad's is older a strip offers **Update pad** (also under Settings → Pad firmware). The pad asks
   you to press its knob to allow it, the files are sent and checked, and the pad restarts by itself and installs
@@ -309,6 +310,7 @@ src/main/device/         Link interface, real USB serial link, mock link, Device
 src/main/store.ts        config.json, last-pushed.json (what the pad holds) and settings.json (theme) in the user
                          data folder (atomic writes)
 src/main/focusWatcher.ts which program has focus (Windows), for automatic profile switching
+src/main/hud.ts          the keys HUD over other apps (hudPage.ts is its page, preload/hud.ts its small bridge)
 src/main/index.ts        windows, tray, IPC; the system-sound handler and the music levels' way to the pad;
                          keeps the window (hidden) alive while a music effect is chosen
 src/preload/index.ts     the only bridge to the renderer (typed, contextIsolation on)

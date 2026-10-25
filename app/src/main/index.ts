@@ -31,8 +31,12 @@ import {
   loadTheme,
   saveTheme,
   loadAutoUpdateCheck,
-  saveAutoUpdateCheck
+  saveAutoUpdateCheck,
+  loadHud,
+  saveHud
 } from './store'
+import { Hud } from './hud'
+import { hudPatchSchema, HUD_MODES } from '../shared/hud'
 import { checkForUpdate, openReleases } from './updater'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { bundleInfo, readBundle } from './firmwareBundle'
@@ -65,6 +69,39 @@ let tray: Tray | null = null
 // its renderer, so the tray costs no web-page memory.
 let musicActive = false
 let quitting = false
+// the HUD over other apps; it follows the profile the pad says it is on
+let config: Config | null = null
+const hud = new Hud(
+  loadHud(),
+  (pref) => {
+    saveHud(pref)
+    tray?.setContextMenu(trayMenu()) // its radio buttons follow the settings
+  },
+  // Studio's settings window may be open while the HUD's own menu changes something
+  (pref) => {
+    for (const w of studioWindows()) w.webContents.send('hud:pref', pref)
+  }
+)
+let hudKey: string | undefined // which profile the HUD was last told about (the pad's number, or the slot's profile id)
+
+/** Tell the HUD which profile the pad is on. Only a real change of profile flashes it, not the first report or an edit. */
+function updateHud(): void {
+  const s = device.state
+  const slotLayer = config?.profiles.length
+  const profile =
+    !config || s.status !== 'connected' || s.activeProfile === undefined
+      ? null
+      : s.activeProfile === slotLayer
+        ? (config.studioProfiles.find((p) => p.id === s.slot) ?? null)
+        : (config.profiles[s.activeProfile] ?? null)
+  const key = profile
+    ? s.activeProfile === slotLayer
+      ? `slot:${profile.id}`
+      : String(s.activeProfile)
+    : undefined
+  hud.setProfile(profile, key !== undefined && hudKey !== undefined && key !== hudKey)
+  hudKey = key
+}
 
 /** The native window buttons are drawn by the OS over our title bar, so they must match the theme. */
 const overlay = (): { color: string; symbolColor: string; height: number } => {
@@ -185,6 +222,8 @@ function registerIpc(): void {
     if (v.ok) {
       saveConfig(v.config)
       device.setConfig(v.config) // the Studio-only profiles are kept here: the pad gets one when its app is in focus
+      config = v.config
+      updateHud()
     }
     return v
   })
@@ -194,6 +233,8 @@ function registerIpc(): void {
     if (!v.ok) return { ok: false, error: v.errors.join('; ') }
     saveConfig(v.config)
     device.setConfig(v.config)
+    config = v.config
+    updateHud()
     const r = await device.push(v.config)
     if (r.ok) backupPushed(v.config)
     return r
@@ -223,6 +264,13 @@ function registerIpc(): void {
     if (!v.success) return
     saveTheme(v.data)
     nativeTheme.themeSource = v.data // the renderer's prefers-color-scheme follows this
+  })
+
+  hud.listen()
+  ipcMain.handle('hud:get', () => hud.getPref())
+  ipcMain.handle('hud:set', (_e, patch: unknown) => {
+    const v = hudPatchSchema.safeParse(patch)
+    if (v.success) hud.setPref(v.data)
   })
 
   ipcMain.handle('templates:load', () => loadTemplates())
@@ -277,7 +325,7 @@ function registerIpc(): void {
     musicActive = on === true
     tray?.setToolTip(trayTip())
     if (!musicActive) {
-      for (const w of BrowserWindow.getAllWindows()) if (!w.isVisible()) w.destroy()
+      for (const w of studioWindows()) if (!w.isVisible()) w.destroy()
     }
   })
   ipcMain.on('music:levels', (_e, bands: unknown, beat: unknown) => {
@@ -300,17 +348,19 @@ function registerIpc(): void {
     const r = readBundle(bundleDir())
     if (!r.ok) return { ok: false, error: r.error }
     return device.updateFirmware(r.bundle, (p) => {
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.send('firmware:progress', p)
+      for (const w of studioWindows()) w.webContents.send('firmware:progress', p)
     })
   })
   ipcMain.handle('firmware:cancel', () => device.cancelFirmwareUpdate())
 
   device.on('event', (e) => {
-    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('device:event', e)
+    for (const w of studioWindows()) w.webContents.send('device:event', e)
+    if (e.kind === 'key') hud.press(e.index, e.down) // light the key up on the HUD
   })
 
   device.on('state', (s) => {
-    for (const w of BrowserWindow.getAllWindows()) w.webContents.send('device:state', s)
+    for (const w of studioWindows()) w.webContents.send('device:state', s)
+    updateHud()
   })
 }
 
@@ -323,8 +373,28 @@ const trayTip = (): string =>
     ? 'SnekPad Studio (profile switching and the music lights are on)'
     : 'SnekPad Studio (profile switching is on)'
 
+/** Studio's own window(s): every window but the HUD. */
+const studioWindows = (): BrowserWindow[] =>
+  BrowserWindow.getAllWindows().filter((w) => !hud.owns(w))
+
+const trayMenu = (): Menu =>
+  Menu.buildFromTemplate([
+    { label: 'Open SnekPad Studio', click: showWindow },
+    {
+      label: 'Keys HUD over apps',
+      submenu: HUD_MODES.map((m) => ({
+        label: m.label,
+        type: 'radio' as const,
+        checked: hud.getPref().mode === m.id,
+        click: () => hud.setPref({ mode: m.id })
+      }))
+    },
+    { type: 'separator' },
+    { label: 'Quit (stops profile switching)', click: () => app.quit() }
+  ])
+
 function showWindow(): void {
-  const w = BrowserWindow.getAllWindows()[0]
+  const w = studioWindows()[0]
   if (!w) return void createWindow()
   w.show()
   w.focus()
@@ -338,7 +408,7 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = loadTheme()
   nativeTheme.on('updated', () => {
     if (process.platform === 'darwin') return // macOS draws its own window buttons
-    for (const w of BrowserWindow.getAllWindows()) {
+    for (const w of studioWindows()) {
       try {
         w.setTitleBarOverlay(overlay())
         w.setBackgroundColor(overlay().color)
@@ -353,7 +423,8 @@ app.whenReady().then(() => {
   // At login the app stays out of Windows' way: no window or renderer is created, and the pad
   // connection and focus watcher wait until the desktop has settled.
   const startWork = (): void => {
-    device.setConfig(loadConfig()) // so the Studio-only profiles work from the tray, before any window is opened
+    config = loadConfig()
+    device.setConfig(config) // so the Studio-only profiles work from the tray, before any window is opened
     device.start()
     focus.start()
   }
@@ -361,10 +432,7 @@ app.whenReady().then(() => {
     setTimeout(() => {
       startWork()
       // started with Windows and a music effect is chosen: make the page, hidden, so the lights follow the music
-      if (
-        isMusicEffect(loadConfig().settings.effect) &&
-        BrowserWindow.getAllWindows().length === 0
-      ) {
+      if (isMusicEffect(loadConfig().settings.effect) && studioWindows().length === 0) {
         musicActive = true
         tray?.setToolTip(trayTip())
         createWindow(undefined, true)
@@ -386,16 +454,10 @@ app.whenReady().then(() => {
     }
   }
 
-  const show = showWindow
   tray = new Tray(nativeImage.createFromPath(icon).resize({ width: 16, height: 16 }))
   tray.setToolTip(trayTip())
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Open SnekPad Studio', click: show },
-      { label: 'Quit (stops profile switching)', click: () => app.quit() }
-    ])
-  )
-  tray.on('click', show)
+  tray.setContextMenu(trayMenu())
+  tray.on('click', showWindow)
 
   if (!startHidden) {
     const splash = showSplash()
@@ -403,12 +465,13 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (studioWindows().length === 0) createWindow()
   })
 })
 
 app.on('before-quit', () => {
   quitting = true
+  hud.destroy()
   focus.stop()
   device.stop()
 })

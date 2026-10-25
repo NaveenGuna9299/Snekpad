@@ -3,6 +3,14 @@ import { MAX_SLEEP_MINUTES } from '../../../shared/config'
 import type { UpdateOffer } from '../../../shared/firmware'
 import type { SyncStatus } from '../../../shared/sync'
 import type { ThemePref } from '../../../shared/theme'
+import {
+  DEFAULT_HUD,
+  HUD_MODES,
+  HUD_SIZES,
+  MIN_HUD_OPACITY,
+  type HudCorner,
+  type HudPref
+} from '../../../shared/hud'
 import type { UpdateInfo } from '../../../shared/update'
 
 type Props = {
@@ -26,6 +34,13 @@ type Props = {
   offer: UpdateOffer
   onUpdateFirmware: () => void
 }
+
+const CORNERS: { id: HudCorner; label: string }[] = [
+  { id: 'top-left', label: 'Top left' },
+  { id: 'top-right', label: 'Top right' },
+  { id: 'bottom-left', label: 'Bottom left' },
+  { id: 'bottom-right', label: 'Bottom right' }
+]
 
 /** Rarely used options, kept out of the top bar: start with Windows, restore the starter profiles, mock pad. */
 export function SettingsMenu({
@@ -53,6 +68,7 @@ export function SettingsMenu({
     enabled: false
   })
   const [theme, setTheme] = useState<ThemePref>('system')
+  const [hud, setHud] = useState<HudPref>(DEFAULT_HUD)
   const [auto, setAuto] = useState(true)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
   const [checking, setChecking] = useState(false)
@@ -79,6 +95,17 @@ export function SettingsMenu({
     })
   }
   const newer = update?.ok === true && update.newer
+
+  // read each time the menu opens, and followed while it is open: the HUD's own menu and the tray can change it too
+  useEffect(() => {
+    if (open) void window.api.getHud().then((h) => h && setHud(h))
+  }, [open])
+  useEffect(() => window.api.onHud(setHud), [])
+  const changeHud = (patch: Partial<HudPref>): void => {
+    const next = { ...hud, ...patch }
+    setHud(next)
+    void window.api.setHud(patch) // only what changed: the HUD may have been dragged since
+  }
 
   useEffect(() => {
     if (!open) return
@@ -155,6 +182,83 @@ export function SettingsMenu({
                 </button>
               ))}
             </div>
+          </div>
+          <div className="flex flex-col gap-1 border-t border-line pt-3 text-sm">
+            <span>Keys HUD over apps</span>
+            <span className="text-xs text-muted">
+              A small see-through panel with the keys of the profile the pad is on.
+            </span>
+            <div role="radiogroup" aria-label="Keys HUD" className="grid grid-cols-3 gap-1.5">
+              {HUD_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  role="radio"
+                  aria-checked={hud.mode === m.id}
+                  onClick={() => changeHud({ mode: m.id })}
+                  className={`rounded-md border px-2 py-1.5 text-xs ${hud.mode === m.id ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {hud.mode !== 'off' && (
+              <>
+                <div role="radiogroup" aria-label="HUD size" className="grid grid-cols-3 gap-1.5">
+                  {HUD_SIZES.map((z) => (
+                    <button
+                      key={z.id}
+                      role="radio"
+                      aria-checked={hud.size === z.id}
+                      onClick={() => changeHud({ size: z.id })}
+                      className={`rounded-md border px-2 py-1.5 text-xs ${hud.size === z.id ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
+                    >
+                      {z.label}
+                    </button>
+                  ))}
+                </div>
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  Opacity
+                  <input
+                    type="range"
+                    aria-label="HUD opacity"
+                    min={Math.round(MIN_HUD_OPACITY * 100)}
+                    max={100}
+                    step={5}
+                    value={Math.round(hud.opacity * 100)}
+                    onChange={(e) => changeHud({ opacity: Number(e.target.value) / 100 })}
+                    className="flex-1"
+                  />
+                  <span className="w-9 text-right text-fg">{Math.round(hud.opacity * 100)}%</span>
+                </label>
+                <div
+                  role="radiogroup"
+                  aria-label="HUD corner"
+                  className="mt-1 grid h-16 w-24 grid-cols-2 gap-1 self-start rounded-md border border-line p-1"
+                >
+                  {CORNERS.map((c) => (
+                    <button
+                      key={c.id}
+                      role="radio"
+                      aria-checked={hud.pos === null && hud.corner === c.id}
+                      aria-label={c.label}
+                      title={c.label}
+                      onClick={() => changeHud({ corner: c.id, pos: null })}
+                      className={`flex p-0.5 ${c.id.startsWith('top') ? 'items-start' : 'items-end'} ${c.id.endsWith('left') ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <span
+                        className={`h-3 w-5 rounded-sm ${hud.pos === null && hud.corner === c.id ? 'bg-accent' : 'bg-surface2 hover:bg-line'}`}
+                      />
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-muted">
+                  {hud.pos
+                    ? 'Placed where you dragged it. Pick a corner to snap it back.'
+                    : 'Drag the HUD by its top bar to put it anywhere.'}{' '}
+                  The three dots on the HUD open these settings there.
+                </span>
+              </>
+            )}
           </div>
           <div className="flex flex-col gap-1 border-t border-line pt-3 text-sm">
             <label htmlFor="sleep-minutes">Pad sleeps after</label>
