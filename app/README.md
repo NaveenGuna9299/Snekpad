@@ -343,6 +343,13 @@ In the app:
 - "Next profile" no longer exists as a press action. Older saved configs that used it are converted when loaded:
   the starter profiles get their default short press (mute, save, Enter, play/pause), any other profile gets "Nothing".
 - The direction and clicks-per-step are firmware settings in `code.py` (`ENCODER_REVERSE`, `ENCODER_DIVISOR`), not in the app.
+- **Turns are counted by the chip, not by the main loop (firmware 0.5.1).** The RP2040 has a hardware counter for knobs
+  (`rotaryio`, a PIO state machine), so a click is counted even while the pad is busy redrawing the screen, lighting the
+  keys or clearing memory. Before 0.5.1 the firmware looked at the knob's two contacts once per pass of its main loop and
+  dropped a click whenever it missed one of the four states, which showed up as steps lost now and then. The counter
+  needs the contacts on neighbouring pins (GP7 and GP8 are); if it cannot be used, the pad falls back to the old way and
+  says so on its console. Clicks counted during a busy moment are typed one per pass of the loop (a few milliseconds
+  apart), at most 12 at a time.
 
 ## Status
 
