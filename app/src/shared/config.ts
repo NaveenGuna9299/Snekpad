@@ -13,6 +13,8 @@ export const KEY_COUNT = ROWS * COLS // key index = row * COLS + column
 export const MAX_PROFILES = 3 // profiles the pad keeps itself (firmware memory limit), General included
 export const MAX_STUDIO_PROFILES = 7 // more profiles that only Studio keeps: the pad gets one when its app is in focus
 export const MAX_ALL_PROFILES = MAX_PROFILES + MAX_STUDIO_PROFILES
+export const MAX_TITLE_WORDS = 6 // words in a profile's window-title rule
+export const TITLE_WORD_MAX = 30 // characters in one of them
 export const LABEL_MAX = 5 // characters that fit one OLED legend cell
 export const MAX_COMBO = 6 // keys pressed together in one shortcut
 export const MAX_STEPS = 6 // keys / shortcuts in one sequence
@@ -116,7 +118,7 @@ export const profileSchema = z.object({
   match: z.object({
     windows: z.array(z.string()).max(12), // process names, lower case, no .exe
     macos: z.array(z.string()).max(12), // bundle ids
-    titles: z.array(z.string()).max(6) // words in the window title
+    titles: z.array(z.string().max(TITLE_WORD_MAX)).max(MAX_TITLE_WORDS) // words in the window title
   }),
   keys: z.array(keySchema).length(KEY_COUNT),
   encoder: z.object({
@@ -481,16 +483,36 @@ export function resolveProfileForOs(profile: Profile, os: 'windows' | 'macos' | 
  * program names (a trailing * means "starts with"), or a profile word anywhere in the window title.
  */
 export function matchProfile(profiles: readonly Profile[], proc: string, title: string): number {
+  return bestMatch(profiles, proc, title).index
+}
+
+/** The best profile for an app and how well it fits: 0 = none, 1 = the program, 2 = a title word, 3 = both. */
+export function bestMatch(
+  profiles: readonly Profile[],
+  proc: string,
+  title: string
+): { index: number; score: number } {
   let p = proc.toLowerCase()
   if (p.endsWith('.exe')) p = p.slice(0, -4)
   const t = title.toLowerCase()
-  return profiles.findIndex((prof) => {
-    if (prof.id === 'general') return false // General has no rules: it is what every other app gets
+  // When several profiles match, the most specific one wins: a title word that matches counts for more than a program that
+  // matches (a "YouTube" profile beats the "Browser" profile for a YouTube tab), so one that matches both beats either
+  // alone; the same score goes to the earlier profile in the list.
+  let best = -1
+  let bestScore = 0
+  profiles.forEach((prof, i) => {
+    if (prof.id === 'general') return // General has no rules: it is what every other app gets
     // like the pad: the names of both systems are tried (the other system's never match)
     const names = [...prof.match.windows, ...prof.match.macos].map((s) => s.toLowerCase())
-    if (names.some((m) => (m.endsWith('*') ? p.startsWith(m.slice(0, -1)) : p === m))) return true
-    return prof.match.titles.some((w) => w !== '' && t.includes(w.toLowerCase()))
+    const program = names.some((m) => (m.endsWith('*') ? p.startsWith(m.slice(0, -1)) : p === m))
+    const word = prof.match.titles.some((w) => w !== '' && t.includes(w.toLowerCase()))
+    const score = (word ? 2 : 0) + (program ? 1 : 0)
+    if (score > bestScore) {
+      best = i
+      bestScore = score
+    }
   })
+  return { index: best, score: bestScore }
 }
 
 /** A blank profile for "New profile". */

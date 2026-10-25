@@ -46,7 +46,9 @@ the pad to allow it).
 
 - 3 x 4 keys, up to 10 profiles, each with its own key actions, labels and per-key RGB colours. Three live on the pad
   itself (they work without Studio); up to seven more are kept in Studio, which puts the one for the app in focus on the
-  pad (needs pad firmware 0.5.0). Studio has to be running, at least in the tray, for those.
+  pad (needs pad firmware 0.5.0). Studio has to be running, at least in the tray, for those. A profile can switch on
+  by program, or by a word in the window title (a website's name in any browser). Studio shows how much of the pad's
+  memory a profile will take, can show it on the pad to try it, and exports, imports and backs up profiles.
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
 - Lighting effects: in Studio, **Home → Lighting effects** picks how the key LEDs look. **Static** shows your per-key

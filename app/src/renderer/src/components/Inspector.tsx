@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import {
   FN_KEY,
   LABEL_MAX,
+  MAX_TITLE_WORDS,
+  TITLE_WORD_MAX,
   type Action,
   type KeyConfig,
   type Profile
@@ -16,6 +19,8 @@ type Props = {
   onKey: (index: number, patch: Partial<KeyConfig>) => void
   onEncoder: (patch: Partial<Profile['encoder']>) => void
   onMatch: (windows: string[], macos: string[]) => void
+  /** The words that switch to the profile when they are in a window's title. */
+  onTitles: (titles: string[]) => void
   onApplyColorToAll: (color: string) => void
 }
 
@@ -28,6 +33,7 @@ export function Inspector({
   onKey,
   onEncoder,
   onMatch,
+  onTitles,
   onApplyColorToAll
 }: Props): React.JSX.Element {
   return (
@@ -52,13 +58,84 @@ export function Inspector({
             General is used for every app that has no profile of its own.
           </p>
         ) : (
-          <ProgramPicker
-            windows={profile.match.windows}
-            macos={profile.match.macos}
-            onChange={onMatch}
-          />
+          <>
+            <ProgramPicker
+              windows={profile.match.windows}
+              macos={profile.match.macos}
+              onChange={onMatch}
+            />
+            <TitleWords words={profile.match.titles} onChange={onTitles} />
+          </>
         )}
       </section>
+    </div>
+  )
+}
+
+/** Words that switch to the profile when a window's title contains them: one website or document inside any program. */
+export function TitleWords({
+  words,
+  onChange
+}: {
+  words: string[]
+  onChange: (words: string[]) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState('')
+  const word = draft.trim().slice(0, TITLE_WORD_MAX)
+  const known = words.some((w) => w.toLowerCase() === word.toLowerCase())
+  const full = words.length >= MAX_TITLE_WORDS
+  const add = (): void => {
+    if (!word || known || full) return
+    onChange([...words, word])
+    setDraft('')
+  }
+  return (
+    <div className="flex flex-col gap-2 border-t border-line pt-3">
+      <span className="text-xs text-muted">…or when the window title contains</span>
+      {words.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="Title words">
+          {words.map((w) => (
+            <li
+              key={w}
+              className="flex items-center gap-1 rounded-md border border-line bg-surface2 py-0.5 pl-2 pr-1 text-sm"
+            >
+              {w}
+              <button
+                onClick={() => onChange(words.filter((x) => x !== w))}
+                aria-label={`Remove ${w}`}
+                className="rounded px-1 text-muted hover:bg-surface hover:text-fg"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-2">
+        <input
+          value={draft}
+          maxLength={TITLE_WORD_MAX}
+          disabled={full}
+          placeholder={full ? `At most ${MAX_TITLE_WORDS} words` : 'e.g. YouTube, Gmail, Figma'}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          aria-label="Word in the window title"
+          className="min-w-0 flex-1 rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg disabled:opacity-60"
+        />
+        <button
+          onClick={add}
+          disabled={!word || known || full}
+          className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Add
+        </button>
+      </div>
+      <p className="text-xs text-muted">
+        Works in any program, so you can have a profile for one website or document: a browser shows
+        the site&apos;s name in its title bar. Capitals do not matter. When two profiles fit the
+        same window, the one that matches a title word wins over one that only matches the program,
+        and one that matches both wins over either.
+      </p>
     </div>
   )
 }

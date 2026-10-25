@@ -5,6 +5,7 @@ import { join } from 'path'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { z } from 'zod'
 import { themePrefSchema, type ThemePref } from '../shared/theme'
+import { rollingBackup } from './autoBackup'
 import {
   defaultConfig,
   migrateConfig,
@@ -40,8 +41,15 @@ export function loadConfig(): Config {
   return defaultConfig()
 }
 
+let lastSafetyCopy = 0
+
+/** Where Studio keeps its own safety copies of the config (and where "Restore from a backup" opens first). */
+export const backupsDir = (): string => join(dir(), 'backups')
+
 export function saveConfig(config: Config): void {
-  writeAtomic(join(dir(), 'config.json'), JSON.stringify(config, null, 2))
+  const file = join(dir(), 'config.json')
+  lastSafetyCopy = rollingBackup(backupsDir(), file, lastSafetyCopy) // a copy of what is about to be replaced
+  writeAtomic(file, JSON.stringify(config, null, 2))
 }
 
 /** The config the pad is known to hold: the last successful push, or the last one adopted from the pad. */

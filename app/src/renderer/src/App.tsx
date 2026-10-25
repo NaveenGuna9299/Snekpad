@@ -14,6 +14,7 @@ import { useStudio } from './lib/useStudio'
 import { useMusic } from './lib/useMusic'
 import { PadView, type Selection } from './components/PadView'
 import { Sidebar } from './components/Sidebar'
+import { SlotMeter } from './components/SlotMeter'
 import { Inspector } from './components/Inspector'
 import { TopBar } from './components/TopBar'
 import { Home } from './components/Home'
@@ -222,6 +223,61 @@ function App(): React.JSX.Element {
     )
   }
 
+  const exportSelected = async (): Promise<void> => {
+    const r = await window.api.exportProfile(profile)
+    if (r.ok) flash(`Saved "${profile.name}" to ${r.path}.`)
+    else if (!r.cancelled) flash(`Could not export: ${r.error}`, true)
+  }
+
+  const importOne = async (): Promise<void> => {
+    const r = await window.api.importProfile()
+    if (!r.ok) {
+      if (!r.cancelled) flash(r.error, true)
+      return
+    }
+    if (everyProfile.length >= MAX_ALL_PROFILES) {
+      flash(
+        `There is no room: Studio holds at most ${MAX_ALL_PROFILES} profiles. Delete one first.`,
+        true
+      )
+      return
+    }
+    // a fresh id, so it never clashes with the profile it was exported from
+    putProfile({ ...r.profile, id: newProfileId() })
+    flash(`Imported "${r.profile.name}".`, false, true)
+  }
+
+  const backupAll = async (): Promise<void> => {
+    const r = await window.api.exportBackup(config)
+    if (r.ok) flash(`Backed up to ${r.path}.`)
+    else if (!r.cancelled) flash(`Could not back up: ${r.error}`, true)
+  }
+
+  const restoreBackup = async (): Promise<void> => {
+    const r = await window.api.importBackup()
+    if (!r.ok) {
+      if (!r.cancelled) flash(r.error, true)
+      return
+    }
+    history.set(r.config) // replaces everything, and Undo brings the old config back
+    setSelectedProfile(0)
+    flash(
+      'Restored from the backup. Send to the pad to put its own profiles on the pad.',
+      false,
+      true
+    )
+  }
+
+  const tryOnPad = async (): Promise<void> => {
+    const r = await window.api.tryProfile(profile)
+    flash(
+      r.ok
+        ? `Showing "${profile.name}" on the pad for a few seconds.`
+        : `Could not show it on the pad: ${r.error}`,
+      !r.ok
+    )
+  }
+
   const addPreset = (preset: Preset): void => {
     putProfile({ ...structuredClone(preset.profile), id: newProfileId() })
     setBrowsing(false)
@@ -331,6 +387,8 @@ function App(): React.JSX.Element {
           mock={mock}
           onMock={setMockPad}
           onReset={restoreStarterProfiles}
+          onBackup={() => void backupAll()}
+          onRestore={() => void restoreBackup()}
           sync={sync}
           pushing={pushing}
           onPush={() => void push()}
@@ -375,6 +433,8 @@ function App(): React.JSX.Element {
                 onMove={moveProfile}
                 onRename={(name) => editProfile((p) => ({ ...p, name }))}
                 onMore={() => setBrowsing(true)}
+                onExport={() => void exportSelected()}
+                onImport={() => void importOne()}
               />
             )}
 
@@ -395,6 +455,23 @@ function App(): React.JSX.Element {
                   ? `Key ${(selection as { index: number }).index + 1}: ${describeAction(selectedKey.action)}`
                   : 'Rotary encoder'}
               </p>
+              {config.studioProfiles.includes(profile) && (
+                <div className="flex w-full max-w-[460px] flex-col items-start gap-3">
+                  <SlotMeter profile={profile} config={config} />
+                  <button
+                    onClick={() => void tryOnPad()}
+                    disabled={device.status !== 'connected'}
+                    title={
+                      device.status !== 'connected'
+                        ? 'Plug the pad in to try the profile on it'
+                        : 'Show this profile on the pad for a few seconds, without opening its app'
+                    }
+                    className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Try on pad
+                  </button>
+                </div>
+              )}
             </main>
 
             <Inspector
@@ -407,6 +484,7 @@ function App(): React.JSX.Element {
               onMatch={(windows, macos) =>
                 editProfile((p) => ({ ...p, match: { ...p.match, windows, macos } }))
               }
+              onTitles={(titles) => editProfile((p) => ({ ...p, match: { ...p.match, titles } }))}
               onApplyColorToAll={(color) =>
                 editProfile((p) => ({ ...p, keys: p.keys.map((k) => ({ ...k, color })) }))
               }

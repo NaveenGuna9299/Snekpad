@@ -125,6 +125,54 @@ describe('which profile an app gets', () => {
     expect(matchProfile([p], 'anything', 'any title')).toBe(-1)
   })
 
+  describe('when several profiles fit the same window', () => {
+    const browser = (): Profile => {
+      const p = blankProfile('browser2', 'Browser')
+      p.match = { windows: ['chrome', 'brave'], macos: [], titles: [] }
+      return p
+    }
+    const youtube = (windows: string[]): Profile => {
+      const p = blankProfile('youtube', 'Youtube')
+      p.match = { windows, macos: [], titles: ['youtube'] }
+      return p
+    }
+
+    it('a profile with the title word beats the profile for the program (the case that did not work)', () => {
+      // Browser comes first in the list, and Youtube also names Brave
+      const list = [browser(), youtube(['brave'])]
+      expect(matchProfile(list, 'brave', 'Lofi hip hop - YouTube - Brave')).toBe(1)
+      expect(matchProfile(list, 'brave', 'Inbox - Gmail - Brave')).toBe(0) // not a YouTube page: Browser, as before
+    })
+
+    it('a title word alone is enough, in a program only the other profile names', () => {
+      const list = [browser(), youtube([])]
+      expect(matchProfile(list, 'chrome', 'Song - YouTube - Google Chrome')).toBe(1)
+      expect(matchProfile(list, 'chrome', 'Gmail - Google Chrome')).toBe(0)
+      expect(matchProfile(list, 'firefox', 'YouTube - Firefox')).toBe(1) // any program with youtube in its title
+    })
+
+    it('a profile that matches both beats one that matches only the program, or only the title', () => {
+      const both = youtube(['brave'])
+      const titleOnly = youtube([])
+      titleOnly.id = 'other'
+      expect(matchProfile([titleOnly, both], 'brave', 'x - YouTube')).toBe(1)
+      expect(matchProfile([both, titleOnly], 'brave', 'x - YouTube')).toBe(0)
+    })
+
+    it('profiles that fit equally well go to the one earlier in the list', () => {
+      const a = browser()
+      const b = browser()
+      b.id = 'b'
+      expect(matchProfile([a, b], 'chrome', 'x')).toBe(0)
+      expect(matchProfile([b, a], 'chrome', 'x')).toBe(0)
+    })
+
+    it('a profile with no rules never matches, and no match is -1', () => {
+      expect(matchProfile([blankProfile('x', 'X')], 'chrome', 'x')).toBe(-1)
+      expect(matchProfile([], 'chrome', 'x')).toBe(-1)
+    })
+  })
+
   it('macOS bundle ids are tried too, like on the pad', () => {
     expect(matchProfile(c.studioProfiles, 'com.google.chrome', '')).toBe(0)
   })
@@ -284,6 +332,50 @@ describe('DeviceManager and the Studio slot', () => {
     expect(link.slot?.name).toBe('Term 2')
     expect(link.slot?.keys[2]).toBe('{"type":"sequence"}\nUP\t100\nENTER\t0')
     expect(link.log.at(-1)).toBe('APP\tmytool\tx\tS')
+    m.stop()
+  })
+
+  it('a YouTube tab in Brave gets the Youtube profile, not Browser, and other Brave pages still get Browser', async () => {
+    const config = defaultConfig()
+    const yt = blankProfile('youtube', 'Youtube')
+    yt.match = { windows: ['brave'], macos: [], titles: ['youtube'] }
+    config.studioProfiles.push(yt) // after Browser, which also names Brave
+    const { m, link } = await connect(SLOT_FIRMWARE, config)
+    m.sendApp('brave', 'Lofi hip hop - YouTube - Brave')
+    await settle()
+    expect(link.slot?.name).toBe('Youtube')
+    expect(link.log.at(-1)).toBe('APP\tbrave\tLofi hip hop - YouTube - Brave\tS')
+    m.sendApp('brave', 'Inbox - Gmail - Brave')
+    await settle()
+    expect(link.slot?.name).toBe('Browser')
+    m.stop()
+  })
+
+  it('a Studio-only profile that fits an app better than the pad’s own profile takes it, and an equal fit stays on the pad', async () => {
+    const config = defaultConfig()
+    const own = blankProfile('ownbrowser', 'Own browser')
+    own.match = { windows: ['brave'], macos: [], titles: [] }
+    config.profiles.splice(1, 0, own) // on the pad, names Brave (the VS Code profile moves along, three in all)
+    config.profiles.pop()
+    const yt = blankProfile('youtube', 'Youtube')
+    yt.match = { windows: [], macos: [], titles: ['youtube'] }
+    config.studioProfiles = [yt]
+    const { m, link } = await connect(SLOT_FIRMWARE, config)
+    m.sendApp('brave', 'Gmail - Brave') // only the pad's profile fits
+    await settle()
+    expect(lines(link, 'SLOT_BEGIN')).toHaveLength(0)
+    expect(link.log.at(-1)).toBe('APP\tbrave\tGmail - Brave')
+    m.sendApp('brave', 'Lofi - YouTube - Brave') // the title word fits better than the program
+    await settle()
+    expect(link.slot?.name).toBe('Youtube')
+    expect(link.log.at(-1)).toBe('APP\tbrave\tLofi - YouTube - Brave\tS')
+    // equal fit: the pad's own profile keeps it
+    const same = blankProfile('same', 'Same')
+    same.match = { windows: ['brave'], macos: [], titles: [] }
+    config.studioProfiles = [same]
+    m.setConfig(config)
+    m.sendApp('brave', 'Gmail - Brave')
+    expect(link.log.at(-1)).toBe('APP\tbrave\tGmail - Brave')
     m.stop()
   })
 
@@ -498,6 +590,128 @@ describe('DeviceManager and the Studio slot', () => {
     expect(m.state.slotError).toBeUndefined()
     expect(m.state.slot).toBe('browser')
     m.stop()
+  })
+
+  describe('Try on pad', () => {
+    it('puts the profile on the slot and shows it, without its app being in focus', async () => {
+      const { m, link } = await connect()
+      const done = m.tryProfile(defaultConfig().studioProfiles[0])
+      await settle()
+      expect(await done).toEqual({ ok: true })
+      expect(link.slot?.name).toBe('Browser')
+      expect(link.log.at(-1)).toBe('APP\tsnekpad-preview\tTry on pad\tS')
+      expect(m.state.slot).toBe('browser')
+      m.stop()
+    })
+
+    it('holds it on the pad while the focus line keeps coming, for 15 seconds', async () => {
+      const { m, link } = await connect()
+      const done = m.tryProfile(defaultConfig().studioProfiles[0])
+      await settle()
+      await done
+      m.sendApp('notepad', 'Untitled') // an app with no profile: it would normally be General
+      expect(link.log.at(-1)).toBe('APP\tnotepad\tUntitled\tS')
+      await vi.advanceTimersByTimeAsync(14000)
+      m.sendApp('notepad', 'Untitled')
+      expect(link.log.at(-1)).toBe('APP\tnotepad\tUntitled\tS')
+      await vi.advanceTimersByTimeAsync(2000) // 16 s in
+      m.sendApp('notepad', 'Untitled')
+      expect(link.log.at(-1)).toBe('APP\tnotepad\tUntitled') // back to normal
+      m.stop()
+    })
+
+    it('does not send the profile again when it is already there', async () => {
+      const { m, link } = await connect()
+      m.sendApp('chrome', 'x') // its own app puts it there
+      await settle()
+      const done = m.tryProfile(defaultConfig().studioProfiles[0])
+      await settle()
+      await done
+      expect(lines(link, 'SLOT_BEGIN')).toHaveLength(1)
+      m.stop()
+    })
+
+    it('shows an edit while it is on the pad', async () => {
+      const config = defaultConfig()
+      const { m, link } = await connect(SLOT_FIRMWARE, config)
+      const done = m.tryProfile(config.studioProfiles[0])
+      await settle()
+      await done
+      const edited = structuredClone(config)
+      edited.studioProfiles[0].keys[0].label = 'new'
+      m.setConfig(edited)
+      m.sendApp('notepad', 'x') // the focus line that follows
+      await settle()
+      expect(lines(link, 'SLOT_KEY\t0\tnew')).toHaveLength(1)
+      expect(link.slot?.keys[0]).toContain('F12')
+      m.stop()
+    })
+
+    it('works for a profile that has not been saved yet', async () => {
+      const { m, link } = await connect()
+      const fresh = blankProfile('fresh', 'Fresh') // not in the config the manager knows
+      const done = m.tryProfile(fresh)
+      await settle()
+      expect((await done).ok).toBe(true)
+      expect(link.slot?.name).toBe('Fresh')
+      m.sendApp('notepad', 'x')
+      expect(link.log.at(-1)).toBe('APP\tnotepad\tx\tS')
+      m.stop()
+    })
+
+    it('says why when the pad is too old, or not there, or busy updating', async () => {
+      const old = await connect('0.4.2')
+      expect(await old.m.tryProfile(defaultConfig().studioProfiles[0])).toEqual({
+        ok: false,
+        error: 'This pad needs firmware 0.5.0 or newer for Studio profiles.'
+      })
+      old.m.stop()
+      const none = new DeviceManager()
+      expect(await none.tryProfile(defaultConfig().studioProfiles[0])).toEqual({
+        ok: false,
+        error: 'pad not connected'
+      })
+    })
+
+    it('says so when the pad finds the profile too big, and shows the warning', async () => {
+      const m = new DeviceManager()
+      const link = new MockLink(SLOT_FIRMWARE, false)
+      const write = link.write.bind(link)
+      link.write = (line) => {
+        if (line === 'SLOT_END') {
+          link.log.push(line)
+          setTimeout(() => link.emit('ERR\tprofile too big for the pad'), 5)
+          return
+        }
+        write(line)
+      }
+      m.setConfig(defaultConfig())
+      attach(m, link)
+      await vi.advanceTimersByTimeAsync(50)
+      const done = m.tryProfile(defaultConfig().studioProfiles[0])
+      await settle()
+      expect(await done).toEqual({
+        ok: false,
+        error: 'It is too big for the pad: use fewer or shorter macros.'
+      })
+      expect(m.state.slotError).toEqual({ id: 'browser', reason: 'too big' })
+      m.sendApp('notepad', 'x')
+      expect(link.log.at(-1)).toBe('APP\tnotepad\tx') // nothing is held on the pad
+      m.stop()
+    })
+
+    it('a new connection forgets it', async () => {
+      const { m } = await connect()
+      const done = m.tryProfile(defaultConfig().studioProfiles[0])
+      await settle()
+      await done
+      const again = new MockLink(SLOT_FIRMWARE, false)
+      attach(m, again)
+      await vi.advanceTimersByTimeAsync(50)
+      m.sendApp('notepad', 'x')
+      expect(again.log.at(-1)).toBe('APP\tnotepad\tx')
+      m.stop()
+    })
   })
 
   it('a push sends the pad its own profiles only', async () => {

@@ -46,6 +46,30 @@ On the Home screen, open **Settings** (top right) and tick **Use a mock pad** to
   while they are not on the pad, and editing one does not make the pad "not up to date". A config saved when the pad
   still held four profiles keeps the first three on the pad and moves the fourth to Studio only. Details:
   [PROTOCOL.md](PROTOCOL.md#the-studio-slot-slot_-firmware-050-and-later).
+- **Switching on a website or document: window-title rules.** Under **Switch to this profile when…** a profile can also
+  be switched on by words in a window's title (up to 6, capitals do not matter): add `YouTube`, `Gmail` or `Figma` and
+  the profile switches on for that site in any browser, because the browser shows the site's name in its title bar. A
+  profile can have programs, title words, or both. When several profiles fit the same window the best fit wins: a title
+  word that matches counts for more than a program that matches, so a profile with both beats one with either, and a
+  tie goes to the one earlier in the list (a "YouTube" profile beats "Browser" on a YouTube tab, and Browser still gets
+  every other page). A Studio-only profile takes an app from the pad's own profiles only when it fits better. For the
+  pad's own profiles the title is checked by the pad itself, which takes the first profile that fits (Studio sends it the
+  first 120 characters of the title); everything else is checked by Studio.
+- **Pad memory meter and Try on pad (Studio-only profiles).** A Studio-only profile shows a bar under the pad picture
+  with an estimate of how much of the pad's spare memory it will use: keys and plain shortcuts cost almost nothing, typed
+  text a little, and macros (sequences, and shortcuts of several ordinary keys) the most. The bar turns amber when it is
+  close and red when the pad will probably refuse the profile ("Too big for the pad" in the list); the estimate is
+  fitted to measurements on a real pad and is good to about a third, and the pad has the last word. **Try on pad** shows
+  the profile on the pad for about 15 seconds without opening its app (and shows edits while it is up), so you can
+  check its keys, colours and screen. It needs a pad with firmware 0.5.0.
+- **Export, import and backup.** **Export…** under the list saves the selected profile to a `.json` file (to share it
+  or keep it); **Import…** adds a profile from such a file, with a new id, to the pad's group if there is room and else
+  to Studio only. Under **Settings**, **Back up all profiles…** saves one file with everything (the pad's profiles, the
+  Studio-only ones and the settings) and **Restore from a backup…** replaces what is in Studio with it (Undo brings it
+  back; the pad itself is only changed by **Push to pad**). Studio-only profiles live only in Studio on this computer,
+  so a backup is worth making. Studio also keeps its own copy of the config before it is overwritten, at most one every
+  30 minutes and the newest 10, in `%APPDATA%\snekpad-studio\snekpad\backups`; they are ordinary backup files, and
+  **Restore from a backup…** opens on that folder.
 - **Keys.** Pick the action type with the buttons in the inspector. A sequence lets you re-record a step and move steps
   up or down. Drag a key onto another to swap them (the FN key, bottom right, always stays put). Deleting a profile,
   restoring the starter profiles, pasting and swapping show a message with **Undo**.

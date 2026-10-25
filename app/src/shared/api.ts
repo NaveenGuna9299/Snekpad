@@ -1,6 +1,6 @@
 // The typed bridge between the renderer and the main process (exposed by the preload script).
 
-import type { Config, Template, ValidationResult } from './config'
+import type { Config, Profile, Template, ValidationResult } from './config'
 import type { ThemePref } from './theme'
 import type { UpdateInfo } from './update'
 import type { LiveView, PadInput } from './protocol'
@@ -39,6 +39,14 @@ export type PullResult = { ok: true; view: LiveView } | { ok: false; error: stri
 
 export type RunningProgram = { proc: string; title: string; icon: string | null }
 
+/** Result of writing an export or backup file. `cancelled` = the user closed the dialog (not an error to show). */
+export type FileResult =
+  { ok: true; path: string } | { ok: false; error: string; cancelled?: boolean }
+export type ImportProfileResult =
+  { ok: true; profile: Profile; file: string } | { ok: false; error: string; cancelled?: boolean }
+export type ImportBackupResult =
+  { ok: true; config: Config; file: string } | { ok: false; error: string; cancelled?: boolean }
+
 export interface SnekApi {
   loadConfig(): Promise<Config>
   saveConfig(config: Config): Promise<ValidationResult>
@@ -50,6 +58,14 @@ export interface SnekApi {
   deviceState(): Promise<DeviceState>
   /** Reads the live config (keys, colours, OLED text) from the connected pad. */
   pull(): Promise<PullResult>
+  /** Save one profile to a file the user picks (to share it or keep it). */
+  exportProfile(profile: Profile): Promise<FileResult>
+  /** Pick a profile file and read it. The profile still has the id it was exported with: give it a new one. */
+  importProfile(): Promise<ImportProfileResult>
+  /** Save the whole config (pad profiles, Studio-only profiles, settings) to a file the user picks. */
+  exportBackup(config: Config): Promise<FileResult>
+  /** Pick a backup file (the dialog opens on Studio's own safety copies) and read it. Nothing is replaced yet. */
+  importBackup(): Promise<ImportBackupResult>
   /** The user's own saved profiles. */
   loadTemplates(): Promise<Template[]>
   saveTemplates(list: Template[]): Promise<Template[]>
@@ -58,6 +74,8 @@ export interface SnekApi {
   setTheme(theme: ThemePref): Promise<void>
   useMock(on: boolean): Promise<void>
   previewLed(layer: number, key: number, color: string): Promise<void>
+  /** "Try on pad": show a Studio-only profile on the pad for about 15 seconds, whatever app is in focus. */
+  tryProfile(profile: Profile): Promise<PushResult>
   /** Levels of the sound the computer plays, for the pad's music effects: four bands (0 to 63) and a beat (0 = none). */
   sendMusic(bands: readonly number[], beat: number): void
   /** Tell the main process whether a music effect is chosen: then closing the window hides it (the music keeps playing in the lights from the tray). */

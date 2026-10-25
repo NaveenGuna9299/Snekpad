@@ -21,6 +21,7 @@ import { DeviceManager } from './device/manager'
 import { isMusicEffect } from '../shared/config'
 import { FocusWatcher } from './focusWatcher'
 import {
+  backupsDir,
   loadConfig,
   saveConfig,
   backupPushed,
@@ -35,7 +36,14 @@ import {
 import { checkForUpdate, openReleases } from './updater'
 import { listRunning, rememberProgram, programIcon } from './programs'
 import { bundleInfo, readBundle } from './firmwareBundle'
-import { validateConfig, type Config, type Template } from '../shared/config'
+import {
+  profileSchema,
+  validateConfig,
+  type Config,
+  type Profile,
+  type Template
+} from '../shared/config'
+import { exportBackup, exportProfile, importBackup, importProfile } from './files'
 import type { PushResult } from '../shared/api'
 import { chromeColors, themePrefSchema } from '../shared/theme'
 
@@ -190,6 +198,18 @@ function registerIpc(): void {
     if (r.ok) backupPushed(v.config)
     return r
   })
+
+  ipcMain.handle('device:try', async (_e, profile: unknown): Promise<PushResult> => {
+    const p = profileSchema.safeParse(profile)
+    return p.success
+      ? device.tryProfile(p.data)
+      : { ok: false, error: 'This profile cannot be shown.' }
+  })
+
+  ipcMain.handle('file:exportProfile', (_e, profile: Profile) => exportProfile(profile))
+  ipcMain.handle('file:importProfile', () => importProfile())
+  ipcMain.handle('file:exportBackup', (_e, config: Config) => exportBackup(config))
+  ipcMain.handle('file:importBackup', () => importBackup(backupsDir()))
 
   ipcMain.handle('baseline:load', () => loadBaseline())
   ipcMain.handle('baseline:save', (_e, config: Config) => {

@@ -9,6 +9,9 @@ type Props = {
   mock: boolean
   onMock: (on: boolean) => void
   onReset: () => void
+  /** Save everything (every profile, the Studio-only ones too, and the settings) to a file / read such a file back. */
+  onBackup?: () => void
+  onRestore?: () => void
   /** Idle minutes before the pad's screen and key LEDs switch off; 0 = never. Part of the pad's config. */
   sleepMinutes: number
   onSleepMinutes: (minutes: number) => void
@@ -29,6 +32,8 @@ export function SettingsMenu({
   mock,
   onMock,
   onReset,
+  onBackup,
+  onRestore,
   sleepMinutes,
   onSleepMinutes,
   connected,
@@ -266,6 +271,32 @@ export function SettingsMenu({
               Check for updates when the app opens
             </label>
           </div>
+          {onBackup && onRestore && (
+            <div className="flex flex-col gap-1.5 text-sm">
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  onBackup()
+                }}
+                className="rounded-md border border-line px-3 py-1.5 text-left hover:bg-surface2"
+              >
+                Back up all profiles…
+              </button>
+              <button
+                onClick={() => {
+                  setOpen(false)
+                  onRestore()
+                }}
+                className="rounded-md border border-line px-3 py-1.5 text-left hover:bg-surface2"
+              >
+                Restore from a backup…
+              </button>
+              <span className="text-xs text-muted">
+                One file with every profile (the Studio-only ones too) and the settings. Studio also
+                keeps its own recent copies; the restore window opens on them.
+              </span>
+            </div>
+          )}
           <button
             onClick={() => {
               setOpen(false)

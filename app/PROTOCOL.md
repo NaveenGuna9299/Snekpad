@@ -16,7 +16,7 @@ One message per line, `\n` terminated, fields separated by TAB. ASCII only.
 
 `CFG_BEGIN` is refused with `ERR<TAB>drive is visible: ...` when the pad's drive is visible (plugged in with the top-left key held), because the pad cannot write files then. The app waits at most 2 s for a reply, and up to 10 s for the reply to `CFG_END` while the pad writes to flash.
 
-The pad ignores unknown commands.
+The pad ignores unknown commands. In `APP` the process name is cut to 40 characters and the window title to 120 (it was 60: a site's name sits at the end of a browser's title, and a title word of a pad profile is matched by the pad).
 
 ## Version 2: `HELLO` and events from the pad
 

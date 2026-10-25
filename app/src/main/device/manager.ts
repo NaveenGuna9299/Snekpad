@@ -3,7 +3,7 @@
 
 import { EventEmitter } from 'events'
 import {
-  matchProfile,
+  bestMatch,
   resolveForOs,
   resolveProfileForOs,
   type Config,
@@ -39,6 +39,8 @@ const HELLO_TRIES = 3 // after this many unanswered HELLOs the pad runs firmware
 const HELLO_RESTART_TRIES = 60 // a pad that restarted (after a push or a firmware update) gets this many seconds to answer
 const RESTART_GRACE_MS = 1500 // the pad restarts about half a second after it says OK: greet only after that
 const SLOT_RETRY_MS = 10000 // after the pad refused a Studio profile, wait this long before trying again
+const PREVIEW_MS = 15000 // how long "Try on pad" keeps a profile on the pad
+const PREVIEW_PROC = 'snekpad-preview' // the "program" the pad is told about while it shows a profile for "Try on pad"
 const NOT_CONNECTED = { ok: false, error: 'pad not connected' } as const
 
 /** What the pad's slot holds of a profile: everything it shows or does, but not which apps it belongs to. */
@@ -63,6 +65,7 @@ export class DeviceManager extends EventEmitter {
   private slotRetryAt = 0 // after a failure, wait a little before sending it again
   private slotRefused: string | null = null // fingerprint of a profile the pad said is too big for it
   private lastFocus: { proc: string; title: string } | null = null
+  private preview: { id: string; profile: Profile; until: number } | null = null // "Try on pad" shows this until then
 
   start(): void {
     this.scan()
@@ -105,6 +108,7 @@ export class DeviceManager extends EventEmitter {
     this.slotHeld = null
     this.slotBusy = false
     this.slotRefused = null
+    this.preview = null
     link.onClose((reason) => {
       if (this.link !== link) return
       this.clearHelloTimer()
@@ -266,7 +270,8 @@ export class DeviceManager extends EventEmitter {
     const session = this.session
     if (!session || session.updating) return
     this.lastFocus = { proc, title }
-    const profile = this.studioProfileFor(proc, title)
+    // "Try on pad" holds a profile on the pad for a few seconds, whatever app is in focus
+    const profile = this.activePreview() ?? this.studioProfileFor(proc, title)
     if (!profile || !hasSlot(this.state)) return session.send(appLine(proc, title))
 
     const held = fingerprint(profile)
@@ -279,37 +284,85 @@ export class DeviceManager extends EventEmitter {
     // failed (tried again after a pause): until the profile is there the pad matches by itself (General).
     if (this.slotBusy || this.slotRefused === held || Date.now() < this.slotRetryAt)
       return session.send(appLine(proc, title))
-    this.slotBusy = true
-    void session.loadSlot(slotFrames(resolveProfileForOs(profile, this.os))).then((r) => {
-      this.slotBusy = false
-      if (this.session !== session) return // the pad went away meanwhile
-      if (r.ok) {
-        this.slotHeld = held
-        this.setState({ ...this.state, slot: profile.id, slotError: undefined })
-        const f = this.lastFocus // the app in focus now, which may no longer be the one that asked for this profile
-        if (f) this.sendApp(f.proc, f.title)
-      } else {
-        this.slotHeld = null
-        // not enough RAM for its macros: the same profile would fail again, so wait until it is changed
-        const tooBig = /too big|memory/i.test(r.error)
-        if (tooBig) this.slotRefused = held
-        else this.slotRetryAt = Date.now() + SLOT_RETRY_MS
-        this.setState({
-          ...this.state,
-          slot: undefined,
-          slotError: { id: profile.id, reason: tooBig ? 'too big' : r.error }
-        })
-        console.warn('[slot] the pad refused the profile:', r.error)
-      }
+    void this.loadSlot(session, profile, held).then((r) => {
+      if (!r.ok) return
+      const f = this.lastFocus // the app in focus now, which may no longer be the one that asked for this profile
+      if (f) this.sendApp(f.proc, f.title)
     })
     session.send(appLine(proc, title))
   }
 
+  /** Put a Studio-only profile on the pad's slot and keep track of what the pad says about it. */
+  private async loadSlot(
+    session: DeviceSession,
+    profile: Profile,
+    held: string
+  ): Promise<PushResult> {
+    this.slotBusy = true
+    const r = await session.loadSlot(slotFrames(resolveProfileForOs(profile, this.os)))
+    this.slotBusy = false
+    if (this.session !== session) return NOT_CONNECTED // the pad went away meanwhile
+    if (r.ok) {
+      this.slotHeld = held
+      this.setState({ ...this.state, slot: profile.id, slotError: undefined })
+      return r
+    }
+    this.slotHeld = null
+    // not enough RAM for its macros: the same profile would fail again, so wait until it is changed
+    const tooBig = /too big|memory/i.test(r.error)
+    if (tooBig) this.slotRefused = held
+    else this.slotRetryAt = Date.now() + SLOT_RETRY_MS
+    this.setState({
+      ...this.state,
+      slot: undefined,
+      slotError: { id: profile.id, reason: tooBig ? 'too big' : r.error }
+    })
+    console.warn('[slot] the pad refused the profile:', r.error)
+    return r
+  }
+
+  /**
+   * "Try on pad": show a Studio-only profile on the pad for a few seconds without its app being in focus, to look at its
+   * keys, colours and screen. Studio goes on sending the profile (also when it is edited) until the time is up.
+   */
+  async tryProfile(profile: Profile): Promise<PushResult> {
+    const session = this.session
+    if (!session) return NOT_CONNECTED
+    if (session.updating) return { ok: false, error: 'A firmware update is running.' }
+    if (!hasSlot(this.state))
+      return { ok: false, error: 'This pad needs firmware 0.5.0 or newer for Studio profiles.' }
+    const held = fingerprint(profile)
+    if (this.slotHeld !== held) {
+      const r = await this.loadSlot(session, profile, held)
+      if (!r.ok)
+        return /too big|memory/i.test(r.error)
+          ? { ok: false, error: 'It is too big for the pad: use fewer or shorter macros.' }
+          : r
+    }
+    this.preview = { id: profile.id, profile, until: Date.now() + PREVIEW_MS }
+    session.send(appLine(PREVIEW_PROC, 'Try on pad', true))
+    return { ok: true }
+  }
+
+  /** The Studio-only profile that "Try on pad" is showing, while its time lasts. */
+  private activePreview(): Profile | null {
+    const p = this.preview
+    if (!p) return null
+    if (Date.now() >= p.until) {
+      this.preview = null
+      return null
+    }
+    // the saved copy when there is one (so an edit shows up at once), else the one that was sent
+    return this.studioProfiles.find((x) => x.id === p.id) ?? p.profile
+  }
+
   private studioProfileFor(proc: string, title: string): Profile | null {
     if (this.studioProfiles.length === 0) return null
-    if (matchProfile(this.padProfiles, proc, title) >= 0) return null // the pad has a profile of its own for this app
-    const i = matchProfile(this.studioProfiles, proc, title)
-    return i >= 0 ? this.studioProfiles[i] : null
+    // The pad's own profiles are matched by the pad. A Studio-only profile takes the app only when it fits better (a title
+    // word beats a program, both beat either), so with equal fit the pad's own profile wins.
+    const own = bestMatch(this.padProfiles, proc, title)
+    const studio = bestMatch(this.studioProfiles, proc, title)
+    return studio.index >= 0 && studio.score > own.score ? this.studioProfiles[studio.index] : null
   }
 
   /** The music levels for the pad's Equalizer and Beat pulse effects. Dropped during a firmware update. */

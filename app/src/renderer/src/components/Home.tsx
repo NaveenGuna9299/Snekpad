@@ -19,6 +19,8 @@ type Props = {
   mock: boolean
   onMock: (on: boolean) => void
   onReset: () => void
+  onBackup?: () => void
+  onRestore?: () => void
   sleepMinutes: number
   onSleepMinutes: (minutes: number) => void
   sync: SyncStatus
@@ -47,6 +49,8 @@ export function Home({
   mock,
   onMock,
   onReset,
+  onBackup,
+  onRestore,
   sleepMinutes,
   onSleepMinutes,
   sync,
@@ -65,6 +69,8 @@ export function Home({
           mock={mock}
           onMock={onMock}
           onReset={onReset}
+          onBackup={onBackup}
+          onRestore={onRestore}
           sleepMinutes={sleepMinutes}
           onSleepMinutes={onSleepMinutes}
           connected={connected}

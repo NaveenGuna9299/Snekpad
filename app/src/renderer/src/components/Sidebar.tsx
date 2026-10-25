@@ -22,6 +22,9 @@ type Props = {
   onMove: () => void
   onRename: (name: string) => void
   onMore: () => void
+  /** Save the selected profile to a file / add a profile from a file. */
+  onExport: () => void
+  onImport: () => void
   /** Index of the pad's own profile the pad is running, once the pad reports it. */
   activeOnPad?: number
   /** The id of the Studio profile the pad is running, once it is on the pad's slot and in use. */
@@ -43,6 +46,8 @@ export function Sidebar({
   onMove,
   onRename,
   onMore,
+  onExport,
+  onImport,
   activeOnPad,
   activeStudio,
   slotSupported,
@@ -89,7 +94,7 @@ export function Sidebar({
         <span className="mt-0.5 flex items-center gap-1 text-xs text-muted">
           {p.id === 'general' ? (
             'Fallback for every other app'
-          ) : p.match.windows.length === 0 ? (
+          ) : p.match.windows.length === 0 && p.match.titles.length === 0 ? (
             'No app set'
           ) : (
             <>
@@ -100,6 +105,11 @@ export function Sidebar({
                 ))}
               {chipsFor(p.match.windows).length > 5 && (
                 <span>+{chipsFor(p.match.windows).length - 5}</span>
+              )}
+              {p.match.titles.length > 0 && (
+                <span className="truncate" title="Window title contains">
+                  {p.match.windows.length > 0 ? '+ ' : ''}“{p.match.titles.join('”, “')}”
+                </span>
               )}
             </>
           )}
@@ -193,6 +203,18 @@ export function Sidebar({
       >
         More profiles…
       </button>
+      <div className="flex gap-2">
+        <SmallButton onClick={onExport} title="Save this profile to a file, to share it or keep it">
+          Export…
+        </SmallButton>
+        <SmallButton
+          onClick={onImport}
+          disabled={full}
+          title={full ? fullTip : 'Add a profile from a file'}
+        >
+          Import…
+        </SmallButton>
+      </div>
     </aside>
   )
 }

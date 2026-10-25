@@ -67,7 +67,7 @@ export function hostOsFrom(platform: string): HostOs {
 export const pingLine = (): string => 'PING'
 export const osLine = (os: HostOs): string => `OS\t${os}`
 export const appLine = (proc: string, title: string, slot = false): string =>
-  `APP\t${clean(proc, 40)}\t${clean(title, 60)}${slot ? '\tS' : ''}`
+  `APP\t${clean(proc, 40)}\t${clean(title, 120)}${slot ? '\tS' : ''}`
 
 /**
  * The lines that put a profile on the pad's Studio slot (firmware 0.5.0 and later): SLOT_BEGIN, SLOT_KEY x 15 (12 keys, then
