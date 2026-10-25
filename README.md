@@ -8,15 +8,16 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 ## Download
 
-SnekPad Studio v1.1.4 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+SnekPad Studio v1.2.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
 | OS                      | Download                                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows                 | [SnekPad-Studio-Setup-1.1.4.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.4/SnekPad-Studio-Setup-1.1.4.exe)                       |
-| Windows (portable)      | [SnekPad-Studio-1.1.4-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.4/SnekPad-Studio-1.1.4-windows-portable.zip) |
-| macOS                   | [snekpad-studio-1.1.4.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.4/snekpad-studio-1.1.4.dmg)                                   |
-| Linux (any distro)      | [snekpad-studio-1.1.4.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.4/snekpad-studio-1.1.4.AppImage)                         |
-| Linux (Debian / Ubuntu) | [snekpad-studio_1.1.4_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.1.4/snekpad-studio_1.1.4_amd64.deb)                       |
+| Windows                 | [SnekPad-Studio-Setup-1.2.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-Studio-Setup-1.2.0.exe)                       |
+| Windows (portable)      | [SnekPad-Studio-1.2.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-Studio-1.2.0-windows-portable.zip) |
+| macOS                   | [snekpad-studio-1.2.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio-1.2.0.dmg)                                   |
+| Linux (any distro)      | [snekpad-studio-1.2.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio-1.2.0.AppImage)                         |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.2.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/snekpad-studio_1.2.0_amd64.deb)                       |
+| Pad image (new pad)     | [SnekPad-pad-v1.2.0.uf2](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.2.0/SnekPad-pad-v1.2.0.uf2)                                       |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
@@ -99,8 +100,9 @@ See [`app/README.md`](app/README.md) for tests, builds, the knob modes and the c
 
 **The pad**
 
-From the next release on, a new pad is set up in one step: hold BOOT while plugging it in and drag the release's
-`SnekPad-pad-vX.Y.Z.uf2` onto the `RPI-RP2` drive. It brings CircuitPython, KMK, the libraries and the firmware at once.
+A new pad is set up in one step: hold BOOT while plugging it in and drag the release's `SnekPad-pad-vX.Y.Z.uf2` (the
+last row of the table above) onto the `RPI-RP2` drive. It brings CircuitPython, KMK, the libraries and the firmware at
+once, and replaces whatever was on the pad.
 It can also be set up by hand: install CircuitPython, KMK and three Adafruit libraries, then copy the files from
 `Programs/` onto the pad. Both ways are in [`app/README.md`](app/README.md#setting-up-a-new-pad).
 
@@ -108,7 +110,7 @@ It can also be set up by hand: install CircuitPython, KMK and three Adafruit lib
 
 - [`app/README.md`](app/README.md): running the app, setting up a pad, the knob.
 - [`app/PROTOCOL.md`](app/PROTOCOL.md): the serial messages between the app and the pad.
-- [Release notes](RELEASE_NOTES_v1.1.4.md): what is new in this version (older ones are in the same folder).
+- [Release notes](RELEASE_NOTES_v1.2.0.md): what is new in this version (older ones are in the same folder).
 
 ## License
 
