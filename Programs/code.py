@@ -103,6 +103,10 @@ keyboard.diode_orientation = DiodeOrientation.COL2ROW
 layers = Layers()
 macros = Macros()
 keyboard.modules = [layers, macros]
+try:
+    config_loader.attach(keyboard)      # lets a config's tap_hold keys add the HoldTap / TapDance modules when they are used
+except Exception:
+    pass
 keyboard.extensions.append(MediaKeys())
 
 # Per-key RGB: created now so KC.LED_TOG / LED_DIM / LED_BRT exist for the utility layer.
@@ -332,6 +336,18 @@ COLORS.append(UTILITY_COLORS)
 LAYER_NAMES.append("UTILITY")
 KNOB_TEXT.append("KNOB:-")
 ENC_MAP.append((KC.NO, KC.NO, KC.NO))
+
+# Extra layers of a profile (config "layers"): after the utility layer, in profile order. The index of each one is
+# what config_loader.build_profiles gave the profile's layer keys. They show their own legend and colours, the knob
+# keeps the profile's actions, and (being past profile_layers) they get no colour flash and pause LED effects.
+for i, p in enumerate(PROFILES):
+    for sub in p.get("sub", ()):
+        keymap.append([FN if k == "FN" else k for k in sub["keys"]])
+        LABELS.append(sub["labels"])
+        COLORS.append(sub["colors"])
+        LAYER_NAMES.append(p["name"][:10] + " 2")
+        KNOB_TEXT.append(KNOB_TEXT[i])
+        ENC_MAP.append(ENC_MAP[i])
 
 keyboard.keymap = keymap
 

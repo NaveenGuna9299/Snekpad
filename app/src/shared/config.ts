@@ -20,6 +20,10 @@ export const MAX_COMBO = 6 // keys pressed together in one shortcut
 export const MAX_STEPS = 6 // keys / shortcuts in one sequence
 export const MAX_WAIT_MS = 2000 // longest pause between two steps
 export const DEFAULT_WAIT_MS = 100
+export const MAX_LAYERS = 1 // extra 12-key layers a profile may have, next to its main keys (SUB_LAYERS in Programs/config_loader.py)
+export const MIN_TAP_MS = 100 // tap / hold / double-tap timing, in ms (the same limits as the firmware)
+export const MAX_TAP_MS = 1000
+export const DEFAULT_TAP_MS = 250
 export const FN_KEY = 11 // bottom-right key is always the utility (FN) layer key
 export const DEFAULT_SLEEP_MINUTES = 2 // idle minutes before the pad's screen and key LEDs switch off
 export const MAX_SLEEP_MINUTES = 60 // 0 = never sleep
@@ -75,10 +79,9 @@ const effectIds = EFFECTS.map((e) => e.id) as [EffectId, ...EffectId[]]
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'colour must look like #RRGGBB')
 const keyName = z.string().regex(/^[A-Z0-9_]{1,12}$/, 'key names are upper case, e.g. CTRL, C, F12')
 
-export const actionSchema = z.discriminatedUnion('type', [
+// The actions that just press something. tap_hold uses these for what a tap, a hold and a double-tap do.
+const plainActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('none') }),
-  z.object({ type: z.literal('fn') }), // reserved for FN_KEY
-  z.object({ type: z.literal('layer_next') }), // legacy: old knob press. Migrated away; holding the knob now opens the profile switcher
   z.object({ type: z.literal('key'), key: keyName }),
   z.object({
     type: z.literal('hotkey'),
@@ -103,6 +106,31 @@ export const actionSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('consumer'), code: keyName })
 ])
+
+// Goes to the profile's extra layer while held ('hold') or switches to it and back ('toggle').
+const layerActionSchema = z.object({
+  type: z.literal('layer'),
+  mode: z.enum(['hold', 'toggle']),
+  layer: z.number().int().min(1).max(MAX_LAYERS)
+})
+
+const tapMs = z.number().int().min(MIN_TAP_MS).max(MAX_TAP_MS)
+
+export const actionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('fn') }), // reserved for FN_KEY
+  z.object({ type: z.literal('layer_next') }), // legacy: old knob press. Migrated away; holding the knob now opens the profile switcher
+  layerActionSchema,
+  ...plainActionSchema.options,
+  // One key, several actions: a tap does `tap`, holding does `hold` (which may be a layer key), and tapping twice
+  // does `double`. At least one of hold and double is needed. `ms` is the hold time / the window for the second tap.
+  z.object({
+    type: z.literal('tap_hold'),
+    tap: plainActionSchema,
+    hold: z.union([plainActionSchema, layerActionSchema]).optional(),
+    double: plainActionSchema.optional(),
+    ms: tapMs.optional()
+  })
+])
 export type Action = z.infer<typeof actionSchema>
 
 export const keySchema = z.object({
@@ -111,6 +139,9 @@ export const keySchema = z.object({
   action: actionSchema
 })
 export type KeyConfig = z.infer<typeof keySchema>
+
+const layerSchema = z.object({ keys: z.array(keySchema).length(KEY_COUNT) })
+export type LayerConfig = z.infer<typeof layerSchema>
 
 export const profileSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,24}$/),
@@ -121,6 +152,8 @@ export const profileSchema = z.object({
     titles: z.array(z.string().max(TITLE_WORD_MAX)).max(MAX_TITLE_WORDS) // words in the window title
   }),
   keys: z.array(keySchema).length(KEY_COUNT),
+  // Extra layers (at most MAX_LAYERS), reached with a layer key. A profile saved before they existed has none.
+  layers: z.array(layerSchema).max(MAX_LAYERS).default([]),
   encoder: z.object({
     label: z.string().max(10), // top-bar hint, e.g. KNOB:VOL
     cw: actionSchema,
@@ -195,11 +228,39 @@ export const configSchema = z
             path: [list, i, 'keys', FN_KEY]
           })
         }
+        p.layers.forEach((l, li) => {
+          if (l.keys[FN_KEY].action.type !== 'fn')
+            ctx.addIssue({
+              code: 'custom',
+              message: `key ${FN_KEY} must stay the FN key`,
+              path: [list, i, 'layers', li, 'keys', FN_KEY]
+            })
+        })
+        for (const problem of layerProblems(p))
+          ctx.addIssue({ code: 'custom', message: problem, path: [list, i] })
       })
     check('profiles')
     check('studioProfiles')
   })
 export type Config = z.infer<typeof configSchema>
+
+/** What is wrong with a profile's layer keys and tap_hold keys (empty = fine). */
+export function layerProblems(p: Profile): string[] {
+  const out: string[] = []
+  const layerKeys = (a: Action): Extract<Action, { type: 'layer' }>[] =>
+    a.type === 'layer' ? [a] : a.type === 'tap_hold' && a.hold?.type === 'layer' ? [a.hold] : []
+  for (const k of [...p.keys, ...p.layers.flatMap((l) => l.keys)])
+    for (const l of layerKeys(k.action))
+      if (l.layer > p.layers.length) out.push(`"${p.name}" has a layer key but no layer ${l.layer}`)
+  const { cw, ccw, press } = p.encoder
+  for (const a of [cw, ccw, press])
+    if (a.type === 'layer' || a.type === 'tap_hold')
+      out.push(`"${p.name}": the knob cannot use a layer key or a tap/hold key`)
+  for (const k of [...p.keys, ...p.layers.flatMap((l) => l.keys)])
+    if (k.action.type === 'tap_hold' && !k.action.hold && !k.action.double)
+      out.push(`"${p.name}": a tap/hold key needs a hold or a double-tap`)
+  return [...new Set(out)]
+}
 
 export type ValidationResult = { ok: true; config: Config } | { ok: false; errors: string[] }
 
@@ -298,6 +359,7 @@ function general(): Profile {
       K('snip', YELLOW, hot('GUI', 'SHIFT', 'S')),
       FN()
     ],
+    layers: [],
     encoder: {
       label: 'KNOB:VOL',
       cw: consumer('VOLU'),
@@ -327,6 +389,7 @@ function vscode(): Profile {
       K('fmt', PINK, hot('SHIFT', 'ALT', 'F')),
       FN()
     ],
+    layers: [],
     encoder: {
       label: 'KNOB:TAB',
       cw: hot('CTRL', 'PGDN'),
@@ -375,6 +438,7 @@ function terminal(): Profile {
       K('py', PINK, typed('python', true)),
       FN()
     ],
+    layers: [],
     encoder: {
       label: 'KNOB:SCRL',
       cw: hot('SHIFT', 'PGDN'),
@@ -408,6 +472,7 @@ function browser(): Profile {
       K('fwd', WHITE, hot('ALT', 'RIGHT')),
       FN()
     ],
+    layers: [],
     encoder: {
       label: 'KNOB:TAB',
       cw: hot('CTRL', 'PGDN'),
@@ -524,6 +589,7 @@ export function blankProfile(id: string, name: string): Profile {
     keys: Array.from({ length: KEY_COUNT }, (_, i) =>
       i === FN_KEY ? FN() : K('', DIM, { type: 'none' })
     ),
+    layers: [],
     encoder: {
       label: 'KNOB:VOL',
       cw: consumer('VOLU'),

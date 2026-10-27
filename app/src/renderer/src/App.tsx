@@ -5,8 +5,10 @@ import {
   defaultConfig,
   FN_KEY,
   MAX_ALL_PROFILES,
+  MAX_LAYERS,
   MAX_PROFILES,
   MAX_STUDIO_PROFILES,
+  type Action,
   type KeyConfig,
   type Profile
 } from '../../shared/config'
@@ -32,12 +34,43 @@ import { hasSlot, updateOffer } from '../../shared/firmware'
 import { isMusicEffect } from '../../shared/config'
 import type { Preset } from './lib/presets'
 
+/** The layer number an action points at, if it is a layer key (or a tap/hold key whose hold is one). */
+const layerOf = (a: Action): number | undefined =>
+  a.type === 'layer'
+    ? a.layer
+    : a.type === 'tap_hold' && a.hold?.type === 'layer'
+      ? a.hold.layer
+      : undefined
+
+/** An action with its layer key taken out (the layer it pointed at is gone): a plain tap stays, a lone layer key does nothing. */
+const withoutLayerKey = (a: Action): Action => {
+  if (a.type === 'layer') return { type: 'none' }
+  if (a.type === 'tap_hold' && a.hold?.type === 'layer') {
+    if (!a.double) return a.tap
+    const rest = { ...a }
+    delete rest.hold
+    return rest
+  }
+  return a
+}
+
+const blankLayer = (): Profile['layers'][number] => ({ keys: blankProfile('layer', 'layer').keys })
+
+/** A key that points at a layer the profile does not have yet makes the layer. */
+const withLayerFor = (p: Profile, action: Action | undefined): Profile =>
+  action && layerOf(action) !== undefined && p.layers.length === 0
+    ? { ...p, layers: [blankLayer()] }
+    : p
+
 const newProfileId = (): string => `profile${Date.now().toString(36)}`
 
 function App(): React.JSX.Element {
   const { config, update, history, device, pressed, sync, push, pushing, message, flash, dismiss } =
     useStudio()
   const [selectedProfile, setSelectedProfile] = useState(0)
+  // which layer of the selected profile the pad view and the inspector show: 0 = the main keys, 1 = its extra layer
+  const [layerSel, setLayerSel] = useState({ profile: 0, layer: 0 })
+  const layerAt = layerSel.profile === selectedProfile ? layerSel.layer : 0
   // a music effect is chosen and a pad is there to receive it: listen to the computer's sound and feed the pad
   const musicChosen = !!config && isMusicEffect(config.settings.effect)
   const music = useMusic(musicChosen && device.status === 'connected')
@@ -83,19 +116,34 @@ function App(): React.JSX.Element {
   )
   // the live colour preview is for the pad's own profiles: a Studio-only profile is not on the pad until its app is in focus
   const previewLed = (layer: number, key: number, color: string): void => {
-    if (config && layer < config.profiles.length) void window.api.previewLed(layer, key, color)
+    if (config && layerAt === 0 && layer < config.profiles.length)
+      void window.api.previewLed(layer, key, color)
   }
+
+  // the keys of the layer being edited, and a way to change them
+  const keysOf = (p: Profile): KeyConfig[] =>
+    layerAt > 0 && layerAt <= p.layers.length ? p.layers[layerAt - 1].keys : p.keys
+  const mapKeys = (p: Profile, fn: (keys: KeyConfig[]) => KeyConfig[]): Profile =>
+    layerAt > 0 && layerAt <= p.layers.length
+      ? {
+          ...p,
+          layers: p.layers.map((l, i) => (i === layerAt - 1 ? { ...l, keys: fn(l.keys) } : l))
+        }
+      : { ...p, keys: fn(p.keys) }
 
   const clipboard = useRef<KeyConfig | null>(null)
   const sel = selection.kind === 'key' ? selection.index : -1
   const swapKeys = (from: number, to: number): void => {
     if (from === to || from === FN_KEY || to === FN_KEY) return
-    editProfile((p) => {
-      const keys = [...p.keys]
-      ;[keys[from], keys[to]] = [keys[to], keys[from]]
-      return { ...p, keys }
-    })
-    const keys = config && allProfiles(config)[selectedProfile]?.keys
+    editProfile((p) =>
+      mapKeys(p, (all) => {
+        const keys = [...all]
+        ;[keys[from], keys[to]] = [keys[to], keys[from]]
+        return keys
+      })
+    )
+    const shown = config && allProfiles(config)[selectedProfile]
+    const keys = shown && keysOf(shown)
     if (keys) {
       previewLed(selectedProfile, from, keys[to].color)
       previewLed(selectedProfile, to, keys[from].color)
@@ -104,7 +152,8 @@ function App(): React.JSX.Element {
     flash(`Swapped keys ${from + 1} and ${to + 1}.`, false, true)
   }
   const copyKey = (): void => {
-    const key = config && allProfiles(config)[selectedProfile]?.keys[sel]
+    const shown = config && allProfiles(config)[selectedProfile]
+    const key = shown && keysOf(shown)[sel]
     if (!key || sel === FN_KEY) return
     clipboard.current = structuredClone(key)
     flash(`Copied key ${sel + 1}.`)
@@ -112,10 +161,12 @@ function App(): React.JSX.Element {
   const pasteKey = (): void => {
     const key = clipboard.current
     if (!key || sel < 0 || sel === FN_KEY) return
-    editProfile((p) => ({
-      ...p,
-      keys: p.keys.map((k, i) => (i === sel ? structuredClone(key) : k))
-    }))
+    editProfile((p) =>
+      withLayerFor(
+        mapKeys(p, (keys) => keys.map((k, i) => (i === sel ? structuredClone(key) : k))),
+        key.action
+      )
+    )
     previewLed(selectedProfile, sel, key.color)
     flash(`Pasted onto key ${sel + 1}.`, false, true)
   }
@@ -290,10 +341,12 @@ function App(): React.JSX.Element {
   }
 
   const setKey = (index: number, patch: Partial<KeyConfig>): void => {
-    editProfile((p) => ({
-      ...p,
-      keys: p.keys.map((k, i) => (i === index ? { ...k, ...patch } : k))
-    }))
+    editProfile((p) =>
+      withLayerFor(
+        mapKeys(p, (keys) => keys.map((k, i) => (i === index ? { ...k, ...patch } : k))),
+        patch.action
+      )
+    )
     if (patch.color) previewLed(selectedProfile, index, patch.color)
   }
 
@@ -323,7 +376,22 @@ function App(): React.JSX.Element {
     setSelectedProfile(0)
     flash('Starter profiles restored.', false, true)
   }
-  const selectedKey = selection.kind === 'key' ? profile.keys[selection.index] : null
+  const shownProfile: Profile = { ...profile, keys: keysOf(profile) }
+  const selectedKey = selection.kind === 'key' ? shownProfile.keys[selection.index] : null
+  const addLayer = (): void => {
+    editProfile((p) => ({ ...p, layers: [...p.layers, blankLayer()] }))
+    setLayerSel({ profile: selectedProfile, layer: profile.layers.length + 1 })
+  }
+  const removeLayer = (): void => {
+    const n = layerAt
+    editProfile((p) => ({
+      ...p,
+      keys: p.keys.map((k) => ({ ...k, action: withoutLayerKey(k.action) })),
+      layers: p.layers.filter((_, i) => i !== n - 1)
+    }))
+    setLayerSel({ profile: selectedProfile, layer: 0 })
+    flash(`Removed layer ${n + 1}.`, false, true)
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -439,8 +507,38 @@ function App(): React.JSX.Element {
             )}
 
             <main className="flex min-w-0 flex-1 flex-col items-center gap-4 overflow-y-auto p-6">
+              <div role="tablist" aria-label="Layer" className="flex items-center gap-1.5">
+                {[0, ...profile.layers.map((_, i) => i + 1)].map((n) => (
+                  <button
+                    key={n}
+                    role="tab"
+                    aria-selected={layerAt === n}
+                    onClick={() => setLayerSel({ profile: selectedProfile, layer: n })}
+                    className={`rounded-md border px-3 py-1 text-xs ${layerAt === n ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
+                  >
+                    {n === 0 ? 'Main keys' : `Layer ${n + 1}`}
+                  </button>
+                ))}
+                {profile.layers.length < MAX_LAYERS && (
+                  <button
+                    onClick={addLayer}
+                    title="Add a second set of 12 keys, reached with a layer key"
+                    className="rounded-md border border-dashed border-line px-3 py-1 text-xs text-muted hover:bg-surface2 hover:text-fg"
+                  >
+                    + Add layer
+                  </button>
+                )}
+                {layerAt > 0 && (
+                  <button
+                    onClick={removeLayer}
+                    className="rounded-md px-2 py-1 text-xs text-muted hover:text-fg"
+                  >
+                    Remove layer
+                  </button>
+                )}
+              </div>
               <PadView
-                profile={profile}
+                profile={shownProfile}
                 selection={selection}
                 onSelect={setSelection}
                 onSwap={swapKeys}
@@ -475,7 +573,7 @@ function App(): React.JSX.Element {
             </main>
 
             <Inspector
-              profile={profile}
+              profile={shownProfile}
               selection={selection}
               onKey={setKey}
               onEncoder={(patch) =>
@@ -486,7 +584,7 @@ function App(): React.JSX.Element {
               }
               onTitles={(titles) => editProfile((p) => ({ ...p, match: { ...p.match, titles } }))}
               onApplyColorToAll={(color) =>
-                editProfile((p) => ({ ...p, keys: p.keys.map((k) => ({ ...k, color })) }))
+                editProfile((p) => mapKeys(p, (keys) => keys.map((k) => ({ ...k, color }))))
               }
             />
           </div>

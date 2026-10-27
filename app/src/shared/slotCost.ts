@@ -16,6 +16,8 @@ const MACRO_OBJECT = 58 // one step of a macro
 const MACRO = 60 // the macro itself
 const MODIFIER = 28 // one modifier wrapped around a key
 const PAD_PROFILE_OVERHEAD = 800 // lists and strings of a profile the pad keeps itself
+const TAP_HOLD = 120 // a tap/hold key: the key object and its timing (an estimate, not measured on a pad yet)
+const LAYER_OVERHEAD = 400 // an extra layer's lists (keys, labels, colours); its keys cost the same as any others (an estimate)
 
 /** Bytes the slot has for a profile's keys when the pad's own profiles are only General (free RAM minus the 2 KB the pad keeps back). */
 export const SLOT_BUDGET = 6350
@@ -44,15 +46,27 @@ export function actionCost(a: Action): number {
       })
       return MACRO + MACRO_OBJECT * objects
     }
+    case 'tap_hold':
+      // the key itself, plus what its tap, hold and double tap each are (not measured on a pad yet: a guess)
+      return (
+        TAP_HOLD +
+        actionCost(a.tap) +
+        (a.hold ? actionCost(a.hold) : 0) +
+        (a.double ? actionCost(a.double) : 0)
+      )
     default:
-      return 0 // a plain key, a media key, nothing: the pad shares one object for each
+      return 0 // a plain key, a media key, a layer key, nothing: the pad shares one object for each
   }
 }
 
 /** The memory a whole profile takes: its 12 keys and the knob's three actions. */
 export function profileCost(p: Profile): number {
   const { cw, ccw, press } = p.encoder
-  return [...p.keys.map((k) => k.action), cw, ccw, press].reduce((n, a) => n + actionCost(a), 0)
+  const keys = [...p.keys, ...p.layers.flatMap((l) => l.keys)]
+  return (
+    [...keys.map((k) => k.action), cw, ccw, press].reduce((n, a) => n + actionCost(a), 0) +
+    p.layers.length * LAYER_OVERHEAD
+  )
 }
 
 /** What the pad has for a Studio-only profile: the budget, less what the pad's own profiles (other than General) already use. */

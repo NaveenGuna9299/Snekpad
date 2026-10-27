@@ -19,5 +19,13 @@ export function describeAction(a: Action): string {
       return a.steps.map((s) => s.keys.join('+')).join(', then ')
     case 'consumer':
       return a.code
+    case 'layer':
+      return a.mode === 'hold' ? `Hold for layer ${a.layer + 1}` : `Toggle layer ${a.layer + 1}`
+    case 'tap_hold': {
+      const parts = [`Tap: ${describeAction(a.tap)}`]
+      if (a.hold) parts.push(`Hold: ${describeAction(a.hold)}`)
+      if (a.double) parts.push(`Double: ${describeAction(a.double)}`)
+      return parts.join(' · ')
+    }
   }
 }

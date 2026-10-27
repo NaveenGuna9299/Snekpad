@@ -24,7 +24,16 @@ type Props = {
   onApplyColorToAll: (color: string) => void
 }
 
-const KEY_ACTIONS: Action['type'][] = ['hotkey', 'key', 'text', 'sequence', 'consumer', 'none']
+const KEY_ACTIONS: Action['type'][] = [
+  'hotkey',
+  'key',
+  'text',
+  'sequence',
+  'consumer',
+  'tap_hold',
+  'layer',
+  'none'
+]
 const ENC_ACTIONS: Action['type'][] = ['consumer', 'hotkey', 'key', 'none']
 
 export function Inspector({

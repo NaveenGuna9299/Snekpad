@@ -41,6 +41,12 @@ DEFAULT_EFFECT = "static"      # settings.effect when the config has none (an ol
 
 MODS = {"CTRL": "LCTL", "SHIFT": "LSFT", "ALT": "LALT", "GUI": "LGUI"}
 
+SUB_LAYERS = 1                 # extra 12-key layers a profile may have (profile["layers"]); reached with a "layer" key
+MIN_TAP_MS = 100               # tap_hold: how long a press counts as a tap / how long the window for a second tap is
+MAX_TAP_MS = 1000
+DEFAULT_TAP_MS = 250
+PLAIN = ("none", "key", "consumer", "hotkey", "text", "sequence")   # what a tap_hold's tap / hold / double may be
+
 
 def crc32(data, value=0):
     """CRC-32 of data; pass the previous result as value to continue over more data."""
@@ -209,6 +215,16 @@ def check(cfg):
         if not p["name"]:
             raise ValueError("profile without a name")
         p["match"]["windows"], p["match"]["macos"], p["match"]["titles"], p["encoder"]["cw"]
+        subs = p.get("layers", [])
+        if not isinstance(subs, list) or len(subs) > SUB_LAYERS:
+            raise ValueError("a profile has at most %d extra layers" % SUB_LAYERS)
+        for sub in subs:
+            if len(sub["keys"]) != KEYS:
+                raise ValueError("a layer needs %d keys" % KEYS)
+        for k in p["keys"] + [k for sub in subs for k in sub["keys"]]:
+            a = k.get("action")
+            if a and a.get("type") == "layer" and not 1 <= a.get("layer", 0) <= len(subs):
+                raise ValueError("a layer key points at a layer the profile does not have")
     cfg["settings"]["brightness"], cfg["device"]["owner_screen"]
     sleep_minutes(cfg)
     effect(cfg)
@@ -249,8 +265,70 @@ def _combo(keys):
     return key
 
 
-def _action(a):
+keyboard = None     # set by code.py (attach): tap_hold needs the HoldTap / TapDance modules, which are added on first use
+
+
+def attach(kb):
+    global keyboard
+    keyboard = kb
+
+
+def _need(name):
+    """KC.HT / KC.TD exist only once their module is in the keyboard. Adds it the first time a config uses it,
+    so a pad whose config has no tap_hold keeps the RAM."""
+    try:
+        return getattr(KC, name)
+    except Exception:
+        pass
+    if keyboard is None:
+        raise ValueError("no support for " + name)
+    if name == "HT":
+        from kmk.modules.holdtap import HoldTap as Mod
+    else:
+        from kmk.modules.tapdance import TapDance as Mod
+    keyboard.modules.append(Mod())
+    return getattr(KC, name)
+
+
+def _plain(a):
+    if a["type"] not in PLAIN:
+        raise ValueError("not allowed inside tap_hold: " + a["type"])
+    return _action(a)
+
+
+def _tap_hold(a, ctx):
+    ms = a.get("ms", DEFAULT_TAP_MS)
+    if isinstance(ms, bool) or not isinstance(ms, int) or not MIN_TAP_MS <= ms <= MAX_TAP_MS:
+        raise ValueError("ms must be %d to %d" % (MIN_TAP_MS, MAX_TAP_MS))
+    tap = _plain(a["tap"])
+    hold, double = a.get("hold"), a.get("double")
+    if hold is None and double is None:
+        raise ValueError("tap_hold needs a hold or a double")
+    if hold is not None:
+        # a hold may also be a layer key, which is how a key becomes "tap = X, hold = layer"
+        hold = _action(hold, ctx) if hold["type"] == "layer" else _plain(hold)
+        tap = _need("HT")(tap, hold, prefer_hold=False, tap_interrupted=False, tap_time=ms)
+    if double is not None:
+        tap = _need("TD")(tap, _plain(double), tap_time=ms)
+    return tap
+
+
+def _action(a, ctx=None):
+    """ctx: {layer number: index of that layer in the keymap} for the profile this key belongs to.
+    None where there are no layers (the Studio slot): a layer key is a dead key there."""
     t = a["type"]
+    if t == "layer":
+        if ctx is None or a["layer"] not in ctx:
+            return KC.NO
+        if a["mode"] == "hold":
+            return KC.MO(ctx[a["layer"]])
+        if a["mode"] == "toggle":
+            return KC.TG(ctx[a["layer"]])
+        raise ValueError("unknown layer mode " + str(a["mode"]))
+    if t == "tap_hold":
+        if ctx is None and keyboard is None:
+            return KC.NO
+        return _tap_hold(a, ctx)
     if t == "none" or t == "layer_next":
         return KC.NO
     if t == "fn":
@@ -278,22 +356,37 @@ def _action(a):
 
 
 def build_profiles(cfg):
-    """The same dicts as p_general() etc. in code.py. Raises if anything can't be built."""
+    """The same dicts as p_general() etc. in code.py. Raises if anything can't be built.
+
+    A profile with extra layers also gets sub=[{keys, labels, colors}, ...]. The keymap is laid out as
+    profiles, Studio slot, utility layer, and then the extra layers in profile order, so profile p's layer s
+    is at index first_sub_layer(cfg) + (the extra layers of the profiles before p) + s - 1."""
     out = []
+    nxt = len(cfg["profiles"]) + 2      # after the profiles, the Studio slot and the utility layer
     for p in cfg["profiles"]:
         m = p["match"]
         enc = p["encoder"]
+        subs = p.get("layers", [])
+        ctx = {}
+        for i in range(len(subs)):
+            ctx[i + 1] = nxt + i
+        nxt += len(subs)
         out.append(dict(
             name=p["name"],
             # process names / bundle ids of both systems: the other system's names never match
             proc=tuple(s.lower() for s in m["windows"]) + tuple(s.lower() for s in m["macos"]),
             title=tuple(s.lower() for s in m["titles"]),
-            keys=[_action(k["action"]) for k in p["keys"]],
+            keys=[_action(k["action"], ctx) for k in p["keys"]],
             labels=[k["label"] for k in p["keys"]],
             colors=[_rgb(k["color"]) for k in p["keys"]],
             # (turn left, turn right, short press, top-bar text, press label)
             knob=(_action(enc["ccw"]), _action(enc["cw"]), _action(enc["press"]),
                   enc["label"], enc.get("pressLabel", "")),
+            sub=[dict(
+                keys=[_action(k["action"], ctx) for k in sub["keys"]],
+                labels=[k["label"] for k in sub["keys"]],
+                colors=[_rgb(k["color"]) for k in sub["keys"]],
+            ) for sub in subs],
         ))
     return out
 

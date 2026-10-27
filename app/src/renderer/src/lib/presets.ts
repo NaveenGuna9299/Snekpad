@@ -58,6 +58,7 @@ const make = (s: Spec): Preset => {
       name: s.name,
       match: { windows: s.windows ?? [], macos: s.macos ?? [], titles: s.titles ?? [] },
       keys: [...s.keys, FN()],
+      layers: [],
       encoder: {
         label: s.knob.label,
         cw: s.knob.cw,

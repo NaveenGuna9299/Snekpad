@@ -145,6 +145,26 @@ the first 3), 12 keys per profile, labels up to 5 characters. Studio keeps up to
 (`studioProfiles`, never sent in a push) and puts one of them on the pad's Studio slot when its app is in focus, see below.
 The JSON shape is `Config` in `src/shared/config.ts`; the starter config is about 4 KB.
 
+## Extra layers and tap / hold keys in the config JSON (next firmware after 0.5.1)
+
+Both are optional additions to schema version 1: a config without them loads exactly as before, and a pad with older
+firmware refuses a config that uses them (the action type is unknown), so it keeps running its built-in profiles.
+
+**`layers`** on a profile: up to 1 extra layer, `[{ "keys": [12 keys] }]`, same key shape as `keys`, and key 12 (the
+utility key) must stay `{"type":"fn"}` there too. The pad puts the extra layers after the utility layer, in profile
+order, shows each layer's own labels and colours, and the knob keeps the profile's actions.
+
+**`{ "type": "layer", "mode": "hold" | "toggle", "layer": 1 }`** goes to the profile's extra layer while held, or switches
+to it and back. It needs the layer to exist. It is not allowed on the knob.
+
+**`{ "type": "tap_hold", "tap": A, "hold": B, "double": C, "ms": 250 }`**: tap does `A`, holding does `B` (which may be a
+`layer` key), tapping twice does `C`. `A`, `B`, `C` are `none`, `key`, `hotkey`, `text`, `sequence` or `consumer`; at least one
+of `hold` and `double` is required, and `ms` (100 to 1000, default 250) is the hold time and the window for the second tap.
+With a `double`, a single tap is sent only after that window. Not allowed on the knob. The pad adds KMK's HoldTap and
+TapDance modules the first time a config uses them.
+
+On the Studio slot (`SLOT_*`) a `layer` key is a dead key, because the slot has no extra layer; a `tap_hold` key works.
+
 ## The Studio slot (`SLOT_*`, firmware 0.5.0 and later)
 
 The pad has room for 3 profiles of its own. Studio keeps up to 7 more and puts the one that fits the app in focus on a

@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
+  DEFAULT_TAP_MS,
   DEFAULT_WAIT_MS,
   MAX_COMBO,
   MAX_STEPS,
+  MAX_TAP_MS,
   MAX_WAIT_MS,
+  MIN_TAP_MS,
   type Action
 } from '../../../shared/config'
 import { CONSUMER_CODES, orderCombo, tokenFromCode } from '../lib/keys'
@@ -18,7 +21,9 @@ const LABELS: Record<Kind, string> = {
   hotkey: 'Shortcut',
   text: 'Type text',
   sequence: 'Sequence',
-  consumer: 'Media / volume'
+  consumer: 'Media / volume',
+  layer: 'Layer',
+  tap_hold: 'Tap / hold'
 }
 
 const DEFAULTS: Record<Kind, Action> = {
@@ -29,8 +34,18 @@ const DEFAULTS: Record<Kind, Action> = {
   hotkey: { type: 'hotkey', keys: ['CTRL', 'C'] },
   text: { type: 'text', text: '', enter: false },
   sequence: { type: 'sequence', steps: [{ keys: ['ESC'], wait: DEFAULT_WAIT_MS }] },
-  consumer: { type: 'consumer', code: 'MUTE' }
+  consumer: { type: 'consumer', code: 'MUTE' },
+  layer: { type: 'layer', mode: 'hold', layer: 1 },
+  tap_hold: {
+    type: 'tap_hold',
+    tap: { type: 'key', key: 'ENTER' },
+    hold: { type: 'layer', mode: 'hold', layer: 1 }
+  }
 }
+
+// what a tap, a hold and a double-tap may do (a hold may also be a layer key)
+const PLAIN: Kind[] = ['hotkey', 'key', 'text', 'sequence', 'consumer', 'none']
+const HOLD: Kind[] = [...PLAIN, 'layer']
 
 type Props = {
   action: Action
@@ -117,6 +132,22 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
         </label>
       )}
 
+      {action.type === 'layer' && (
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          How it works
+          <select
+            value={action.mode}
+            onChange={(e) => onChange({ ...action, mode: e.target.value as 'hold' | 'toggle' })}
+            className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
+          >
+            <option value="hold">Hold to use layer {action.layer + 1}</option>
+            <option value="toggle">Press to switch to layer {action.layer + 1} and back</option>
+          </select>
+        </label>
+      )}
+
+      {action.type === 'tap_hold' && <TapHoldEditor action={action} onChange={onChange} />}
+
       {(action.type === 'hotkey' || action.type === 'sequence') && (
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -126,6 +157,78 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
           />
           Use Cmd instead of Ctrl on macOS
         </label>
+      )}
+    </div>
+  )
+}
+
+function TapHoldEditor({
+  action,
+  onChange
+}: {
+  action: Extract<Action, { type: 'tap_hold' }>
+  onChange: (a: Action) => void
+}): React.JSX.Element {
+  type Part = 'hold' | 'double'
+  const [more, setMore] = useState<Record<Part, boolean>>({
+    hold: !!action.hold,
+    double: !!action.double
+  })
+  // a tap_hold with neither a hold nor a double-tap is refused by the pad, so one of them is always kept
+  const toggle = (part: Part, on: boolean): void => {
+    const other: Part = part === 'hold' ? 'double' : 'hold'
+    if (!on && !action[other]) return
+    setMore({ ...more, [part]: on })
+    const next = { ...action }
+    if (!on) delete next[part]
+    else if (part === 'hold') next.hold = { type: 'layer', mode: 'hold', layer: 1 }
+    else next.double = { type: 'key', key: 'ENTER' }
+    onChange(next)
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2 rounded-md border border-line p-2">
+        <span className="text-xs font-semibold">Tap</span>
+        <ActionEditor
+          action={action.tap}
+          allowed={PLAIN}
+          onChange={(tap) => onChange({ ...action, tap: tap as typeof action.tap })}
+        />
+      </div>
+      {(['hold', 'double'] as Part[]).map((part) => (
+        <div key={part} className="flex flex-col gap-2 rounded-md border border-line p-2">
+          <label className="flex items-center gap-2 text-xs font-semibold">
+            <input
+              type="checkbox"
+              checked={more[part]}
+              onChange={(e) => toggle(part, e.target.checked)}
+            />
+            {part === 'hold' ? 'Hold' : 'Double tap'}
+          </label>
+          {more[part] && action[part] && (
+            <ActionEditor
+              action={action[part]!}
+              allowed={part === 'hold' ? HOLD : PLAIN}
+              onChange={(a) => onChange({ ...action, [part]: a })}
+            />
+          )}
+        </div>
+      ))}
+      <label className="flex flex-col gap-1 text-xs text-muted">
+        Hold time / double-tap window: {action.ms ?? DEFAULT_TAP_MS} ms
+        <input
+          type="range"
+          min={MIN_TAP_MS}
+          max={MAX_TAP_MS}
+          step={10}
+          value={action.ms ?? DEFAULT_TAP_MS}
+          onChange={(e) => onChange({ ...action, ms: Number(e.target.value) })}
+        />
+      </label>
+      {more.double && (
+        <p className="text-xs text-muted">
+          With a double tap, a single tap fires only after the window has passed.
+        </p>
       )}
     </div>
   )
