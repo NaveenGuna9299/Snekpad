@@ -198,6 +198,36 @@ class ConfigPushFreesTheSlot(unittest.TestCase):
         self.assertIs(keymap[3], keymap[0])          # the slot is General again
         self.assertEqual(pad.profiles[3], ("Studio", (), ()))
 
+    def test_reading_the_config_without_enough_ram_lets_the_slot_go_and_tries_again(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        send_profile(pad, kb)
+        calls = []
+
+        def view():
+            calls.append(1)
+            if len(calls) == 1:
+                raise MemoryError()             # the slot's profile leaves too little RAM for the whole config
+            return '{"ok":true}'
+
+        pad.view = view
+        SERIAL.out = b""
+        feed(pad, kb, "GET_CFG\n")
+        self.assertEqual(len(calls), 2)
+        self.assertIn("CFG_BEGIN", sent())
+        self.assertFalse(pad.slot_ready)
+        self.assertIs(keymap[3], keymap[0])
+
+    def test_reading_the_config_with_nothing_on_the_slot_reports_the_error(self):
+        pad, kb, *_ = make_slot_pad()
+
+        def view():
+            raise MemoryError()
+
+        pad.view = view
+        SERIAL.out = b""
+        feed(pad, kb, "GET_CFG\n")
+        self.assertEqual(sent(), "ERR\tcould not read config\n")
+
     def test_a_push_with_nothing_on_the_slot_is_unchanged(self):
         pad, kb, keymap, *_ = make_slot_pad()
         SERIAL.out = b""

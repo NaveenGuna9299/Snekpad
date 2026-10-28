@@ -304,7 +304,15 @@ class AppProfiles(Module):
             self._write("ERR\tGET_CFG not supported\n")
             return
         try:
-            text = self.view()
+            try:
+                text = self.view()
+            except MemoryError:
+                # a Studio profile on the slot leaves too little RAM for the whole config in one piece: drop it (Studio
+                # sends it again, see manager.ts) and try once more
+                if not self.slot_ready:
+                    raise
+                self._slot_free()
+                text = self.view()
             data = text.encode("utf-8")
             self._write("CFG_BEGIN\t%d\t%08x\n" % (len(text), config_loader.crc32(data)))
             for i in range(0, len(text), CFG_CHUNK):

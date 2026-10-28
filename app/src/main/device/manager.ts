@@ -242,7 +242,11 @@ export class DeviceManager extends EventEmitter {
 
   /** Read the config that is live on the pad (what its keys, colours and OLED show right now). */
   async pull(): Promise<PullResult> {
-    return this.session ? this.session.pull() : NOT_CONNECTED
+    if (!this.session) return NOT_CONNECTED
+    const r = await this.session.pull()
+    // a pad short of RAM drops the Studio profile to read its config: send it again the next time its app is in focus
+    this.slotHeld = null
+    return r
   }
 
   /** Live colour preview of one key (not saved on the pad). */
