@@ -122,6 +122,8 @@ if ENABLE_RGB:
     # a brightness chosen with the DIM / BRT keys on the pad is kept across a power-off and wins over the app's
     # setting, and a config push does not undo it (config_loader.saved_level)
     LEVEL_SAVER = None
+    LEDS_ON = True              # the LED toggle key (hold FN): switched off on the pad stays off across a push or a power-off
+    LEDS_SAVER = None
     try:
         import config_loader as _cl
 
@@ -129,6 +131,8 @@ if ENABLE_RGB:
         if _saved is not None:
             RGB_START_LEVEL = _saved
         LEVEL_SAVER = _cl.save_level
+        LEDS_ON = _cl.saved_leds_on() is not False
+        LEDS_SAVER = _cl.save_leds_on
     except Exception as e:
         print("saved brightness ignored:", e)
     LED_EFFECT = "static"       # the app's setting (settings.effect in config.json, set in SnekPad Studio)
@@ -137,7 +141,7 @@ if ENABLE_RGB:
             LED_EFFECT = config_loader.effect(CFG)
         except Exception as e:
             print("config effect ignored:", e)
-    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL, on_level=LEVEL_SAVER, effect=LED_EFFECT)
+    leds = RgbKeys(board.GP10, level=RGB_START_LEVEL, on_level=LEVEL_SAVER, effect=LED_EFFECT, on=LEDS_ON, on_toggle=LEDS_SAVER)
     keyboard.modules.append(leds)
 
 

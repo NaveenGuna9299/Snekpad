@@ -32,7 +32,7 @@ import { KeyTest } from './components/KeyTest'
 import { Effects } from './components/Effects'
 import { FirmwareNotice } from './components/FirmwareNotice'
 import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
-import { hasLayers, hasSlot, updateOffer } from '../../shared/firmware'
+import { hasSlot, lacksLayers, updateOffer } from '../../shared/firmware'
 import { isMusicEffect } from '../../shared/config'
 import type { Preset } from './lib/presets'
 
@@ -571,7 +571,7 @@ function App(): React.JSX.Element {
               {isStudio && (
                 <div className="flex w-full max-w-[460px] flex-col items-start gap-3">
                   <SlotMeter profile={profile} config={config} />
-                  {studioOnlyUsed && device.status === 'connected' && !hasLayers(device) && (
+                  {studioOnlyUsed && lacksLayers(device) && (
                     <p className="text-xs text-muted">
                       This pad&apos;s firmware does not support layers or double tap yet, so they
                       will not work on it until the firmware is updated.

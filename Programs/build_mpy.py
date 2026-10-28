@@ -52,6 +52,7 @@ OTA_FILES = ("firmware.mpy", "config_loader.mpy", "slot_keys.mpy", "key_extras.m
 # The Heartbeat module in code.py clears the count after a minute of normal running.
 # nvm[2] = starts a freshly installed update has had to prove itself (fw_boot.py).
 # nvm[3] = the brightness step chosen with the keys on the pad (config_loader.saved_level), kept across a power-off.
+# nvm[4] = whether the LED toggle key left the key LEDs on or off (config_loader.saved_leds_on), kept the same way.
 # nvm[0] = crashes in a row, nvm[1] = 0xA5 when the stub itself asked for the reset: the pad reports
 # "power on" after microcontroller.reset() too, so that marker is how a real power-on is told apart.
 STUB = '''import microcontroller

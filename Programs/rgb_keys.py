@@ -130,7 +130,7 @@ def _wheel(p):
 
 
 class RgbKeys(Module):
-    def __init__(self, pin, level=3, press_flash=True, on_level=None, effect="static"):
+    def __init__(self, pin, level=3, press_flash=True, on_level=None, effect="static", on=True, on_toggle=None):
         self._pin = pin
         self.effect = effect    # static, rainbow, ripple, starry, equalizer or beat
         self._last_ms = 0       # ticks_ms of the last frame
@@ -159,6 +159,7 @@ class RgbKeys(Module):
         self._level = max(0, min(level, len(LEVELS) - 1))
         self._flash = press_flash
         self._on_level = on_level   # function(level): remembers the step across a power-off (code.py sets it)
+        self._on_toggle = on_toggle # function(on): remembers the LED toggle key's state, the same way
         self._save_at = 0
         self._t0 = None         # when the soft start began: the first scan, not power-up (the screen's start-up logo
                                 # blocks for about 2 s before the first scan, which would use up the fade)
@@ -172,7 +173,7 @@ class RgbKeys(Module):
 
         self.px = None
         self.enabled = False
-        self.on = True
+        self.on = on            # False after the toggle key switched the LEDs off (kept across a restart)
         self.colors = []        # colors[layer][key] = 0xRRGGBB
         self.layer = -1
         self._down = set()
@@ -384,6 +385,11 @@ class RgbKeys(Module):
     def _toggle(self, *args, **kwargs):
         self.on = not self.on
         self._paint()
+        if self._on_toggle is not None:
+            try:
+                self._on_toggle(self.on)
+            except Exception as e:      # never let a memory error stop the key
+                print("rgb_keys LED state not saved:", e)
 
     def _dimmer(self, *args, **kwargs):
         self._level = max(0, self._level - 1)

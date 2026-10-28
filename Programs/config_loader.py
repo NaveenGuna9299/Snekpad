@@ -362,6 +362,35 @@ def saved_level(count):
         return None
 
 
+NVM_LEDS = 4
+LEDS_ON = 0xA1                  # nvm[4] = LEDS_ON or LEDS_OFF: the LED toggle key of the utility layer; anything else = never used
+LEDS_OFF = 0xA0
+
+
+def saved_leds_on():
+    """True / False when the LED toggle key has switched the key LEDs on / off, or None if it never has."""
+    try:
+        import microcontroller
+
+        v = microcontroller.nvm[NVM_LEDS]
+        return True if v == LEDS_ON else False if v == LEDS_OFF else None
+    except Exception:
+        return None
+
+
+def save_leds_on(on):
+    """Remember whether the LED toggle key left the LEDs on or off, so a push (which restarts the pad) or a power-off does
+    not switch them back on. Writes only when it differs (flash wears with every write)."""
+    try:
+        import microcontroller
+
+        v = LEDS_ON if on else LEDS_OFF
+        if microcontroller.nvm[NVM_LEDS] != v:
+            microcontroller.nvm[NVM_LEDS] = v
+    except Exception as e:
+        print("LED state not saved:", e)
+
+
 def save_level(level):
     """Remember a step. Writes only when it differs: the memory is flash, which wears with every write."""
     try:

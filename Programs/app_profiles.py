@@ -421,6 +421,10 @@ class AppProfiles(Module):
     def _cfg_begin(self, parts, now):
         # CFG_BEGIN<TAB>length<TAB>crc32hex -> OK | ERR<TAB>reason
         self._drop_rx()
+        if self.slot is not None and self.slot_ready:
+            # The Studio profile on the slot takes RAM, and checking a config builds every profile at once: a push got
+            # "out of memory" while one was on the slot. Studio sends it again when its app comes into focus.
+            self._slot_free()
         try:
             if self._fw_busy():
                 raise OSError("firmware update in progress")
@@ -468,8 +472,10 @@ class AppProfiles(Module):
             rx.abort()
 
     def _cfg_error(self, e):
-        print("app_profiles config error:", e)
-        reason = "".join(c if " " <= c <= "~" else " " for c in str(e))[:60]
+        print("app_profiles config error:", repr(e))
+        # a MemoryError has no text: say what it is, or the app shows "Could not send:" and nothing after it
+        why = "config too big for the pad's memory" if isinstance(e, MemoryError) and not str(e) else str(e)
+        reason = "".join(c if " " <= c <= "~" else " " for c in why)[:60]
         try:
             self._write("ERR\t" + reason + "\n")     # the app gets its answer even if the screen code fails
         except Exception:

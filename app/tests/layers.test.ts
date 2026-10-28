@@ -14,7 +14,7 @@ import {
 } from '../src/shared/config'
 import { describeAction } from '../src/renderer/src/lib/describe'
 import { slotFrames } from '../src/shared/protocol'
-import { hasLayers } from '../src/shared/firmware'
+import { hasLayers, lacksLayers } from '../src/shared/firmware'
 import { profileCost } from '../src/shared/slotCost'
 
 // Layers, layer keys and double tap are for Studio-only profiles: the pad builds its own profiles at start-up, where the
@@ -202,6 +202,16 @@ describe('sending a layered profile to the pad', () => {
       ({ status: 'connected', firmware }) as unknown as Parameters<typeof hasLayers>[0]
     expect(hasLayers(dev('0.5.1'))).toBe(false)
     expect(hasLayers(dev('0.6.0'))).toBe(true)
+    expect(lacksLayers(dev('0.5.1'))).toBe(true)
+    expect(lacksLayers(dev('0.6.0'))).toBe(false)
+  })
+
+  it('does not warn while the pad has not said its firmware yet (right after a push it restarts)', () => {
+    const connected = { status: 'connected' } as unknown as Parameters<typeof lacksLayers>[0]
+    expect(lacksLayers(connected)).toBe(false) // connected, no HELLO answer yet
+    expect(lacksLayers({ ...connected, events: true })).toBe(true) // answered HELLO with no version: old firmware
+    expect(lacksLayers({ ...connected, legacy: true })).toBe(true) // never answered HELLO: old firmware
+    expect(lacksLayers({ status: 'disconnected' } as never)).toBe(false)
   })
 })
 

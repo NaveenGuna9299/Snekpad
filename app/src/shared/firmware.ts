@@ -22,6 +22,15 @@ export const LAYERS_FIRMWARE = '0.6.0'
 export const hasLayers = (device: DeviceState): boolean =>
   device.status === 'connected' && !!device.firmware && !isNewer(LAYERS_FIRMWARE, device.firmware)
 
+/**
+ * True when the connected pad is KNOWN to be older than 0.6.0 (no layers, no double tap). Not the same as "not hasLayers": right
+ * after a push the pad restarts, and for a moment Studio is connected to it without having heard its firmware yet; that must
+ * not look like old firmware. A pad that answers HELLO but sends no version is old firmware (from before versions).
+ */
+export const lacksLayers = (device: DeviceState): boolean =>
+  device.status === 'connected' &&
+  (device.firmware ? isNewer(LAYERS_FIRMWARE, device.firmware) : !!(device.events || device.legacy))
+
 /** True when the connected pad has the Studio slot (a pad that has not said its firmware yet does not count). */
 export const hasSlot = (device: DeviceState): boolean =>
   device.status === 'connected' && !!device.firmware && !isNewer(SLOT_FIRMWARE, device.firmware)

@@ -75,8 +75,10 @@ config). From 0.6.0 on, updates run from Studio again, and can add files.
   really turns off, and everything comes back as it was on the first key press or knob turn. At half that time they
   dim first (the LEDs drop to their lowest brightness). The time is set in Studio under **Settings → Pad sleeps
   after** (0 = never) and sent to the pad with **Push to pad**.
-- LED brightness is changed on the pad with the dim and brighter keys of the utility layer (hold FN). The step you
-  choose is remembered across a power-off or a computer restart, and pushing a config from Studio does not reset it.
+- LED brightness is changed on the pad with the dim and brighter keys of the utility layer (hold FN), and the LED key
+  there switches the lights off and on. The brightness step and the on/off state you choose are remembered across a
+  power-off or a computer restart, and pushing a config from Studio does not reset them (pad firmware 0.6.0 for the
+  on/off state).
   Studio has no brightness setting yet.
 - A soft start for the LEDs: at power-up they stay dark for about a second, so the computer can finish setting up the
   USB connection, and then fade in over about two seconds. Switching on all 12 LEDs at once could overload a weak or

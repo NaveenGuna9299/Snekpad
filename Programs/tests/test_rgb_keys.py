@@ -151,6 +151,33 @@ class LedTests(unittest.TestCase):
         self.tick()
         self.assertEqual(self.shown(), [0] * 12)
 
+    def test_the_toggle_key_reports_its_state_so_it_survives_a_push(self):
+        seen = []
+        self.leds._on_toggle = seen.append
+        self.leds._toggle()
+        self.leds._toggle()
+        self.assertEqual(seen, [False, True])
+
+    def test_a_failing_save_never_stops_the_toggle_key(self):
+        def boom(on):
+            raise MemoryError()
+
+        self.leds._on_toggle = boom
+        self.leds._toggle()
+        self.assertFalse(self.leds.on)
+        self.assertEqual(self.shown(), [0] * 12)
+
+    def test_the_leds_start_off_when_they_were_switched_off(self):
+        leds = rgb_keys.RgbKeys(None, level=3, on=False)
+        leds.px = FakeStrip()
+        leds.px.brightness = rgb_keys.LEVELS[3]
+        leds.enabled = True
+        leds.set_colors([list(row) for row in COLORS])
+        leds.layer = -1
+        self.assertFalse(leds.on)
+        leds._paint()
+        self.assertEqual([v for v in (leds.px.px[rgb_keys.LED_FOR_KEY[i]] for i in range(12))], [0] * 12)
+
     def test_without_a_screen_nothing_changes(self):
         self.leds.ui = None
         self.tick()

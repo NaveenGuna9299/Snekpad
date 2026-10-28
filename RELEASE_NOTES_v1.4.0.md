@@ -33,6 +33,11 @@ Studio's memory meter for Studio-only profiles uses the new numbers. A pad that 
 - **From 0.6.0 on, updates can add files.** Firmware 0.6.0 accepts a new module name when an update brings one (only plain `.mpy` names that would not replace something the pad already has), so this is the last release that needs a manual flash for that reason.
 - Your profiles are safe: Studio keeps them, a config saved by 1.3.0 loads unchanged, and a pad that was flashed with the script keeps its config.
 
+## Smaller things
+
+- **The LED key remembers.** The LED key of the utility layer (hold FN) switches the key LEDs off and on. That state is now kept across a push from Studio and across a power-off, like the brightness already was: the pad no longer lights them up again every time it restarts.
+- **Clearer errors.** A push that runs out of the pad's memory now says so, and a push frees the Studio profile on the slot first so it has the most memory to work with. The "firmware too old for layers" warning no longer flashes for a moment after a push.
+
 ## Notes
 
 - Config schema version: 1 (nothing changed). The new fields (`layers`, the `layer` and `tap_hold` actions) are optional; a pad with older firmware refuses a config that uses `tap_hold` and keeps running its built-in profiles.

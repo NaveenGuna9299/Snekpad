@@ -153,6 +153,59 @@ def send_layered(pad, kb, layers, name="OBS"):
     feed(pad, kb, "SLOT_END\n")
 
 
+class ConfigPushErrors(unittest.TestCase):
+    """A refused config push says why. A MemoryError has no text, which showed up in Studio as 'Could not send:' alone."""
+
+    def test_running_out_of_ram_while_checking_a_config_says_so(self):
+        pad, kb = make_pad()
+        SERIAL.out = b""
+        pad._cfg_error(MemoryError())
+        self.assertIn("config too big for the pad's memory", sent())
+        self.assertNotIn("ERR\t\n", sent())
+
+    def test_other_reasons_are_passed_on(self):
+        pad, kb = make_pad()
+        SERIAL.out = b""
+        pad._cfg_error(ValueError("unknown key FOO"))
+        self.assertIn("ERR\tunknown key FOO", sent())
+
+
+class ConfigPushFreesTheSlot(unittest.TestCase):
+    """A config push gets all the RAM: the Studio profile on the slot is let go when the push starts."""
+
+    class Receiver:
+        def __init__(self, length, crc):
+            self.length, self.crc = length, crc
+
+        def abort(self):
+            pass
+
+    def setUp(self):
+        base.config_loader.SlotBuilder = FakeBuilder
+        for name, value in (("can_save", lambda: True), ("Receiver", self.Receiver)):
+            patcher = mock.patch.object(base.config_loader, name, value, create=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_the_slot_profile_is_let_go_when_a_push_starts(self):
+        pad, kb, keymap, labels, colors, names, knob_text, enc = make_slot_pad()
+        send_profile(pad, kb)
+        self.assertTrue(pad.slot_ready)
+        SERIAL.out = b""
+        feed(pad, kb, "CFG_BEGIN\t100\t00000000\n")
+        self.assertEqual(sent(), "OK\n")
+        self.assertFalse(pad.slot_ready)
+        self.assertIs(keymap[3], keymap[0])          # the slot is General again
+        self.assertEqual(pad.profiles[3], ("Studio", (), ()))
+
+    def test_a_push_with_nothing_on_the_slot_is_unchanged(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        SERIAL.out = b""
+        feed(pad, kb, "CFG_BEGIN\t100\t00000000\n")
+        self.assertEqual(sent(), "OK\n")
+        self.assertFalse(pad.slot_ready)
+
+
 class OutOfMemoryBuilder(FakeBuilder):
     def add(self, index, label, color, action_text):
         if label == "bad":

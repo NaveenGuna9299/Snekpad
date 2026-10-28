@@ -229,5 +229,54 @@ class SavedBrightnessTests(unittest.TestCase):
             config_loader.save_level(2)                      # prints, never raises
 
 
+class SavedLedStateTests(unittest.TestCase):
+    """The LED toggle key (hold FN) is remembered across a push, which restarts the pad, and across a power-off."""
+
+    def setUp(self):
+        self.nvm = FakeNvm()
+        fake = types.ModuleType("microcontroller")
+        fake.nvm = self.nvm
+        patch = unittest.mock.patch.dict(sys.modules, {"microcontroller": fake})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_a_pad_that_never_used_the_key_has_no_saved_state(self):
+        self.assertIsNone(config_loader.saved_leds_on())        # erased flash: 0xFF
+        self.nvm.data[4] = 0
+        self.assertIsNone(config_loader.saved_leds_on())
+
+    def test_off_and_on_come_back(self):
+        config_loader.save_leds_on(False)
+        self.assertIs(config_loader.saved_leds_on(), False)
+        config_loader.save_leds_on(True)
+        self.assertIs(config_loader.saved_leds_on(), True)
+
+    def test_it_uses_its_own_byte_and_touches_no_other(self):
+        before = bytes(self.nvm.data)
+        config_loader.save_leds_on(False)
+        after = bytes(self.nvm.data)
+        self.assertEqual([i for i in range(len(before)) if before[i] != after[i]], [4])
+        config_loader.save_level(2)                             # the brightness byte is separate
+        self.assertIs(config_loader.saved_leds_on(), False)
+        self.assertEqual(config_loader.saved_level(5), 2)
+
+    def test_the_same_state_is_not_written_again(self):
+        config_loader.save_leds_on(False)
+        writes = self.nvm.writes
+        config_loader.save_leds_on(False)
+        self.assertEqual(self.nvm.writes, writes)
+
+    def test_a_pad_without_nvm_just_works(self):
+        with unittest.mock.patch.dict(sys.modules, {"microcontroller": types.ModuleType("microcontroller")}):
+            self.assertIsNone(config_loader.saved_leds_on())
+            config_loader.save_leds_on(False)                    # prints, never raises
+
+    def test_code_py_starts_the_leds_in_the_saved_state_and_hands_them_the_saver(self):
+        with open(os.path.join(HERE, "..", "code.py"), encoding="utf8") as f:
+            code = f.read()
+        self.assertIn("LEDS_ON = _cl.saved_leds_on() is not False", code)
+        self.assertIn("on=LEDS_ON, on_toggle=LEDS_SAVER", code)
+
+
 if __name__ == "__main__":
     unittest.main()
