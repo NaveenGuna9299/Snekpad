@@ -29,6 +29,13 @@ export const hasSlot = (device: DeviceState): boolean =>
 /** First firmware that can receive an update from Studio (it has fw_update.py and fw_boot.py). */
 export const OTA_FIRMWARE = '0.3.4'
 
+/**
+ * First firmware whose update list (ALLOWED in fw_update.py) holds slot_keys.mpy and key_extras.mpy. The pad checks the
+ * files of an update against its own, running list, so an older pad refuses a bundle that carries them: it needs one flash
+ * from the computer (the UF2 image or flash_pad.ps1), and after that updates run from Studio again.
+ */
+export const OTA_NEW_FILES_FIRMWARE = '0.6.0'
+
 /** `x.y.z`, digits only: the one shape the pad may send as its firmware version. */
 export const isFirmwareVersion = (v: string): boolean => /^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(v)
 
@@ -66,7 +73,14 @@ export function updateOffer(device: DeviceState, bundleVersion: string | null): 
   if (!bundleVersion || device.status !== 'connected') return 'none'
   if (!device.firmware) return device.events || device.legacy ? 'manual' : 'none'
   if (!isNewer(bundleVersion, device.firmware)) return 'none'
-  return isNewer(OTA_FIRMWARE, device.firmware) ? 'manual' : 'ota'
+  if (isNewer(OTA_FIRMWARE, device.firmware)) return 'manual'
+  // the bundle carries files that a pad this old does not know: it would refuse them
+  if (
+    isNewer(OTA_NEW_FILES_FIRMWARE, device.firmware) &&
+    !isNewer(OTA_NEW_FILES_FIRMWARE, bundleVersion)
+  )
+    return 'manual'
+  return 'ota'
 }
 
 /** The sentence shown to the user when the status is `older`. */

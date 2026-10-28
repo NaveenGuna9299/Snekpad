@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { FirmwareNotice } from '../../src/renderer/src/components/FirmwareNotice'
 import { SettingsMenu } from '../../src/renderer/src/components/SettingsMenu'
-import { OTA_FIRMWARE, updateOffer } from '../../src/shared/firmware'
+import { OTA_FIRMWARE, OTA_NEW_FILES_FIRMWARE, updateOffer } from '../../src/shared/firmware'
 import type { DeviceState } from '../../src/shared/api'
 import { installApi } from './stubApi'
 
@@ -34,14 +34,20 @@ function notice(device: DeviceState, bundleVersion: string | null = BUNDLE) {
 
 describe('FirmwareNotice: a pad that can take the update', () => {
   it('offers an Update pad button and opens the update when it is pressed', () => {
-    const n = notice(pad({ firmware: OTA_FIRMWARE }))
+    const n = notice(pad({ firmware: OTA_NEW_FILES_FIRMWARE }))
     const alert = screen.getByRole('alert')
     expect(alert.textContent).toContain(
-      `Pad firmware ${OTA_FIRMWARE} is older than the firmware in this app (${BUNDLE})`
+      `Pad firmware ${OTA_NEW_FILES_FIRMWARE} is older than the firmware in this app (${BUNDLE})`
     )
     fireEvent.click(screen.getByRole('button', { name: 'Update pad' }))
     expect(n.onUpdate).toHaveBeenCalledOnce()
     expect(screen.queryByRole('button', { name: 'Open the release page' })).toBeNull()
+  })
+
+  it('does not offer the button to a pad that would refuse the new files in the bundle (it needs a flash first)', () => {
+    notice(pad({ firmware: OTA_FIRMWARE }))
+    expect(screen.queryByRole('button', { name: 'Update pad' })).toBeNull()
+    expect(screen.getByRole('alert').textContent).toContain('one flash from the computer')
   })
 
   it('can be dismissed', () => {

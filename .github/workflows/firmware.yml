@@ -47,7 +47,7 @@ jobs:
       - name: Check the build output
         working-directory: Programs/build
         run: |
-          for f in firmware.mpy config_loader.mpy rgb_keys.mpy encoder_modes.mpy app_profiles.mpy oled_ui.mpy fw_boot.mpy fw_update.mpy code.py boot.py ota/manifest.json; do
+          for f in firmware.mpy config_loader.mpy slot_keys.mpy key_extras.mpy rgb_keys.mpy encoder_modes.mpy app_profiles.mpy oled_ui.mpy fw_boot.mpy fw_update.mpy code.py boot.py ota/manifest.json; do
             test -s "$f" || { echo "missing or empty: $f"; exit 1; }
           done
           # the pad's code.py is plain source: it must at least parse
@@ -63,7 +63,7 @@ jobs:
 
       - name: Python files still parse
         working-directory: Programs
-        run: python -m py_compile boot.py code.py config_loader.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py fw_boot.py fw_update.py focus_sender.py dev/dev_tools.py
+        run: python -m py_compile boot.py code.py config_loader.py slot_keys.py key_extras.py rgb_keys.py encoder_modes.py app_profiles.py oled_ui.py fw_boot.py fw_update.py focus_sender.py dev/dev_tools.py
 
       - name: Test the pad's firmware
         # runs the firmware on a normal Python with fake CircuitPython / KMK modules (no hardware), including the

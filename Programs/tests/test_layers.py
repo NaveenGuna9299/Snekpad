@@ -25,6 +25,8 @@ _spec = importlib.util.spec_from_file_location("real_config_loader_layers", os.p
 real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(real)
 
+import key_extras  # noqa: E402  (layer and tap / hold keys; config_loader loads it when a profile has one)
+import slot_keys  # noqa: E402  (the slot builder; config_loader.SlotBuilder loads it)
 
 
 class Key(str):
@@ -104,7 +106,10 @@ class Base(unittest.TestCase):
             mock.patch.object(real, "Release", lambda k: ("release", k)),
             mock.patch.object(real, "Delay", lambda ms: ("delay", ms)),
             mock.patch.object(real, "keyboard", self.kb),
-            mock.patch.object(real, "_need", self._need),
+            mock.patch.object(slot_keys, "KC", self.kc),
+            mock.patch.object(slot_keys, "Delay", lambda ms: ("delay", ms)),
+            mock.patch.object(key_extras, "KC", self.kc),
+            mock.patch.object(key_extras, "_need", lambda keyboard, name: self._need(name)),
         ):
             p.start()
             self.addCleanup(p.stop)
@@ -299,8 +304,7 @@ class NeedTests(unittest.TestCase):
             p = mock.patch.dict(sys.modules, {name: mod})
             p.start()
             self.addCleanup(p.stop)
-        for p in (mock.patch.object(real, "KC", self.kc), mock.patch.object(real, "keyboard", self.kb),
-                  mock.patch.object(real, "_added", [])):
+        for p in (mock.patch.object(key_extras, "KC", self.kc), mock.patch.object(key_extras, "_added", [])):
             p.start()
             self.addCleanup(p.stop)
 
@@ -311,16 +315,15 @@ class NeedTests(unittest.TestCase):
         return make
 
     def test_the_module_is_added_the_first_time_and_only_then(self):
-        real._need("HT")
-        real._need("HT")
-        real._need("TD")
+        key_extras._need(self.kb, "HT")
+        key_extras._need(self.kb, "HT")
+        key_extras._need(self.kb, "TD")
         self.assertEqual(self.created, ["HoldTap", "TapDance"])
         self.assertEqual(self.kb.modules, ["HoldTap", "TapDance"])
 
     def test_without_a_keyboard_it_refuses(self):
-        with mock.patch.object(real, "keyboard", None):
-            with self.assertRaises(ValueError):
-                real._need("HT")
+        with self.assertRaises(ValueError):
+            key_extras._need(None, "HT")
 
 
 if __name__ == "__main__":

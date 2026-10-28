@@ -35,7 +35,7 @@ from binascii import a2b_base64
 import config_loader
 import fw_boot
 
-ALLOWED = ("firmware.mpy", "config_loader.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
+ALLOWED = ("firmware.mpy", "config_loader.mpy", "slot_keys.mpy", "key_extras.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
            "oled_ui.mpy", "fw_update.mpy", "snekpad32.bmp")
 NAME_MAX = 28               # characters in the name of a module that a later release adds
 MAX_FILES = 12

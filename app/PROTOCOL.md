@@ -96,7 +96,7 @@ line: the pad never has more than one line waiting. Firmware 0.4.2 also reads at
 while an update runs (`READ_MAX_WHILE_UPDATING` in `app_profiles.py`). A pad whose `PONG` stops coming ends the update with
 "no reply from pad", and Studio tells it to drop what it staged.
 
-**What can be sent.** Only `firmware.mpy`, `config_loader.mpy`, `rgb_keys.mpy`, `encoder_modes.mpy`, `app_profiles.mpy`, `oled_ui.mpy`, `fw_update.mpy` and `snekpad32.bmp` (at most 12 files, 40 000 bytes each, 150 000 in all). From firmware 0.6.0 the pad also takes **a module that a later release adds**: a name of lower case letters, digits and `_` (starting with a letter, at most 24 before `.mpy`) ending in `.mpy`, that is not `fw_boot.mpy` and would not take the place of anything the pad already has (`/lib/<name>.mpy`, `/lib/<name>`, a folder `/<name>/`). The pad checks the files of an update against the list of the firmware that is **running**, so a new file name can only come to a pad whose firmware already knows the shape: that is why 0.6.0 keeps its new code inside `config_loader.mpy` (a 0.5.1 pad refuses any other new name), and why a later release may add files. `code.py`, `boot.py`, `fw_boot.mpy` (the safety net), `kmk/`, `lib/`, `config.json` and CircuitPython itself cannot be updated this way: they need a flash from the computer (`flash_pad.ps1`).
+**What can be sent.** Only `firmware.mpy`, `config_loader.mpy`, `slot_keys.mpy`, `key_extras.mpy`, `rgb_keys.mpy`, `encoder_modes.mpy`, `app_profiles.mpy`, `oled_ui.mpy`, `fw_update.mpy` and `snekpad32.bmp` (at most 12 files, 40 000 bytes each, 150 000 in all). From firmware 0.6.0 the pad also takes **a module that a later release adds**: a name of lower case letters, digits and `_` (starting with a letter, at most 24 before `.mpy`) ending in `.mpy`, that is not `fw_boot.mpy` and would not take the place of anything the pad already has (`/lib/<name>.mpy`, `/lib/<name>`, a folder `/<name>/`). The pad checks the files of an update against the list of the firmware that is **running**, so a new file name can only come to a pad whose firmware already knows the shape: a pad on 0.5.1 refuses `slot_keys.mpy` and `key_extras.mpy` (they are new in 0.6.0) and needs one flash from the computer, and from 0.6.0 on a release may add files. `code.py`, `boot.py`, `fw_boot.mpy` (the safety net), `kmk/`, `lib/`, `config.json` and CircuitPython itself cannot be updated this way: they need a flash from the computer (`flash_pad.ps1`).
 
 **On the pad:**
 
@@ -158,9 +158,9 @@ The pad adds KMK's HoldTap module (about 0.3 KB of RAM) the first time a config 
 **Layers and double tap are only for Studio-only profiles** (the ones in `studioProfiles`, which never go in a push). The pad's
 own profiles are built at start-up, where RAM is scarcest, and Studio's memory meter is built around the Studio slot, where
 the room is known. Measured on a real pad with firmware 0.6.0 and only General on it (free RAM left after the profile is
-built; the pad refuses a profile that leaves under 2000 bytes): a plain profile 17920, with one layer 17184 (each layer costs
-0.74 KB), with two layers 16448, with a hold key 17488 (KMK's HoldTap, 0.43 KB), with a double tap 15888 (KMK's TapDance,
-2.0 KB), with two layers and a double tap 14432. So a pushed config is
+built; the pad refuses a profile that leaves under 2000 bytes): a plain profile 18592, with one layer 16720 (the first layer also
+loads `key_extras.mpy`, 1.1 KB; each layer costs 0.74 KB), with two layers 15984, with a hold key 17056 (KMK's HoldTap,
+0.4 KB), with a double tap 15280 (KMK's TapDance, 2.2 KB), with two layers and a double tap 13792. So a pushed config is
 refused when a profile in `profiles` has `layers`, a `layer` key, a `tap_hold` whose `hold` is a `layer` key, or a `double`.
 
 **`layers`** on a Studio-only profile: up to 2 extra layers, `[{ "keys": [12 keys] }, ...]`, same key shape as `keys`, key 12 (the

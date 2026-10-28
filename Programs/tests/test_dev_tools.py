@@ -55,7 +55,7 @@ class SplitTests(unittest.TestCase):
             return f.read()
 
     def test_production_modules_never_import_the_dev_tools(self):
-        for name in ("app_profiles.py", "encoder_modes.py", "config_loader.py", "rgb_keys.py", "oled_ui.py", "boot.py"):
+        for name in ("app_profiles.py", "encoder_modes.py", "config_loader.py", "slot_keys.py", "key_extras.py", "rgb_keys.py", "oled_ui.py", "boot.py"):
             self.assertNotIn("dev_tools", self.read(name), name)
 
     def test_code_py_only_probes_for_the_dev_tools(self):
