@@ -698,6 +698,18 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(leds.px.brightness, 1.0)
         self.assertNotEqual(leds.px.px, COLORS[0])
 
+    def test_the_effect_runs_on_the_extra_layers_of_a_studio_profile(self):
+        # they come after the utility layer (3 here), so a layer number above it is still a profile
+        leds = self.make("rainbow")
+        self.tick(leds)
+        self.kb.active_layers[0] = 4
+        self.tick(leds)
+        self.assertTrue(leds._moving())
+        self.assertEqual(leds.px.brightness, 1.0)
+        self.kb.active_layers[0] = 3                            # the utility layer is still not an effect
+        self.tick(leds)
+        self.assertFalse(leds._moving())
+
     def test_a_moving_effect_stays_off_while_the_leds_are_off(self):
         leds = self.make("rainbow")
         self.tick(leds)

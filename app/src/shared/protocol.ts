@@ -20,6 +20,7 @@ import {
   FN_KEY,
   KEY_COUNT,
   LABEL_MAX,
+  MAX_LAYERS,
   MAX_PROFILES,
   MAX_SLEEP_MINUTES,
   EFFECTS,
@@ -281,6 +282,7 @@ export function parseHello(line: string): HelloInfo | null {
 
 export type PadEvent =
   | { kind: 'layer'; index: number } // the profile the pad is running changed
+  | { kind: 'sub'; index: number } // the extra layer of the Studio profile that is on top (0 = its main keys)
   | { kind: 'key'; index: number; down: boolean }
   | { kind: 'knob'; action: KnobAction } // the knob was turned right / left or pressed
 
@@ -289,7 +291,7 @@ export type KnobAction = 'cw' | 'ccw' | 'press'
 const KNOB_ACTIONS: readonly string[] = ['cw', 'ccw', 'press']
 
 /** The events that come from the pad's own controls (not the profile change); sent on to the screen. */
-export type PadInput = Exclude<PadEvent, { kind: 'layer' }>
+export type PadInput = Exclude<PadEvent, { kind: 'layer' | 'sub' }>
 
 /** Parse an `EVT` line; anything malformed or out of range is dropped (null). */
 export function parseEvent(line: string): PadEvent | null {
@@ -299,6 +301,7 @@ export function parseEvent(line: string): PadEvent | null {
   const index = Number(a)
   if (!Number.isInteger(index) || index < 0) return null
   if (kind === 'layer') return index <= MAX_PROFILES ? { kind, index } : null // MAX_PROFILES itself is the Studio slot
+  if (kind === 'sub') return index <= MAX_LAYERS ? { kind, index } : null
   if (kind === 'key')
     return index < KEY_COUNT && (b === '0' || b === '1') ? { kind, index, down: b === '1' } : null
   return null

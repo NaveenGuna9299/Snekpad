@@ -22,6 +22,8 @@ export type DeviceState = {
   legacy?: boolean
   /** Index of the profile the pad is running (known once the pad reports it). */
   activeProfile?: number
+  /** Which extra layer of the Studio profile is on top: 0 or unset = its main keys, 1 = Layer 2, 2 = Layer 3. */
+  activeSub?: number
   /** The id of the Studio-only profile that is on the pad's slot right now (layer number = the pad's profile count). */
   slot?: string
   /** The pad refused this Studio-only profile: `reason` is 'too big' (not enough RAM for its macros) or the pad's own words. */

@@ -93,6 +93,7 @@ class AppProfiles(Module):
         self.events = False         # the app said HELLO, so tell it about profile changes and key presses
         self._evq = []              # EVT lines waiting to be written
         self._reported_layer = None # last profile reported to the app
+        self._reported_sub = 0      # last extra layer reported to the app
         self.slot = None            # set by code.py: (layer, keymap, labels, colors, names, knob_text, enc_map, FN key)
         self.slot_ready = False     # the slot holds a profile from Studio
         self._sb = None             # config_loader.SlotBuilder while a slot is arriving
@@ -173,12 +174,14 @@ class AppProfiles(Module):
     def _hello(self):
         # HELLO -> HELLO<TAB>protocol<TAB>firmware. From now on the pad reports, on its own:
         #   EVT<TAB>layer<TAB>n          the profile it runs changed
+        #   EVT<TAB>sub<TAB>n            the Studio profile's extra layer on top changed (0 = its main keys, 1 = Layer 2, ...)
         #   EVT<TAB>key<TAB>n<TAB>1|0    key n (0-11, row by row) went down / up
         # An older app never sends HELLO and so never gets events.
         self._write(self._hello_reply() + "\n")
         self.events = True
         self._evq = []
         self._reported_layer = None     # report the current profile right away
+        self._reported_sub = 0
 
     def _hello_reply(self):
         return "HELLO\t%d\t%s" % (PROTOCOL_VERSION, FIRMWARE_VERSION)
@@ -646,6 +649,16 @@ class AppProfiles(Module):
             if self.events and base != self._reported_layer and 0 <= base < len(self.profiles):
                 self._reported_layer = base
                 self._queue_event("EVT\tlayer\t%d\n" % base)
+            if self.events:
+                sub = 0     # which extra layer of the Studio profile is on top (0 = its main keys)
+                if self.slot is not None and base == self.slot[0]:
+                    for n in keyboard.active_layers:
+                        if n >= base + 2:
+                            sub = n - base - 1
+                            break
+                if sub != self._reported_sub:
+                    self._reported_sub = sub
+                    self._queue_event("EVT\tsub\t%d\n" % sub)
 
             if self.connected and now - self.last_seen > self.timeout_s:
                 self.connected = False

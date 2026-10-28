@@ -161,6 +161,7 @@ export class DeviceManager extends EventEmitter {
       dev: undefined,
       legacy: undefined,
       activeProfile: undefined,
+      activeSub: undefined,
       slot: undefined,
       slotError: undefined
     })
@@ -175,6 +176,8 @@ export class DeviceManager extends EventEmitter {
     if (e.kind === 'layer') {
       if (this.state.activeProfile !== e.index)
         this.setState({ ...this.state, activeProfile: e.index })
+    } else if (e.kind === 'sub') {
+      if ((this.state.activeSub ?? 0) !== e.index) this.setState({ ...this.state, activeSub: e.index })
     } else {
       this.emit('event', e)
     }

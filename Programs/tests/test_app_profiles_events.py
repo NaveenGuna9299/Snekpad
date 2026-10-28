@@ -140,6 +140,33 @@ class EventTests(unittest.TestCase):
         self.assertEqual(sent().count("EVT\tlayer\t2\n"), 1)
         self.assertEqual(sent().count("EVT\tlayer"), 2)
 
+    def test_an_extra_layer_of_the_studio_profile_is_reported(self):
+        pad, kb = make_pad()
+        pad.slot = (3, [], [], [], [], [], [], None)      # the slot is layer 3; the utility layer is 4, the extra layers 5 and 6
+        say_hello(pad, kb)
+        kb.active_layers[-1] = 3
+        scan(pad, kb, 2)
+        SERIAL.out = b""
+        kb.active_layers[:] = [5, 3]                        # Layer 2 on top
+        scan(pad, kb, 2)
+        self.assertEqual(sent(), "EVT\tsub\t1\n")
+        SERIAL.out = b""
+        kb.active_layers[:] = [4, 6, 3]                     # holding FN over Layer 3: still Layer 3
+        scan(pad, kb, 2)
+        self.assertEqual(sent(), "EVT\tsub\t2\n")
+        SERIAL.out = b""
+        kb.active_layers[:] = [3]
+        scan(pad, kb, 2)
+        self.assertEqual(sent(), "EVT\tsub\t0\n")
+
+    def test_no_extra_layer_is_reported_on_a_pad_profile(self):
+        pad, kb = make_pad()
+        pad.slot = (3, [], [], [], [], [], [], None)
+        say_hello(pad, kb)
+        kb.active_layers[:] = [5, 1]                        # not the slot underneath
+        scan(pad, kb, 2)
+        self.assertNotIn("EVT\tsub", sent())
+
     def test_key_down_and_up(self):
         pad, kb = make_pad()
         say_hello(pad, kb)

@@ -58,6 +58,13 @@ describe('parseEvent', () => {
     expect(parseEvent('EVT\tkey\t5\t0\r')).toEqual({ kind: 'key', index: 5, down: false })
   })
 
+  it('reads the extra layer of the Studio profile that is on top', () => {
+    expect(parseEvent('EVT\tsub\t0')).toEqual({ kind: 'sub', index: 0 })
+    expect(parseEvent('EVT\tsub\t2\r')).toEqual({ kind: 'sub', index: 2 })
+    expect(parseEvent('EVT\tsub\t3')).toBeNull() // a profile has at most 2 extra layers
+    expect(parseEvent('EVT\tsub\t-1')).toBeNull()
+  })
+
   it('reads knob turns and presses', () => {
     expect(parseEvent('EVT\tknob\tcw')).toEqual({ kind: 'knob', action: 'cw' })
     expect(parseEvent('EVT\tknob\tccw')).toEqual({ kind: 'knob', action: 'ccw' })

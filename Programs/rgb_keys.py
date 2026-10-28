@@ -208,8 +208,9 @@ class RgbKeys(Module):
         return best
 
     def _moving(self):
-        # a moving effect runs on the profiles; the utility layer (holding FN) always shows its own colours
-        return self.effect != "static" and (not self.profile_layers or self.layer < self.profile_layers)
+        # a moving effect runs on the profiles (and on the extra layers of a Studio profile, which sit after the utility
+        # layer); the utility layer (holding FN) always shows its own colours
+        return self.effect != "static" and (not self.profile_layers or self.layer != self.profile_layers)
 
     def _base(self, i):
         layer = self.layer if 0 <= self.layer < len(self.colors) else 0

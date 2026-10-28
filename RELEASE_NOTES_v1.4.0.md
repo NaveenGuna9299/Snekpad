@@ -38,6 +38,7 @@ Studio's memory meter for Studio-only profiles uses the new numbers. A pad that 
 
 - **The LED key remembers.** The LED key of the utility layer (hold FN) switches the key LEDs off and on. That state is now kept across a push from Studio and across a power-off, like the brightness already was: the pad no longer lights them up again every time it restarts.
 - **Clearer errors.** A push that runs out of the pad's memory now says so, and a push frees the Studio profile on the slot first so it has the most memory to work with. The "firmware too old for layers" warning no longer flashes for a moment after a push.
+- **The HUD follows the layers.** When the pad switches to Layer 2 or 3 of a Studio-only profile, the HUD shows that layer's keys (titled "Profile · Layer 2") and goes back when you leave it.
 - **Edits on an extra layer reach the pad.** A change made on a Layer 2 or Layer 3 tab was not sent again to the pad until something on the main keys changed. Studio now sends the profile whenever any of its layers change.
 
 ## Notes

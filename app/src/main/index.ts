@@ -88,17 +88,24 @@ let hudKey: string | undefined // which profile the HUD was last told about (the
 function updateHud(): void {
   const s = device.state
   const slotLayer = config?.profiles.length
-  const profile =
+  let profile =
     !config || s.status !== 'connected' || s.activeProfile === undefined
       ? null
       : s.activeProfile === slotLayer
         ? (config.studioProfiles.find((p) => p.id === s.slot) ?? null)
         : (config.profiles[s.activeProfile] ?? null)
-  const key = profile
+  let key = profile
     ? s.activeProfile === slotLayer
       ? `slot:${profile.id}`
       : String(s.activeProfile)
     : undefined
+  // an extra layer of the Studio-only profile is on top: the HUD shows its keys
+  const sub = s.activeProfile === slotLayer ? (s.activeSub ?? 0) : 0
+  const layer = profile && sub > 0 ? profile.layers[sub - 1] : undefined
+  if (profile && layer) {
+    key = `${key}:${sub}`
+    profile = { ...profile, name: `${profile.name} · Layer ${sub + 1}`, keys: layer.keys }
+  }
   hud.setProfile(profile, key !== undefined && hudKey !== undefined && key !== hudKey)
   hudKey = key
 }
