@@ -75,20 +75,29 @@ export const appLine = (proc: string, title: string, slot = false): string =>
  * Text is cleaned to what the pad can show; the action is the same JSON a config holds.
  */
 export function slotFrames(profile: Profile): string[] {
-  const lines = [`SLOT_BEGIN\t${clean(profile.name, 12)}\t${clean(profile.encoder.label, 10)}`]
-  profile.keys.forEach((k, i) => {
-    const a = k.action
-    // A sequence goes as the key line without its steps, then one SLOT_STEP per step: the pad has no RAM to parse all of
-    // them as one block of JSON (it fails for a long sequence), and a step at a time costs nothing.
-    const action = a.type === 'sequence' ? '{"type":"sequence"}' : JSON.stringify(a)
-    lines.push(`SLOT_KEY\t${i}\t${clean(k.label, LABEL_MAX)}\t${k.color}\t${action}`)
-    if (a.type === 'sequence')
-      for (const s of a.steps) lines.push(`SLOT_STEP\t${i}\t${s.keys.join('+')}\t${s.wait}`)
-  })
+  // a profile with extra layers says how many (firmware 0.6.0): their keys follow the knob's, 12 per layer (keys 15 to 26 for
+  // the first layer, 27 to 38 for the second). Without layers the line is the same as before.
+  const layers = profile.layers.length
+  const lines = [
+    `SLOT_BEGIN\t${clean(profile.name, 12)}\t${clean(profile.encoder.label, 10)}${layers ? `\t${layers}` : ''}`
+  ]
+  const keyLines = (keys: Profile['keys'], first: number): void =>
+    keys.forEach((k, j) => {
+      const a = k.action
+      const i = first + j
+      // A sequence goes as the key line without its steps, then one SLOT_STEP per step: the pad has no RAM to parse all of
+      // them as one block of JSON (it fails for a long sequence), and a step at a time costs nothing.
+      const action = a.type === 'sequence' ? '{"type":"sequence"}' : JSON.stringify(a)
+      lines.push(`SLOT_KEY\t${i}\t${clean(k.label, LABEL_MAX)}\t${k.color}\t${action}`)
+      if (a.type === 'sequence')
+        for (const s of a.steps) lines.push(`SLOT_STEP\t${i}\t${s.keys.join('+')}\t${s.wait}`)
+    })
+  keyLines(profile.keys, 0)
   const { cw, ccw, press } = profile.encoder
   ;[cw, ccw, press].forEach((a, i) =>
     lines.push(`SLOT_KEY\t${KEY_COUNT + i}\t\t#000000\t${JSON.stringify(a)}`)
   )
+  profile.layers.forEach((l, n) => keyLines(l.keys, KEY_COUNT + 3 + n * KEY_COUNT))
   lines.push('SLOT_END')
   return lines
 }

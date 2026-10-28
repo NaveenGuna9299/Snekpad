@@ -6,8 +6,11 @@
 //   - a macro step the pad keeps (a key press, a release, a tap or a pause) is about 58 bytes, a macro itself about 60
 //   - a shortcut of modifiers and one key is a single key the pad builds in one piece: about 28 bytes per modifier
 //   - Browser, VS Code and Terminal leave 384, 448 and 1200 bytes less free than a profile of plain keys
-//   - a plain profile on the slot leaves about 8.3 KB free when the pad's own profiles are only General, and each
-//     other profile on the pad takes away its own cost plus about 800 bytes of lists and strings
+//   - a plain profile on the slot leaves about 18.6 KB free (firmware 0.6.0, whose main screen page no longer uses Labels;
+//     0.5.0 left 8.3 KB) when the pad's own profiles are only General, and each other profile on the pad takes away its
+//     own cost plus about 800 bytes of lists and strings
+//   - firmware 0.6.0, measured the same way: the first layer or tap/hold key brings in key_extras.py (1.1 KB), each layer
+//     costs 0.74 KB, a hold 0.4 KB (KMK's HoldTap) and a double tap 2.2 KB (KMK's TapDance)
 // It is good to roughly a third, which is why the editor says "about" and keeps a margin before it calls a profile too big.
 
 import type { Action, Config, Profile } from './config'
@@ -16,11 +19,14 @@ const MACRO_OBJECT = 58 // one step of a macro
 const MACRO = 60 // the macro itself
 const MODIFIER = 28 // one modifier wrapped around a key
 const PAD_PROFILE_OVERHEAD = 800 // lists and strings of a profile the pad keeps itself
-const TAP_HOLD = 120 // a tap/hold key: the key object and its timing (an estimate, not measured on a pad yet)
-const LAYER_OVERHEAD = 400 // an extra layer's lists (keys, labels, colours); its keys cost the same as any others (an estimate)
+const TAP_HOLD = 120 // a tap/hold key: the key object and its timing (an estimate)
+const KEY_EXTRAS_MODULE = 1100 // key_extras.py, loaded the first time a profile has a layer key or a tap/hold key (measured)
+const LAYER_OVERHEAD = 740 // an extra layer of plain keys: its lists of keys, labels and colours (measured on a pad)
+const HOLD_TAP_MODULE = 400 // KMK's HoldTap module, for a hold (measured)
+const TAP_DANCE_MODULE = 2200 // KMK's TapDance module, for a double tap (measured; it stays until the pad restarts)
 
 /** Bytes the slot has for a profile's keys when the pad's own profiles are only General (free RAM minus the 2 KB the pad keeps back). */
-export const SLOT_BUDGET = 6350
+export const SLOT_BUDGET = 16000
 
 const MODIFIERS = new Set(['CTRL', 'SHIFT', 'ALT', 'GUI'])
 
@@ -63,9 +69,18 @@ export function actionCost(a: Action): number {
 export function profileCost(p: Profile): number {
   const { cw, ccw, press } = p.encoder
   const keys = [...p.keys, ...p.layers.flatMap((l) => l.keys)]
+  const actions = keys.map((k) => k.action)
+  const tapHold = actions.filter(
+    (a): a is Extract<Action, { type: 'tap_hold' }> => a.type === 'tap_hold'
+  )
   return (
-    [...keys.map((k) => k.action), cw, ccw, press].reduce((n, a) => n + actionCost(a), 0) +
-    p.layers.length * LAYER_OVERHEAD
+    [...actions, cw, ccw, press].reduce((n, a) => n + actionCost(a), 0) +
+    p.layers.length * LAYER_OVERHEAD +
+    (p.layers.length > 0 || tapHold.length > 0 || actions.some((a) => a.type === 'layer')
+      ? KEY_EXTRAS_MODULE
+      : 0) +
+    (tapHold.some((a) => a.hold) ? HOLD_TAP_MODULE : 0) +
+    (tapHold.some((a) => a.double) ? TAP_DANCE_MODULE : 0)
   )
 }
 

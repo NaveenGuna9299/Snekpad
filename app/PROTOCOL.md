@@ -96,7 +96,7 @@ line: the pad never has more than one line waiting. Firmware 0.4.2 also reads at
 while an update runs (`READ_MAX_WHILE_UPDATING` in `app_profiles.py`). A pad whose `PONG` stops coming ends the update with
 "no reply from pad", and Studio tells it to drop what it staged.
 
-**What can be sent.** Only `firmware.mpy`, `config_loader.mpy`, `rgb_keys.mpy`, `encoder_modes.mpy`, `app_profiles.mpy`, `oled_ui.mpy`, `fw_update.mpy` and `snekpad32.bmp` (at most 12 files, 40 000 bytes each, 150 000 in all). `code.py`, `boot.py`, `fw_boot.mpy` (the safety net), `kmk/`, `lib/`, `config.json` and CircuitPython itself cannot be updated this way: they need a flash from the computer (`flash_pad.ps1`).
+**What can be sent.** Only `firmware.mpy`, `config_loader.mpy`, `slot_keys.mpy`, `key_extras.mpy`, `rgb_keys.mpy`, `encoder_modes.mpy`, `app_profiles.mpy`, `oled_ui.mpy`, `fw_update.mpy` and `snekpad32.bmp` (at most 12 files, 40 000 bytes each, 150 000 in all). `code.py`, `boot.py`, `fw_boot.mpy` (the safety net), `kmk/`, `lib/`, `config.json` and CircuitPython itself cannot be updated this way: they need a flash from the computer (`flash_pad.ps1`).
 
 **On the pad:**
 
@@ -145,25 +145,34 @@ the first 3), 12 keys per profile, labels up to 5 characters. Studio keeps up to
 (`studioProfiles`, never sent in a push) and puts one of them on the pad's Studio slot when its app is in focus, see below.
 The JSON shape is `Config` in `src/shared/config.ts`; the starter config is about 4 KB.
 
-## Extra layers and tap / hold keys in the config JSON (next firmware after 0.5.1)
+## Tap / hold keys, and layers and double tap for Studio-only profiles (firmware 0.6.0)
 
-Both are optional additions to schema version 1: a config without them loads exactly as before, and a pad with older
-firmware refuses a config that uses them (the action type is unknown), so it keeps running its built-in profiles.
+Optional additions to schema version 1: a config without them loads exactly as before. A pad with older firmware refuses a
+config that uses `tap_hold` (the action type is unknown) and keeps running its built-in profiles.
 
-**`layers`** on a profile: up to 1 extra layer, `[{ "keys": [12 keys] }]`, same key shape as `keys`, and key 12 (the
-utility key) must stay `{"type":"fn"}` there too. The pad puts the extra layers after the utility layer, in profile
-order, shows each layer's own labels and colours, and the knob keeps the profile's actions.
+**`{ "type": "tap_hold", "tap": A, "hold": B, "double": C, "ms": 250 }`**: tap does `A`, holding does `B`, tapping twice does
+`C`. `A`, `B`, `C` are `none`, `key`, `hotkey`, `text`, `sequence` or `consumer`; at least one of `hold` and `double` is
+required, and `ms` (100 to 1000, default 250) is the hold time and the window for the second tap. Not allowed on the knob.
+The pad adds KMK's HoldTap module (about 0.3 KB of RAM) the first time a config uses a hold.
 
-**`{ "type": "layer", "mode": "hold" | "toggle", "layer": 1 }`** goes to the profile's extra layer while held, or switches
-to it and back. It needs the layer to exist. It is not allowed on the knob.
+**Layers and double tap are only for Studio-only profiles** (the ones in `studioProfiles`, which never go in a push). The pad's
+own profiles are built at start-up, where RAM is scarcest, and Studio's memory meter is built around the Studio slot, where
+the room is known. Measured on a real pad with firmware 0.6.0 and only General on it (free RAM left after the profile is
+built; the pad refuses a profile that leaves under 2000 bytes): a plain profile 18592, with one layer 16720 (the first layer also
+loads `key_extras.mpy`, 1.1 KB; each layer costs 0.74 KB), with two layers 15984, with a hold key 17056 (KMK's HoldTap,
+0.4 KB), with a double tap 15280 (KMK's TapDance, 2.2 KB), with two layers and a double tap 13792. So a pushed config is
+refused when a profile in `profiles` has `layers`, a `layer` key, a `tap_hold` whose `hold` is a `layer` key, or a `double`.
 
-**`{ "type": "tap_hold", "tap": A, "hold": B, "double": C, "ms": 250 }`**: tap does `A`, holding does `B` (which may be a
-`layer` key), tapping twice does `C`. `A`, `B`, `C` are `none`, `key`, `hotkey`, `text`, `sequence` or `consumer`; at least one
-of `hold` and `double` is required, and `ms` (100 to 1000, default 250) is the hold time and the window for the second tap.
-With a `double`, a single tap is sent only after that window. Not allowed on the knob. The pad adds KMK's HoldTap and
-TapDance modules the first time a config uses them.
+**`layers`** on a Studio-only profile: up to 2 extra layers, `[{ "keys": [12 keys] }, ...]`, same key shape as `keys`, key 12 (the
+utility key) staying `{"type":"fn"}` on each. **`{ "type": "layer", "mode": "hold" | "toggle", "layer": 1 | 2 }`** goes to that
+layer while held, or switches to it and back; it needs the layer to exist and is not allowed on the knob.
 
-On the Studio slot (`SLOT_*`) a `layer` key is a dead key, because the slot has no extra layer; a `tap_hold` key works.
+On the slot, `SLOT_BEGIN<TAB>name<TAB>knob text<TAB>n` (a fourth field, only when the profile has layers) says there are `n`
+extra layers, and their keys follow the knob's as `SLOT_KEY` lines: 15 to 26 for layer 2, 27 to 38 for layer 3, 12 per layer.
+The pad puts them after its utility layer, shows each layer's own legend and colours (the knob keeps the profile's actions),
+and lets them go with the profile, switching a layer that is held off. A pad with older firmware ignores the fourth field and
+answers `ERR` to the first layer key, so Studio warns when a pad's firmware is older than 0.6.0. The double-tap module stays in
+RAM until the pad restarts.
 
 ## The Studio slot (`SLOT_*`, firmware 0.5.0 and later)
 

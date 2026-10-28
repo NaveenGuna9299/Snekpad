@@ -92,10 +92,13 @@ describe('the room the pad has for a Studio-only profile', () => {
     expect(slotBudget(c)).toBe(SLOT_BUDGET)
   })
 
-  it('shrinks with every other profile on the pad, to about 3.2 KB with the starter three (measured: 3176)', () => {
+  it('shrinks with every other profile on the pad, to about 12.8 KB with the starter three', () => {
+    // measured on firmware 0.6.0 with only General on the pad: a plain Studio-only profile leaves 18592 bytes free, so 16.6 KB
+    // above the 2 KB the pad keeps back (0.5.0 left 8.3 KB: the main screen page no longer uses Labels). The starter three
+    // is the General budget less what VS Code / Terminal and their lists take: derived, not measured.
     const b = slotBudget(defaultConfig())
-    expect(b).toBeGreaterThan(3176 * 0.8)
-    expect(b).toBeLessThan(3176 * 1.2)
+    expect(b).toBeGreaterThan(11000)
+    expect(b).toBeLessThan(14500)
   })
 
   it('never goes below zero', () => {
@@ -118,12 +121,14 @@ describe('does it fit', () => {
   it('a profile of many long sequences is over', () => {
     const c = defaultConfig()
     const p = blankProfile('big', 'Big')
-    for (let i = 0; i < 11; i++) p.keys[i].action = seq([['CTRL', 'K'], ['CTRL', 'D'], ['ENTER']])
+    for (let i = 0; i < 11; i++)
+      p.keys[i].action = seq(Array(6).fill(['CTRL', 'SHIFT', 'ALT', 'K']))
     expect(slotFit(p, c).level).toBe('over')
   })
 
-  it('a profile full of typed text still fits (eleven long texts loaded fine on a real pad)', () => {
+  it('a profile full of typed text still fits when only General is on the pad (eleven long texts loaded fine on a real pad)', () => {
     const c = defaultConfig()
+    c.profiles = [c.profiles[0]]
     const p = blankProfile('texts', 'Texts')
     for (let i = 0; i < 11; i++)
       p.keys[i].action = { type: 'text', text: 'echo ' + 'x'.repeat(60), enter: true }
@@ -136,7 +141,7 @@ describe('does it fit', () => {
     const p = blankProfile('grow', 'Grow')
     const levels: string[] = []
     for (let i = 0; i < 11; i++) {
-      p.keys[i].action = seq([['CTRL', 'K'], ['CTRL', 'D'], ['ENTER']])
+      p.keys[i].action = seq(Array(6).fill(['CTRL', 'SHIFT', 'ALT', 'K']))
       levels.push(slotFit(p, c).level)
     }
     expect(levels[0]).toBe('ok')

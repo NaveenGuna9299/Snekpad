@@ -32,7 +32,12 @@ export class MockLink implements Link {
   restartAs: MockRestart | null = null
   /** The profile on the pad's Studio slot (firmware 0.5.0 and later); null until Studio sends one, and after a restart. */
   slot: { name: string; knob: string; keys: Record<number, string> } | null = null
-  private slotRx: { name: string; knob: string; keys: Record<number, string> } | null = null
+  private slotRx: {
+    name: string
+    knob: string
+    layers: number
+    keys: Record<number, string>
+  } | null = null
 
   /**
    * firmware: what the fake pad reports in HELLO; null = a pad from before versions were reported.
@@ -123,7 +128,16 @@ export class MockLink implements Link {
       this.slotRx = {
         name: (p[1] ?? '').slice(0, 12) || 'Studio',
         knob: (p[2] ?? '').slice(0, 10),
+        layers: Number(p[3] ?? 0),
         keys: {}
+      }
+      if (
+        !Number.isInteger(this.slotRx.layers) ||
+        this.slotRx.layers < 0 ||
+        this.slotRx.layers > 2
+      ) {
+        this.slotRx = null
+        return 'ERR\tat most 2 extra layers'
       }
       return 'OK'
     }
@@ -131,7 +145,7 @@ export class MockLink implements Link {
     if (!rx) return 'ERR\tno SLOT_BEGIN'
     if (p[0] === 'SLOT_KEY') {
       const n = Number(p[1])
-      if (!Number.isInteger(n) || n < 0 || n > 14 || p.length < 5) {
+      if (!Number.isInteger(n) || n < 0 || n > 14 + rx.layers * 12 || p.length < 5) {
         this.slotRx = null
         return 'ERR\tbad key number'
       }
@@ -149,7 +163,7 @@ export class MockLink implements Link {
     }
     if (p[0] === 'SLOT_END') {
       this.slotRx = null
-      if (Object.keys(rx.keys).length !== 15) return 'ERR\tprofile incomplete'
+      if (Object.keys(rx.keys).length !== 15 + rx.layers * 12) return 'ERR\tprofile incomplete'
       this.slot = rx
       return 'OK'
     }

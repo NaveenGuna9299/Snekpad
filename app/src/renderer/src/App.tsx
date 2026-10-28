@@ -3,6 +3,8 @@ import {
   allProfiles,
   blankProfile,
   defaultConfig,
+  forPad,
+  withoutStudioOnly,
   FN_KEY,
   MAX_ALL_PROFILES,
   MAX_LAYERS,
@@ -30,7 +32,7 @@ import { KeyTest } from './components/KeyTest'
 import { Effects } from './components/Effects'
 import { FirmwareNotice } from './components/FirmwareNotice'
 import { FirmwareUpdateDialog } from './components/FirmwareUpdateDialog'
-import { hasSlot, updateOffer } from '../../shared/firmware'
+import { hasLayers, hasSlot, updateOffer } from '../../shared/firmware'
 import { isMusicEffect } from '../../shared/config'
 import type { Preset } from './lib/presets'
 
@@ -161,10 +163,13 @@ function App(): React.JSX.Element {
   const pasteKey = (): void => {
     const key = clipboard.current
     if (!key || sel < 0 || sel === FN_KEY) return
+    const onPad = selectedProfile < (config?.profiles.length ?? 0)
+    const pasted = structuredClone(key)
+    if (onPad) pasted.action = withoutStudioOnly(pasted.action)
     editProfile((p) =>
       withLayerFor(
-        mapKeys(p, (keys) => keys.map((k, i) => (i === sel ? structuredClone(key) : k))),
-        key.action
+        mapKeys(p, (keys) => keys.map((k, i) => (i === sel ? pasted : k))),
+        pasted.action
       )
     )
     previewLed(selectedProfile, sel, key.color)
@@ -219,7 +224,7 @@ function App(): React.JSX.Element {
     const toPad = config.profiles.length < MAX_PROFILES
     update((c) =>
       toPad
-        ? { ...c, profiles: [...c.profiles, next] }
+        ? { ...c, profiles: [...c.profiles, forPad(next)] }
         : { ...c, studioProfiles: [...c.studioProfiles, next] }
     )
     setSelectedProfile(toPad ? config.profiles.length : everyProfile.length)
@@ -260,7 +265,7 @@ function App(): React.JSX.Element {
         : {
             ...c,
             studioProfiles: c.studioProfiles.filter((p) => p.id !== profile.id),
-            profiles: [...c.profiles, profile]
+            profiles: [...c.profiles, forPad(profile)]
           }
     )
     // it is now the last of its new group
@@ -268,7 +273,10 @@ function App(): React.JSX.Element {
     flash(
       onPad
         ? `"${profile.name}" is now Studio only. Send to the pad to take it off the pad.`
-        : `"${profile.name}" is now on the pad. Send to the pad to put it there.`,
+        : profile.layers.length ||
+            profile.keys.some((k) => forPad({ ...profile, keys: [k] }).keys[0].action !== k.action)
+          ? `"${profile.name}" is now on the pad. Its layers, layer keys and double taps were taken out: only Studio-only profiles have them.`
+          : `"${profile.name}" is now on the pad. Send to the pad to put it there.`,
       false,
       true
     )
@@ -376,7 +384,14 @@ function App(): React.JSX.Element {
     setSelectedProfile(0)
     flash('Starter profiles restored.', false, true)
   }
+  const isStudio = config.studioProfiles.includes(profile)
   const shownProfile: Profile = { ...profile, keys: keysOf(profile) }
+  const studioOnlyUsed =
+    isStudio &&
+    (profile.layers.length > 0 ||
+      [...profile.keys, ...profile.layers.flatMap((l) => l.keys)].some(
+        (k) => k.action.type === 'layer' || (k.action.type === 'tap_hold' && !!k.action.double)
+      ))
   const selectedKey = selection.kind === 'key' ? shownProfile.keys[selection.index] : null
   const addLayer = (): void => {
     editProfile((p) => ({ ...p, layers: [...p.layers, blankLayer()] }))
@@ -519,10 +534,10 @@ function App(): React.JSX.Element {
                     {n === 0 ? 'Main keys' : `Layer ${n + 1}`}
                   </button>
                 ))}
-                {profile.layers.length < MAX_LAYERS && (
+                {isStudio && profile.layers.length < MAX_LAYERS && (
                   <button
                     onClick={addLayer}
-                    title="Add a second set of 12 keys, reached with a layer key"
+                    title="Add a set of 12 more keys, reached with a layer key"
                     className="rounded-md border border-dashed border-line px-3 py-1 text-xs text-muted hover:bg-surface2 hover:text-fg"
                   >
                     + Add layer
@@ -553,9 +568,15 @@ function App(): React.JSX.Element {
                   ? `Key ${(selection as { index: number }).index + 1}: ${describeAction(selectedKey.action)}`
                   : 'Rotary encoder'}
               </p>
-              {config.studioProfiles.includes(profile) && (
+              {isStudio && (
                 <div className="flex w-full max-w-[460px] flex-col items-start gap-3">
                   <SlotMeter profile={profile} config={config} />
+                  {studioOnlyUsed && device.status === 'connected' && !hasLayers(device) && (
+                    <p className="text-xs text-muted">
+                      This pad&apos;s firmware does not support layers or double tap yet, so they
+                      will not work on it until the firmware is updated.
+                    </p>
+                  )}
                   <button
                     onClick={() => void tryOnPad()}
                     disabled={device.status !== 'connected'}
@@ -573,6 +594,7 @@ function App(): React.JSX.Element {
             </main>
 
             <Inspector
+              studio={isStudio}
               profile={shownProfile}
               selection={selection}
               onKey={setKey}

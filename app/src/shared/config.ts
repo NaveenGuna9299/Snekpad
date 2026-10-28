@@ -20,7 +20,7 @@ export const MAX_COMBO = 6 // keys pressed together in one shortcut
 export const MAX_STEPS = 6 // keys / shortcuts in one sequence
 export const MAX_WAIT_MS = 2000 // longest pause between two steps
 export const DEFAULT_WAIT_MS = 100
-export const MAX_LAYERS = 1 // extra 12-key layers a profile may have, next to its main keys (SUB_LAYERS in Programs/config_loader.py)
+export const MAX_LAYERS = 2 // extra 12-key layers a Studio-only profile may have (SLOT_LAYERS in Programs/config_loader.py); the pad's own profiles have none
 export const MIN_TAP_MS = 100 // tap / hold / double-tap timing, in ms (the same limits as the firmware)
 export const MAX_TAP_MS = 1000
 export const DEFAULT_TAP_MS = 250
@@ -152,7 +152,8 @@ export const profileSchema = z.object({
     titles: z.array(z.string().max(TITLE_WORD_MAX)).max(MAX_TITLE_WORDS) // words in the window title
   }),
   keys: z.array(keySchema).length(KEY_COUNT),
-  // Extra layers (at most MAX_LAYERS), reached with a layer key. A profile saved before they existed has none.
+  // Extra layers (at most MAX_LAYERS), reached with a layer key. Only Studio-only profiles may have them: the pad's own
+  // profiles are built at start-up, where the screen needs the RAM. A profile saved before they existed has none.
   layers: z.array(layerSchema).max(MAX_LAYERS).default([]),
   encoder: z.object({
     label: z.string().max(10), // top-bar hint, e.g. KNOB:VOL
@@ -241,8 +242,44 @@ export const configSchema = z
       })
     check('profiles')
     check('studioProfiles')
+    cfg.profiles.forEach((p, i) => {
+      for (const problem of padProblems(p))
+        ctx.addIssue({ code: 'custom', message: problem, path: ['profiles', i] })
+    })
   })
 export type Config = z.infer<typeof configSchema>
+
+/** True for what only a Studio-only profile may use: a layer key, a hold that is a layer key, or a double tap. */
+export const isStudioOnlyAction = (a: Action): boolean =>
+  a.type === 'layer' || (a.type === 'tap_hold' && (!!a.double || a.hold?.type === 'layer'))
+
+/** What a profile on the pad itself may not have (layers, layer keys, double tap): empty = fine. */
+export function padProblems(p: Profile): string[] {
+  const out: string[] = []
+  if (p.layers.length > 0) out.push(`"${p.name}": layers are for Studio-only profiles`)
+  if (p.keys.some((k) => isStudioOnlyAction(k.action)))
+    out.push(`"${p.name}": layer keys and double tap are for Studio-only profiles`)
+  return out
+}
+
+/** An action without what only Studio-only profiles may use: a layer key does nothing, a tap/hold keeps what is left. */
+export function withoutStudioOnly(a: Action): Action {
+  if (a.type === 'layer') return { type: 'none' }
+  if (a.type !== 'tap_hold') return a
+  const rest = { ...a }
+  delete rest.double
+  if (rest.hold?.type === 'layer') delete rest.hold
+  return rest.hold ? rest : rest.tap
+}
+
+/** A profile as the pad's own list may hold it: no layers, no layer keys, no double tap. */
+export function forPad(p: Profile): Profile {
+  return {
+    ...p,
+    layers: [],
+    keys: p.keys.map((k) => ({ ...k, action: withoutStudioOnly(k.action) }))
+  }
+}
 
 /** What is wrong with a profile's layer keys and tap_hold keys (empty = fine). */
 export function layerProblems(p: Profile): string[] {
@@ -288,6 +325,22 @@ export function migrateConfig(input: unknown): unknown {
   if (Array.isArray(cfg?.profiles) && cfg.profiles.length > MAX_PROFILES) {
     const extra = cfg.profiles.splice(MAX_PROFILES)
     cfg.studioProfiles = [...extra, ...(cfg.studioProfiles ?? [])].slice(0, MAX_STUDIO_PROFILES)
+  }
+  // layers, layer keys and double tap are for Studio-only profiles: a file saved by an early build that put them on the
+  // pad's own profiles loses them (a layer key does nothing, a tap/hold key keeps its tap and hold)
+  for (const p of cfg?.profiles ?? []) {
+    const raw = p as { layers?: unknown; keys?: { action?: Record<string, unknown> }[] }
+    if (Array.isArray(raw.layers) && raw.layers.length > 0) delete raw.layers // an empty list is already fine
+    for (const k of raw.keys ?? []) {
+      const a = k.action
+      if (!a) continue
+      if (a.type === 'layer') k.action = { type: 'none' }
+      else if (a.type === 'tap_hold') {
+        delete a.double
+        if ((a.hold as { type?: string } | undefined)?.type === 'layer') delete a.hold
+        if (!a.hold) k.action = a.tap as Record<string, unknown>
+      }
+    }
   }
   for (const p of [...(cfg?.profiles ?? []), ...(cfg?.studioProfiles ?? [])]) {
     const enc = p.encoder
@@ -528,11 +581,19 @@ export function resolveProfileForOs(profile: Profile, os: 'windows' | 'macos' | 
     if (a.type === 'hotkey' && a.cmdOnMac) return { ...a, keys: swap(a.keys) }
     if (a.type === 'sequence' && a.cmdOnMac)
       return { ...a, steps: a.steps.map((s) => ({ ...s, keys: swap(s.keys) })) }
+    if (a.type === 'tap_hold') {
+      const plain = <T extends Action | undefined>(x: T): T => (x ? (fix(x) as T) : x)
+      return { ...a, tap: plain(a.tap), hold: plain(a.hold), double: plain(a.double) }
+    }
     return a
   }
   return {
     ...profile,
     keys: profile.keys.map((k) => ({ ...k, action: fix(k.action) })),
+    layers: profile.layers.map((l) => ({
+      ...l,
+      keys: l.keys.map((k) => ({ ...k, action: fix(k.action) }))
+    })),
     encoder: {
       ...profile.encoder,
       cw: fix(profile.encoder.cw),

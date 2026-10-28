@@ -22,9 +22,21 @@ type Props = {
   /** The words that switch to the profile when they are in a window's title. */
   onTitles: (titles: string[]) => void
   onApplyColorToAll: (color: string) => void
+  /** The profile is a Studio-only one: it may have layers, layer keys and a double tap. */
+  studio?: boolean
 }
 
 const KEY_ACTIONS: Action['type'][] = [
+  'hotkey',
+  'key',
+  'text',
+  'sequence',
+  'consumer',
+  'tap_hold',
+  'none'
+]
+// a layer key is for Studio-only profiles (the pad's own profiles have no layers)
+const STUDIO_KEY_ACTIONS: Action['type'][] = [
   'hotkey',
   'key',
   'text',
@@ -43,12 +55,14 @@ export function Inspector({
   onEncoder,
   onMatch,
   onTitles,
-  onApplyColorToAll
+  onApplyColorToAll,
+  studio = false
 }: Props): React.JSX.Element {
   return (
     <div className="flex w-80 shrink-0 flex-col gap-5 overflow-y-auto border-l border-line bg-surface p-4">
       {selection.kind === 'key' ? (
         <KeyPanel
+          studio={studio}
           profile={profile}
           index={selection.index}
           onKey={onKey}
@@ -153,8 +167,10 @@ export function KeyPanel({
   profile,
   index,
   onKey,
-  onApplyColorToAll
+  onApplyColorToAll,
+  studio = false
 }: {
+  studio?: boolean
   profile: Profile
   index: number
   onKey: Props['onKey']
@@ -199,7 +215,9 @@ export function KeyPanel({
       {!isFn && (
         <ActionEditor
           action={key.action}
-          allowed={KEY_ACTIONS}
+          allowed={studio ? STUDIO_KEY_ACTIONS : KEY_ACTIONS}
+          studio={studio}
+          layerCount={profile.layers.length}
           onChange={(action) => onKey(index, { action })}
         />
       )}

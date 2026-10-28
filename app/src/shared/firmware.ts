@@ -15,6 +15,13 @@ export const EFFECTS_FIRMWARE = '0.4.0'
 /** First firmware with the Studio slot: the spare layer Studio fills with the profile of the app in focus (SLOT_*). */
 export const SLOT_FIRMWARE = '0.5.0'
 
+/** First firmware whose Studio slot takes extra layers and double-tap keys. */
+export const LAYERS_FIRMWARE = '0.6.0'
+
+/** True when the connected pad can run layers and double tap in a Studio-only profile. */
+export const hasLayers = (device: DeviceState): boolean =>
+  device.status === 'connected' && !!device.firmware && !isNewer(LAYERS_FIRMWARE, device.firmware)
+
 /** True when the connected pad has the Studio slot (a pad that has not said its firmware yet does not count). */
 export const hasSlot = (device: DeviceState): boolean =>
   device.status === 'connected' && !!device.firmware && !isNewer(SLOT_FIRMWARE, device.firmware)

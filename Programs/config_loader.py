@@ -41,12 +41,6 @@ DEFAULT_EFFECT = "static"      # settings.effect when the config has none (an ol
 
 MODS = {"CTRL": "LCTL", "SHIFT": "LSFT", "ALT": "LALT", "GUI": "LGUI"}
 
-SUB_LAYERS = 1                 # extra 12-key layers a profile may have (profile["layers"]); reached with a "layer" key
-MIN_TAP_MS = 100               # tap_hold: how long a press counts as a tap / how long the window for a second tap is
-MAX_TAP_MS = 1000
-DEFAULT_TAP_MS = 250
-PLAIN = ("none", "key", "consumer", "hotkey", "text", "sequence")   # what a tap_hold's tap / hold / double may be
-
 
 def crc32(data, value=0):
     """CRC-32 of data; pass the previous result as value to continue over more data."""
@@ -200,6 +194,12 @@ def effect(cfg):
     return v
 
 
+def _pad_action(a):
+    """Layers and double tap need RAM the pad does not have at start-up: only the Studio slot may use them."""
+    if a["type"] == "layer" or (a["type"] == "tap_hold" and (a.get("double") or a.get("hold", {}).get("type") == "layer")):
+        raise ValueError("layers and double tap are for Studio-only profiles")
+
+
 def check(cfg):
     """Raises ValueError (or KeyError/TypeError) if the structure is not what the firmware needs."""
     if cfg["schema_version"] != SCHEMA_VERSION:
@@ -215,16 +215,11 @@ def check(cfg):
         if not p["name"]:
             raise ValueError("profile without a name")
         p["match"]["windows"], p["match"]["macos"], p["match"]["titles"], p["encoder"]["cw"]
-        subs = p.get("layers", [])
-        if not isinstance(subs, list) or len(subs) > SUB_LAYERS:
-            raise ValueError("a profile has at most %d extra layers" % SUB_LAYERS)
-        for sub in subs:
-            if len(sub["keys"]) != KEYS:
-                raise ValueError("a layer needs %d keys" % KEYS)
-        for k in p["keys"] + [k for sub in subs for k in sub["keys"]]:
-            a = k.get("action")
-            if a and a.get("type") == "layer" and not 1 <= a.get("layer", 0) <= len(subs):
-                raise ValueError("a layer key points at a layer the profile does not have")
+        if p.get("layers"):
+            raise ValueError("layers are for Studio-only profiles")
+        for k in p["keys"]:
+            if k.get("action"):
+                _pad_action(k["action"])
     cfg["settings"]["brightness"], cfg["device"]["owner_screen"]
     sleep_minutes(cfg)
     effect(cfg)
@@ -242,6 +237,8 @@ def _kc(name):
         name = MODS[name]
     try:
         return getattr(KC, name)
+    except MemoryError:     # KMK makes a key the first time it is asked for: no RAM left looks like an unknown key
+        raise
     except Exception:
         raise ValueError("unknown key " + name)
 
@@ -273,62 +270,14 @@ def attach(kb):
     keyboard = kb
 
 
-def _need(name):
-    """KC.HT / KC.TD exist only once their module is in the keyboard. Adds it the first time a config uses it,
-    so a pad whose config has no tap_hold keeps the RAM."""
-    try:
-        return getattr(KC, name)
-    except Exception:
-        pass
-    if keyboard is None:
-        raise ValueError("no support for " + name)
-    if name == "HT":
-        from kmk.modules.holdtap import HoldTap as Mod
-    else:
-        from kmk.modules.tapdance import TapDance as Mod
-    keyboard.modules.append(Mod())
-    return getattr(KC, name)
-
-
-def _plain(a):
-    if a["type"] not in PLAIN:
-        raise ValueError("not allowed inside tap_hold: " + a["type"])
-    return _action(a)
-
-
-def _tap_hold(a, ctx):
-    ms = a.get("ms", DEFAULT_TAP_MS)
-    if isinstance(ms, bool) or not isinstance(ms, int) or not MIN_TAP_MS <= ms <= MAX_TAP_MS:
-        raise ValueError("ms must be %d to %d" % (MIN_TAP_MS, MAX_TAP_MS))
-    tap = _plain(a["tap"])
-    hold, double = a.get("hold"), a.get("double")
-    if hold is None and double is None:
-        raise ValueError("tap_hold needs a hold or a double")
-    if hold is not None:
-        # a hold may also be a layer key, which is how a key becomes "tap = X, hold = layer"
-        hold = _action(hold, ctx) if hold["type"] == "layer" else _plain(hold)
-        tap = _need("HT")(tap, hold, prefer_hold=False, tap_interrupted=False, tap_time=ms)
-    if double is not None:
-        tap = _need("TD")(tap, _plain(double), tap_time=ms)
-    return tap
-
-
 def _action(a, ctx=None):
-    """ctx: {layer number: index of that layer in the keymap} for the profile this key belongs to.
-    None where there are no layers (the Studio slot): a layer key is a dead key there."""
+    """ctx: {layer number: index of that layer in the keymap} for a Studio-only profile ({} when it has no layers).
+    None for the pad's own profiles, which have no layers and no double tap."""
     t = a["type"]
-    if t == "layer":
-        if ctx is None or a["layer"] not in ctx:
-            return KC.NO
-        if a["mode"] == "hold":
-            return KC.MO(ctx[a["layer"]])
-        if a["mode"] == "toggle":
-            return KC.TG(ctx[a["layer"]])
-        raise ValueError("unknown layer mode " + str(a["mode"]))
-    if t == "tap_hold":
-        if ctx is None and keyboard is None:
-            return KC.NO
-        return _tap_hold(a, ctx)
+    if t == "layer" or t == "tap_hold":
+        import key_extras       # only when a profile has one: the screen needs the RAM at start-up
+
+        return key_extras.build(_action, keyboard, a, ctx)
     if t == "none" or t == "layer_next":
         return KC.NO
     if t == "fn":
@@ -356,120 +305,31 @@ def _action(a, ctx=None):
 
 
 def build_profiles(cfg):
-    """The same dicts as p_general() etc. in code.py. Raises if anything can't be built.
-
-    A profile with extra layers also gets sub=[{keys, labels, colors}, ...]. The keymap is laid out as
-    profiles, Studio slot, utility layer, and then the extra layers in profile order, so profile p's layer s
-    is at index first_sub_layer(cfg) + (the extra layers of the profiles before p) + s - 1."""
+    """The same dicts as p_general() etc. in code.py. Raises if anything can't be built."""
     out = []
-    nxt = len(cfg["profiles"]) + 2      # after the profiles, the Studio slot and the utility layer
     for p in cfg["profiles"]:
         m = p["match"]
         enc = p["encoder"]
-        subs = p.get("layers", [])
-        ctx = {}
-        for i in range(len(subs)):
-            ctx[i + 1] = nxt + i
-        nxt += len(subs)
         out.append(dict(
             name=p["name"],
             # process names / bundle ids of both systems: the other system's names never match
             proc=tuple(s.lower() for s in m["windows"]) + tuple(s.lower() for s in m["macos"]),
             title=tuple(s.lower() for s in m["titles"]),
-            keys=[_action(k["action"], ctx) for k in p["keys"]],
+            keys=[_action(k["action"]) for k in p["keys"]],
             labels=[k["label"] for k in p["keys"]],
             colors=[_rgb(k["color"]) for k in p["keys"]],
             # (turn left, turn right, short press, top-bar text, press label)
             knob=(_action(enc["ccw"]), _action(enc["cw"]), _action(enc["press"]),
                   enc["label"], enc.get("pressLabel", "")),
-            sub=[dict(
-                keys=[_action(k["action"], ctx) for k in sub["keys"]],
-                labels=[k["label"] for k in sub["keys"]],
-                colors=[_rgb(k["color"]) for k in sub["keys"]],
-            ) for sub in subs],
         ))
     return out
 
 
-class SlotBuilder:
-    """The profile that SnekPad Studio sends for an app that has none of its own on the pad, built one line at a time.
+def SlotBuilder(name, knob_text, layers=0, base=0):
+    """The builder for the profile Studio sends for one app (see slot_keys.py, which is only loaded now)."""
+    import slot_keys
 
-    Studio keeps more profiles than the pad has room for and sends the one that fits the app in focus (SLOT_BEGIN,
-    SLOT_KEY x 15, SLOT_END; see app_profiles.py). Each key is built as its line arrives, so the pad never holds the
-    text of a whole profile. Keys 0-11 are the pad's keys (label, colour, action), 12-14 the knob (turn right, turn
-    left, press; their label and colour are not used).
-
-    A sequence is sent as {"type":"sequence"} (no steps) and then one SLOT_STEP line per step. Parsing all the steps as one
-    block of JSON needs several KB of RAM for a moment, which the pad does not have; a step at a time needs next to
-    nothing, and the macro is made when the next key (or the end) arrives."""
-
-    COUNT = KEYS + 3
-
-    def __init__(self, name, knob_text):
-        self.name = name[:12] or "Studio"
-        self.knob_text = knob_text[:10]
-        self.keys = [None] * KEYS
-        self.labels = [""] * KEYS
-        self.colors = [0] * KEYS
-        self.knob = [None] * 3
-        self.got = 0
-        self.seq = -1       # the key whose steps are arriving, -1 = none
-        self.acts = None    # the macro steps so far
-        self.wait = 0       # pause after the last step so far (only used if another step follows)
-
-    def _store(self, index, action):
-        if index < KEYS:
-            if self.keys[index] is None:
-                self.got += 1
-            self.keys[index] = action
-        else:
-            if self.knob[index - KEYS] is None:
-                self.got += 1
-            self.knob[index - KEYS] = action
-
-    def _end_seq(self):
-        if self.seq >= 0:
-            index, acts = self.seq, self.acts
-            self.seq = -1
-            self.acts = None
-            if not acts:
-                raise ValueError("empty sequence")
-            self._store(index, KC.MACRO(*acts))
-
-    def add(self, index, label, color, action_text):
-        self._end_seq()
-        if not 0 <= index < self.COUNT:
-            raise ValueError("bad key number")
-        a = json.loads(action_text)
-        if a["type"] == "sequence" and "steps" not in a:
-            if index >= KEYS:
-                raise ValueError("no sequence on the knob")
-            self.seq = index
-            self.acts = []
-            self.wait = 0
-        else:
-            self._store(index, _action(a))
-        if index < KEYS:
-            self.labels[index] = label[:5]
-            self.colors[index] = _rgb(color)
-
-    def step(self, index, keys, wait):
-        """One step of the sequence that SLOT_KEY just announced: keys joined with '+', pause after it in ms."""
-        if index != self.seq:
-            raise ValueError("no sequence")
-        pause = int(wait)
-        if not 0 <= pause <= 2000:
-            raise ValueError("bad pause")
-        if self.wait:
-            self.acts.append(Delay(self.wait))      # same rule as a pushed sequence: a pause only between steps
-        self.acts.extend(_hold(keys.split("+")))
-        self.wait = pause
-
-    def finish(self):
-        self._end_seq()
-        if self.got != self.COUNT:
-            raise ValueError("profile incomplete")
-        return self
+    return slot_keys.SlotBuilder((_action, _hold, _rgb), name, knob_text, layers, base)
 
 
 def level_for(brightness, levels):

@@ -31,6 +31,8 @@ for _attr in ("Delay", "Press", "Release", "Tap"):
         setattr(sys.modules["kmk.modules.macros"], _attr, object)
 real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(real)
+import key_extras  # noqa: E402  (layer and tap / hold keys)
+import slot_keys  # noqa: E402  (the slot builder lives here; config_loader.SlotBuilder loads it)
 
 
 class Key(str):
@@ -69,7 +71,9 @@ def key_lines(skip=(), bad=None):
 class FakeBuilder:
     """Stands in for config_loader.SlotBuilder in the serial tests (the real one is tested below)."""
 
-    def __init__(self, name, knob_text):
+    def __init__(self, name, knob_text, layers=0, base=0):
+        self.layers, self.base = layers, base
+        self.sub = []
         self.name = name[:12]
         self.knob_text = knob_text[:10]
         self.keys = [None] * 12
@@ -128,6 +132,109 @@ def send_profile(pad, kb, name="OBS", knob="KNOB:SCN", **kw):
     for line in key_lines(**kw):
         feed(pad, kb, line)
     feed(pad, kb, "SLOT_END\n")
+
+
+class LayerBuilder(FakeBuilder):
+    """FakeBuilder that also makes the extra layers it was asked for."""
+
+    def __init__(self, name, knob_text, layers=0, base=0):
+        super().__init__(name, knob_text, layers, base)
+        self.sub = [
+            dict(keys=["S%d_%d" % (n, i) for i in range(12)], labels=["x%d" % n] * 12, colors=[n] * 12)
+            for n in range(1, layers + 1)
+        ]
+
+
+def send_layered(pad, kb, layers, name="OBS"):
+    SERIAL.out = b""
+    feed(pad, kb, "SLOT_BEGIN\t%s\tKNOB:SCN\t%d\n" % (name, layers))
+    for line in key_lines():
+        feed(pad, kb, line)
+    feed(pad, kb, "SLOT_END\n")
+
+
+class OutOfMemoryBuilder(FakeBuilder):
+    def add(self, index, label, color, action_text):
+        if label == "bad":
+            raise MemoryError()         # KMK makes a key the first time it is asked for: no RAM left
+        super().add(index, label, color, action_text)
+
+
+class SlotOutOfMemory(unittest.TestCase):
+    def test_running_out_of_ram_while_building_says_so(self):
+        base.config_loader.SlotBuilder = OutOfMemoryBuilder
+        pad, kb, keymap, *_ = make_slot_pad()
+        send_profile(pad, kb, bad=3)
+        self.assertIn("profile too big for the pad", sent())
+        self.assertFalse(pad.slot_ready)
+        self.assertIs(keymap[3], keymap[0])      # the slot is General again
+
+
+class SlotLayers(unittest.TestCase):
+    """A Studio-only profile's extra layers go after the utility layer and are let go with the profile."""
+
+    def setUp(self):
+        base.config_loader.SlotBuilder = LayerBuilder
+
+    def lists(self, *parts):
+        return [len(x) for x in parts]
+
+    def test_the_builder_is_told_how_many_layers_and_where_they_will_be(self):
+        made = []
+        orig = LayerBuilder.__init__
+
+        def spy(self, *a):
+            made.append(a)
+            orig(self, *a)
+
+        pad, kb, *_ = make_slot_pad()
+        with mock.patch.object(LayerBuilder, "__init__", spy):
+            send_layered(pad, kb, 2)
+        self.assertEqual(made, [("OBS", "KNOB:SCN", 2, 5)])        # the slot is layer 3, the utility layer 4, so the first is 5
+
+    def test_the_extra_layers_are_added_after_the_utility_layer(self):
+        pad, kb, keymap, labels, colors, names, knob_text, enc = make_slot_pad()
+        send_layered(pad, kb, 2)
+        self.assertEqual(self.lists(keymap, labels, colors, names, knob_text, enc), [7] * 6)
+        self.assertEqual(keymap[5][0], "S1_0")
+        self.assertEqual(keymap[6][0], "S2_0")
+        self.assertEqual((names[5], names[6]), ("OBS 2", "OBS 3"))
+        self.assertEqual(knob_text[5], "KNOB:SCN")
+        self.assertEqual(enc[5], enc[3])                # the knob keeps the profile's actions on a layer
+
+    def test_a_profile_without_layers_adds_nothing(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        send_layered(pad, kb, 0)
+        self.assertEqual(len(keymap), 5)
+
+    def test_the_next_profile_lets_the_layers_go(self):
+        pad, kb, keymap, labels, colors, names, knob_text, enc = make_slot_pad()
+        send_layered(pad, kb, 2)
+        send_layered(pad, kb, 1, name="Next")
+        self.assertEqual(self.lists(keymap, labels, colors, names, knob_text, enc), [6] * 6)
+        self.assertEqual(names[5], "Next 2")
+
+    def test_a_layer_that_is_switched_on_is_switched_off_when_it_goes(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        send_layered(pad, kb, 2)
+        kb.active_layers = [5, 3]           # holding a layer key of the slot's profile
+        send_layered(pad, kb, 0, name="Next")
+        self.assertEqual(kb.active_layers, [3])
+        self.assertEqual(len(keymap), 5)
+
+    def test_when_nothing_is_left_it_falls_back_to_general(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        send_layered(pad, kb, 1)
+        kb.active_layers = [5]
+        send_layered(pad, kb, 0, name="Next")
+        self.assertEqual(kb.active_layers, [0])
+
+    def test_too_little_ram_takes_the_layers_out_again(self):
+        pad, kb, keymap, *_ = make_slot_pad()
+        with mock.patch.object(app_profiles.gc, "mem_free", create=True, return_value=app_profiles.SLOT_MIN_FREE - 1):
+            send_layered(pad, kb, 2)
+        self.assertEqual(len(keymap), 5)
+        self.assertFalse(pad.slot_ready)
 
 
 class SlotTransfer(unittest.TestCase):
@@ -359,6 +466,9 @@ class SlotBuilderTests(unittest.TestCase):
     def setUp(self):
         patches = [
             mock.patch.object(real, "KC", FakeKC()),
+            mock.patch.object(slot_keys, "KC", FakeKC()),
+            mock.patch.object(key_extras, "KC", FakeKC()),
+            mock.patch.object(slot_keys, "Delay", lambda ms: ("delay", ms)),
             mock.patch.object(real, "Tap", lambda k: ("tap", k)),
             mock.patch.object(real, "Press", lambda k: ("press", k)),
             mock.patch.object(real, "Release", lambda k: ("release", k)),

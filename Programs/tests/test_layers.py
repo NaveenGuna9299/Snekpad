@@ -25,6 +25,9 @@ _spec = importlib.util.spec_from_file_location("real_config_loader_layers", os.p
 real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(real)
 
+import key_extras  # noqa: E402  (layer and tap / hold keys; config_loader loads it when a profile has one)
+import slot_keys  # noqa: E402  (the slot builder; config_loader.SlotBuilder loads it)
+
 
 class Key(str):
     """A fake KMK key; calling it records the call, e.g. KC.MO(5) -> "MO(5)"."""
@@ -103,7 +106,10 @@ class Base(unittest.TestCase):
             mock.patch.object(real, "Release", lambda k: ("release", k)),
             mock.patch.object(real, "Delay", lambda ms: ("delay", ms)),
             mock.patch.object(real, "keyboard", self.kb),
-            mock.patch.object(real, "_need", self._need),
+            mock.patch.object(slot_keys, "KC", self.kc),
+            mock.patch.object(slot_keys, "Delay", lambda ms: ("delay", ms)),
+            mock.patch.object(key_extras, "KC", self.kc),
+            mock.patch.object(key_extras, "_need", lambda keyboard, name: self._need(name)),
         ):
             p.start()
             self.addCleanup(p.stop)
@@ -120,74 +126,117 @@ class _Modules(list):
         super().__init__()
 
 
-class LayerCheckTests(Base):
-    def test_a_profile_without_layers_is_still_valid(self):
+class PadProfileTests(Base):
+    """The pad's own profiles have no layers and no double tap: they would cost RAM at start-up, where the screen needs it."""
+
+    def test_a_plain_profile_is_valid(self):
         real.check(config(profile()))
 
-    def test_one_extra_layer_is_valid(self):
-        keys = [key() for _ in range(12)]
-        keys[0] = layer_key()
-        real.check(config(profile(keys=keys, layers=[sub_layer()])))
-
-    def test_more_extra_layers_than_allowed_are_refused(self):
+    def test_layers_are_refused(self):
         with self.assertRaises(ValueError):
-            real.check(config(profile(layers=[sub_layer()] * (real.SUB_LAYERS + 1))))
+            real.check(config(profile(layers=[sub_layer()])))
 
-    def test_a_layer_needs_twelve_keys(self):
-        with self.assertRaises(ValueError):
-            real.check(config(profile(layers=[sub_layer(11)])))
-
-    def test_a_layer_key_without_the_layer_is_refused(self):
+    def test_a_layer_key_is_refused(self):
         keys = [key() for _ in range(12)]
         keys[0] = layer_key()
         with self.assertRaises(ValueError):
             real.check(config(profile(keys=keys)))
 
-    def test_a_layer_key_inside_the_extra_layer_is_checked_too(self):
-        sub = sub_layer()
-        sub["keys"][0] = layer_key(layer=2)
-        with self.assertRaises(ValueError):
-            real.check(config(profile(layers=[sub])))
-
-
-class LayerBuildTests(Base):
-    def test_the_layer_key_points_at_the_first_index_after_the_utility_layer(self):
+    def test_a_double_tap_is_refused(self):
         keys = [key() for _ in range(12)]
-        keys[0] = layer_key("hold")
-        keys[1] = layer_key("toggle")
-        built = real.build_profiles(config(profile(keys=keys, layers=[sub_layer()])))
-        # one profile: 0 = profile, 1 = Studio slot, 2 = utility, 3 = its extra layer
-        self.assertEqual(built[0]["keys"][0], "MO(3)")
-        self.assertEqual(built[0]["keys"][1], "TG(3)")
+        keys[0] = key("x", {"type": "tap_hold", "tap": {"type": "key", "key": "A"}, "double": {"type": "key", "key": "B"}})
+        with self.assertRaises(ValueError):
+            real.check(config(profile(keys=keys)))
 
-    def test_indexes_follow_the_profile_order(self):
-        k1 = [key() for _ in range(12)]
-        k1[0] = layer_key()
-        k2 = [key() for _ in range(12)]
-        k2[0] = layer_key()
-        built = real.build_profiles(config(
-            profile("general"), profile("one", keys=k1, layers=[sub_layer()]), profile("two", keys=k2, layers=[sub_layer()])
-        ))
-        # three profiles: slot = 3, utility = 4, then one's layer = 5 and two's layer = 6
-        self.assertEqual(built[1]["keys"][0], "MO(5)")
-        self.assertEqual(built[2]["keys"][0], "MO(6)")
+    def test_a_hold_that_is_a_layer_is_refused(self):
+        keys = [key() for _ in range(12)]
+        keys[0] = key("x", {"type": "tap_hold", "tap": {"type": "key", "key": "A"},
+                            "hold": {"type": "layer", "mode": "hold", "layer": 1}})
+        with self.assertRaises(ValueError):
+            real.check(config(profile(keys=keys)))
 
-    def test_the_extra_layer_is_built_with_its_own_labels_and_colours(self):
-        built = real.build_profiles(config(profile(layers=[sub_layer()])))
-        sub = built[0]["sub"][0]
-        self.assertEqual(sub["labels"][:2], ["s0", "s1"])
-        self.assertEqual(sub["colors"][0], 0x112233)
-        self.assertEqual(sub["keys"][0], "F1")
+    def test_tap_and_hold_are_fine_and_build(self):
+        keys = [key() for _ in range(12)]
+        keys[0] = key("x", {"type": "tap_hold", "tap": {"type": "key", "key": "A"}, "hold": {"type": "key", "key": "B"}})
+        cfg = config(profile(keys=keys))
+        real.check(cfg)
+        self.assertEqual(real.build_profiles(cfg)[0]["keys"][0], "HT(A,B,prefer_hold=False,tap_interrupted=False,tap_time=250)")
 
-    def test_a_profile_without_layers_has_no_sub(self):
-        self.assertEqual(real.build_profiles(config(profile()))[0]["sub"], [])
+    def test_building_a_pad_profile_without_a_layer_map_refuses_layer_and_double(self):
+        for a in (
+            {"type": "layer", "mode": "hold", "layer": 1},
+            {"type": "tap_hold", "tap": {"type": "key", "key": "A"}, "double": {"type": "key", "key": "B"}},
+        ):
+            with self.assertRaises(ValueError):
+                real._action(a)
 
-    def test_a_layer_key_is_a_dead_key_where_there_are_no_layers(self):
-        self.assertEqual(real._action({"type": "layer", "mode": "hold", "layer": 1}), "NO")
 
-    def test_the_knob_cannot_hold_a_layer_key_that_has_nothing_to_point_at(self):
-        # the knob is built without a layer map, so a layer there is a dead key and cannot lock the pad
-        self.assertEqual(real._action({"type": "layer", "mode": "toggle", "layer": 1}), "NO")
+class SlotBuilderTests(Base):
+    """A Studio-only profile (the slot) may have up to 2 extra layers and use double tap."""
+
+    def make(self, layers, base=5):
+        return real.SlotBuilder("Studio", "KNOB:X", layers, base)
+
+    def feed(self, b, count, layer_key=None, first=0):
+        for n in range(first, count):
+            a = {"type": "fn"} if n in (11, 26, 38) else {"type": "key", "key": "K%d" % n}
+            if layer_key and n == layer_key[0]:
+                a = layer_key[1]
+            b.add(n, "l%d" % n, "#%06x" % (0x100000 + n), __import__("json").dumps(a))
+        return b
+
+    def test_two_layers_make_39_keys(self):
+        b = self.feed(self.make(2), 39)
+        self.assertEqual(b.finish().COUNT, 39)
+        self.assertEqual(len(b.sub), 2)
+        self.assertEqual(b.sub[0]["keys"][0], "K15")
+        self.assertEqual(b.sub[1]["keys"][0], "K27")
+        self.assertEqual(b.sub[1]["labels"][0], "l27")
+        self.assertEqual(b.sub[1]["colors"][1], 0x10001C)
+
+    def test_without_layers_it_is_the_old_15_keys(self):
+        b = self.feed(self.make(0), 15)
+        self.assertEqual(b.finish().COUNT, 15)
+        self.assertEqual(b.sub, [])
+
+    def test_missing_keys_of_a_layer_are_refused(self):
+        b = self.feed(self.make(1), 20)
+        with self.assertRaises(ValueError):
+            b.finish()
+
+    def test_more_than_two_layers_are_refused(self):
+        with self.assertRaises(ValueError):
+            self.make(3)
+
+    def test_a_key_past_the_last_layer_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.make(1).add(27, "x", "#000000", '{"type":"none"}')
+
+    def test_a_layer_key_points_at_the_index_the_layers_will_have(self):
+        b = self.make(2, base=6)
+        b.add(0, "a", "#000000", '{"type":"layer","mode":"hold","layer":1}')
+        b.add(1, "b", "#000000", '{"type":"layer","mode":"toggle","layer":2}')
+        self.assertEqual(b.keys[0], "MO(6)")
+        self.assertEqual(b.keys[1], "TG(7)")
+
+    def test_a_layer_key_to_a_layer_the_profile_lacks_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.make(1).add(0, "a", "#000000", '{"type":"layer","mode":"hold","layer":2}')
+
+    def test_double_tap_and_a_layer_hold_work_in_the_slot(self):
+        b = self.make(1, base=5)
+        b.add(0, "a", "#000000", '{"type":"tap_hold","tap":{"type":"key","key":"A"},"double":{"type":"key","key":"B"}}')
+        b.add(1, "b", "#000000", '{"type":"tap_hold","tap":{"type":"key","key":"A"},"hold":{"type":"layer","mode":"hold","layer":1}}')
+        self.assertEqual(b.keys[0], "TD(A,B,tap_time=250)")
+        self.assertEqual(b.keys[1], "HT(A,MO(5),prefer_hold=False,tap_interrupted=False,tap_time=250)")
+
+    def test_a_sequence_on_a_layer_is_built_from_its_steps(self):
+        b = self.make(1)
+        b.add(15, "s", "#000000", '{"type":"sequence"}')
+        b.step(15, "CTRL+C", "0")
+        b.add(16, "n", "#000000", '{"type":"none"}')
+        self.assertEqual(len(b.sub[0]["keys"][0:1]), 1)
+        self.assertIsNotNone(b.sub[0]["keys"][0])
 
 
 class TapHoldTests(Base):
@@ -238,6 +287,43 @@ class TapHoldTests(Base):
     def test_the_modules_are_added_only_once_and_only_when_needed(self):
         real.build_profiles(config(profile()))
         self.assertEqual(self.kb.modules, [])
+
+
+class NeedTests(unittest.TestCase):
+    """The real _need. KMK does not raise for KC.HT before its module exists (it logs "Invalid key" and gives back a
+    dead key), so the module must be added by name, once."""
+
+    def setUp(self):
+        self.kc = FakeKC()
+        self.kc.modules = {"HT", "TD"}          # a fake KC that never raises, like KMK's
+        self.kb = FakeKeyboard(self.kc)
+        self.created = []
+        for name, cls in (("kmk.modules.holdtap", "HoldTap"), ("kmk.modules.tapdance", "TapDance")):
+            mod = type(sys)(name)
+            setattr(mod, cls, self._factory(cls))
+            p = mock.patch.dict(sys.modules, {name: mod})
+            p.start()
+            self.addCleanup(p.stop)
+        for p in (mock.patch.object(key_extras, "KC", self.kc), mock.patch.object(key_extras, "_added", [])):
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _factory(self, cls):
+        def make():
+            self.created.append(cls)
+            return cls
+        return make
+
+    def test_the_module_is_added_the_first_time_and_only_then(self):
+        key_extras._need(self.kb, "HT")
+        key_extras._need(self.kb, "HT")
+        key_extras._need(self.kb, "TD")
+        self.assertEqual(self.created, ["HoldTap", "TapDance"])
+        self.assertEqual(self.kb.modules, ["HoldTap", "TapDance"])
+
+    def test_without_a_keyboard_it_refuses(self):
+        with self.assertRaises(ValueError):
+            key_extras._need(None, "HT")
 
 
 if __name__ == "__main__":

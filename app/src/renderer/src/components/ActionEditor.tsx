@@ -26,6 +26,14 @@ const LABELS: Record<Kind, string> = {
   tap_hold: 'Tap / hold'
 }
 
+const defaultFor = (k: Kind, studio: boolean): Action => {
+  if (k !== 'tap_hold') return DEFAULTS[k]
+  // a tap/hold key on the pad's own profile holds a plain key; in a Studio-only profile the hold goes to the layer
+  return studio
+    ? DEFAULTS.tap_hold
+    : { type: 'tap_hold', tap: { type: 'key', key: 'ENTER' }, hold: { type: 'key', key: 'ESC' } }
+}
+
 const DEFAULTS: Record<Kind, Action> = {
   none: { type: 'none' },
   fn: { type: 'fn' },
@@ -51,9 +59,19 @@ type Props = {
   action: Action
   allowed: Kind[]
   onChange: (a: Action) => void
+  /** A Studio-only profile: layer keys and a double tap are possible. */
+  studio?: boolean
+  /** How many extra layers the profile has (a layer key chooses one of them). */
+  layerCount?: number
 }
 
-export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.Element {
+export function ActionEditor({
+  action,
+  allowed,
+  onChange,
+  studio = false,
+  layerCount = 1
+}: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
       <div role="radiogroup" aria-label="Action" className="flex flex-col gap-1">
@@ -64,7 +82,7 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
               key={k}
               role="radio"
               aria-checked={action.type === k}
-              onClick={() => action.type !== k && onChange(DEFAULTS[k])}
+              onClick={() => action.type !== k && onChange(defaultFor(k, studio))}
               className={`rounded-md border px-1.5 py-1.5 text-xs ${action.type === k ? 'border-accent bg-selected font-semibold text-fg' : 'border-line text-muted hover:bg-surface2 hover:text-fg'}`}
             >
               {LABELS[k]}
@@ -134,6 +152,23 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
 
       {action.type === 'layer' && (
         <label className="flex flex-col gap-1 text-xs text-muted">
+          Layer
+          <select
+            value={action.layer}
+            onChange={(e) => onChange({ ...action, layer: Number(e.target.value) })}
+            className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
+          >
+            {Array.from({ length: Math.max(1, layerCount) }, (_, i) => (
+              <option key={i} value={i + 1}>
+                Layer {i + 2}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {action.type === 'layer' && (
+        <label className="flex flex-col gap-1 text-xs text-muted">
           How it works
           <select
             value={action.mode}
@@ -146,7 +181,14 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
         </label>
       )}
 
-      {action.type === 'tap_hold' && <TapHoldEditor action={action} onChange={onChange} />}
+      {action.type === 'tap_hold' && (
+        <TapHoldEditor
+          action={action}
+          onChange={onChange}
+          studio={studio}
+          layerCount={layerCount}
+        />
+      )}
 
       {(action.type === 'hotkey' || action.type === 'sequence') && (
         <label className="flex items-center gap-2 text-sm">
@@ -164,10 +206,14 @@ export function ActionEditor({ action, allowed, onChange }: Props): React.JSX.El
 
 function TapHoldEditor({
   action,
-  onChange
+  onChange,
+  studio,
+  layerCount
 }: {
   action: Extract<Action, { type: 'tap_hold' }>
   onChange: (a: Action) => void
+  studio: boolean
+  layerCount: number
 }): React.JSX.Element {
   type Part = 'hold' | 'double'
   const [more, setMore] = useState<Record<Part, boolean>>({
@@ -181,7 +227,8 @@ function TapHoldEditor({
     setMore({ ...more, [part]: on })
     const next = { ...action }
     if (!on) delete next[part]
-    else if (part === 'hold') next.hold = { type: 'layer', mode: 'hold', layer: 1 }
+    else if (part === 'hold')
+      next.hold = studio ? { type: 'layer', mode: 'hold', layer: 1 } : { type: 'key', key: 'ESC' }
     else next.double = { type: 'key', key: 'ENTER' }
     onChange(next)
   }
@@ -195,25 +242,29 @@ function TapHoldEditor({
           onChange={(tap) => onChange({ ...action, tap: tap as typeof action.tap })}
         />
       </div>
-      {(['hold', 'double'] as Part[]).map((part) => (
-        <div key={part} className="flex flex-col gap-2 rounded-md border border-line p-2">
-          <label className="flex items-center gap-2 text-xs font-semibold">
-            <input
-              type="checkbox"
-              checked={more[part]}
-              onChange={(e) => toggle(part, e.target.checked)}
-            />
-            {part === 'hold' ? 'Hold' : 'Double tap'}
-          </label>
-          {more[part] && action[part] && (
-            <ActionEditor
-              action={action[part]!}
-              allowed={part === 'hold' ? HOLD : PLAIN}
-              onChange={(a) => onChange({ ...action, [part]: a })}
-            />
-          )}
-        </div>
-      ))}
+      {(studio ? ['hold', 'double'] : ['hold'])
+        .map((p) => p as Part)
+        .map((part) => (
+          <div key={part} className="flex flex-col gap-2 rounded-md border border-line p-2">
+            <label className="flex items-center gap-2 text-xs font-semibold">
+              <input
+                type="checkbox"
+                checked={more[part]}
+                onChange={(e) => toggle(part, e.target.checked)}
+              />
+              {part === 'hold' ? 'Hold' : 'Double tap'}
+            </label>
+            {more[part] && action[part] && (
+              <ActionEditor
+                action={action[part]!}
+                allowed={part === 'hold' && studio ? HOLD : PLAIN}
+                studio={studio}
+                layerCount={layerCount}
+                onChange={(a) => onChange({ ...action, [part]: a })}
+              />
+            )}
+          </div>
+        ))}
       <label className="flex flex-col gap-1 text-xs text-muted">
         Hold time / double-tap window: {action.ms ?? DEFAULT_TAP_MS} ms
         <input
@@ -225,7 +276,7 @@ function TapHoldEditor({
           onChange={(e) => onChange({ ...action, ms: Number(e.target.value) })}
         />
       </label>
-      {more.double && (
+      {studio && more.double && (
         <p className="text-xs text-muted">
           With a double tap, a single tap fires only after the window has passed.
         </p>

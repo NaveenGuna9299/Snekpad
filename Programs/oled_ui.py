@@ -45,6 +45,10 @@ BLACK = 0x000000
 COLS = 4
 ROWS = 3
 KEYS = COLS * ROWS
+GLYPH_TOP = 2           # rows above the capitals in a tile of the built-in font (see _glyph_row)
+CELL_CHARS = 5          # characters in a key's legend cell (a label is at most 5)
+TOP_LEFT_CHARS = 20     # the top line: the app or profile name ...
+TOP_RIGHT_CHARS = 10    # ... and the knob's hint
 
 HEART = (
     ".##...##.",
@@ -64,6 +68,35 @@ def _white_palette():
     pal[1] = WHITE
     pal.make_transparent(0)
     return pal
+
+
+def _dark_palette():
+    """Black text on nothing: for the key that is held (the white block is under it)."""
+    pal = displayio.Palette(2)
+    pal[0] = WHITE
+    pal[1] = BLACK
+    pal.make_transparent(0)
+    return pal
+
+
+def _glyph_row(chars, x, y, shader):
+    """A row of `chars` characters drawn as tiles of the built-in font (set the text with _put); y is the top of the 8
+    pixel line the capital letters fill. The main page has 14 of these and used to have 14 Labels: a Label brings a bitmap,
+    a palette and a layout of its own, about a kilobyte each, and together they were most of the 16 KB the main page took.
+    A row of tiles is one small object. The font's tiles are 6 x 12 and its capitals fill rows 2 to 9 of the tile (the
+    rows below are for the tails of g, p and y), so the tile starts GLYPH_TOP above the line."""
+    w, h = terminalio.FONT.get_bounding_box()
+    return displayio.TileGrid(
+        terminalio.FONT.bitmap, pixel_shader=shader, width=chars, height=1, tile_width=w, tile_height=h,
+        x=x, y=y - GLYPH_TOP)
+
+
+def _put(row, s):
+    """Show s on a _glyph_row (cut off or padded with spaces to its width)."""
+    font = terminalio.FONT
+    for i in range(row.width):
+        g = font.get_glyph(ord(s[i])) if i < len(s) else None
+        row[i] = g.tile_index if g else font.get_glyph(32).tile_index
 
 
 def _heart(x, y):
@@ -252,16 +285,24 @@ class OledUI(Module):
             g.append(tile)
             self.hl_tiles.append(tile)
 
+        # Every cell is a row of 5 font tiles (a label is at most 5 characters, 30 of the cell's 32 pixels). A key that is
+        # held shows its white block and its text in black. Nothing is allocated when it changes.
+        self._gw = terminalio.FONT.get_bounding_box()[0]     # width of a character
+        self._pal = pal
+        self._pal_dark = _dark_palette()
+        self._cells = [None] * KEYS
         self.cell_labels = []
         for i in range(KEYS):
             col = i % COLS
             row = i // COLS
-            lab = _text(" ", col * cw + cw // 2, band_h + row * ch + ch // 2)
-            g.append(lab)
-            self.cell_labels.append(lab)
+            tiles = _glyph_row(CELL_CHARS, col * cw + 1, band_h + row * ch, pal)
+            g.append(tiles)
+            self.cell_labels.append(tiles)
 
-        self.lbl_layer = _text(" ", 3, band_h // 2, ax=0.0)
-        self.lbl_knob = _text(" ", self._w - 3, band_h // 2, ax=1.0)
+        # the top line: the app or profile on the left, the knob's hint on the right
+        w = terminalio.FONT.get_bounding_box()[0]
+        self.lbl_layer = _glyph_row(TOP_LEFT_CHARS, 3, 0, pal)
+        self.lbl_knob = _glyph_row(TOP_RIGHT_CHARS, self._w - 3 - TOP_RIGHT_CHARS * w, 0, pal)
         g.append(self.lbl_layer)
         g.append(self.lbl_knob)
         return g
@@ -363,7 +404,7 @@ class OledUI(Module):
     def _refresh_top(self):
         t = self._top_text(self.layer)
         if t != self._top:
-            self.lbl_layer.text = t
+            _put(self.lbl_layer, t)
             self._top = t
 
     def _apply_layer(self, layer):
@@ -371,16 +412,21 @@ class OledUI(Module):
             layer = 0
         self.layer = layer
         self._refresh_top()
-        self.lbl_knob.text = self.knob_text[layer]
+        knob = self.knob_text[layer][:TOP_RIGHT_CHARS]
+        _put(self.lbl_knob, " " * (TOP_RIGHT_CHARS - len(knob)) + knob)       # right-aligned
         row = self.labels[layer]
         for i in range(KEYS):
-            s = row[i] if i < len(row) and row[i] else " "
-            if self.cell_labels[i].text != s:
-                self.cell_labels[i].text = s
+            s = row[i][:CELL_CHARS] if i < len(row) and row[i] else ""
+            if self._cells[i] != s:
+                tiles = self.cell_labels[i]
+                _put(tiles, s)
+                # centred to the pixel: slide the row sideways by half a character for every character it lacks
+                tiles.x = (i % COLS) * (self._w // COLS) + 1 + (CELL_CHARS - len(s)) * self._gw // 2
+                self._cells[i] = s
 
     def _set_cell(self, i, on):
         self.hl_tiles[i].hidden = not on
-        self.cell_labels[i].color = BLACK if on else WHITE
+        self.cell_labels[i].pixel_shader = self._pal_dark if on else self._pal
 
     def _panel(self, on):
         # Switch the panel itself off / on (SSD1306 commands 0xAE / 0xAF). Brightness 0.0 is only the lowest
@@ -445,7 +491,8 @@ class OledUI(Module):
                 self._show("notice")
                 self._notice_until = self.last_activity + self._notice_s
             self.enabled = True
-            print("oled_ui ready (128x32)")
+            gc.collect()
+            print("oled_ui ready (128x32) free RAM:", gc.mem_free())    # what the screen leaves for the rest
         except Exception as e:
             self._fail("setup", e)
 

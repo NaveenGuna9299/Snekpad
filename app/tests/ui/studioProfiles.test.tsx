@@ -200,11 +200,10 @@ describe('the size meter', () => {
     for (let i = 0; i < 11; i++)
       big.keys[i].action = {
         type: 'sequence',
-        steps: [
-          { keys: ['CTRL', 'K'], wait: 100 },
-          { keys: ['CTRL', 'D'], wait: 100 },
-          { keys: ['ENTER'], wait: 0 }
-        ]
+        steps: Array.from({ length: 6 }, (_, n) => ({
+          keys: ['CTRL', 'SHIFT', 'ALT', 'K'],
+          wait: n < 5 ? 100 : 0
+        }))
       }
     c.studioProfiles.push(big)
     const { side } = await editor(pad(), api({ loadConfig: () => Promise.resolve(c) }))

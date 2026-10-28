@@ -42,7 +42,7 @@ CFG_CHUNK = 160     # characters per CFG_LINE, same as the app (src/shared/proto
 RX_TIMEOUT_S = 3.0  # a config transfer that goes quiet this long is dropped
 
 PROTOCOL_VERSION = 2    # 2 = HELLO and the pad's own EVT lines (see app/PROTOCOL.md)
-FIRMWARE_VERSION = "0.5.1"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
+FIRMWARE_VERSION = "0.6.0"  # x.y.z, sent in the HELLO reply. Bump it with every firmware change, and keep it
                             # at or above REQUIRED_FIRMWARE in app/src/shared/firmware.ts (a test checks this).
 FS_ROOT = ""            # root of the pad's filesystem; tests point it at a temporary folder
 EVENT_QUEUE_MAX = 24    # events kept until the next scan; beyond this the newest are dropped
@@ -316,8 +316,9 @@ class AppProfiles(Module):
 
     # ------------------------------------------------------------ SLOT_* (the profile Studio sends for one app)
     def _slot_cmd(self, parts, now):
-        # SLOT_BEGIN<TAB>name<TAB>knob text            -> OK | ERR<TAB>reason
-        # SLOT_KEY<TAB>n<TAB>label<TAB>#RRGGBB<TAB>action as JSON   (n 0-11 = keys, 12 = turn right, 13 = turn left, 14 = press)
+        # SLOT_BEGIN<TAB>name<TAB>knob text[<TAB>extra layers]   -> OK | ERR<TAB>reason
+        # SLOT_KEY<TAB>n<TAB>label<TAB>#RRGGBB<TAB>action as JSON   (n 0-11 = keys, 12 = turn right, 13 = turn left, 14 = press,
+        #                                                           15-26 = the keys of extra layer 1, 27-38 of layer 2)
         # SLOT_STEP<TAB>n<TAB>KEY+KEY<TAB>pause ms      one step of the sequence that key n announced as {"type":"sequence"}
         # SLOT_END                                      the profile is complete: it replaces the old slot
         # Every line is answered, so Studio sends one at a time. The old slot is let go at SLOT_BEGIN, before the new
@@ -328,7 +329,10 @@ class AppProfiles(Module):
             cmd = parts[0]
             if cmd == "SLOT_BEGIN":
                 self._slot_free()
-                self._sb = config_loader.SlotBuilder(parts[1], parts[2] if len(parts) > 2 else "")
+                # the extra layers go at the end of the keymap, after the utility layer (the slot is right before it)
+                self._sb = config_loader.SlotBuilder(
+                    parts[1], parts[2] if len(parts) > 2 else "", int(parts[3]) if len(parts) > 3 else 0, self.slot[0] + 2
+                )
             elif self._sb is None:
                 raise OSError("no SLOT_BEGIN")
             elif cmd == "SLOT_KEY":
@@ -344,12 +348,24 @@ class AppProfiles(Module):
         except Exception as e:
             self._slot_drop()
             print("app_profiles slot error:", e)
-            self._write("ERR\t" + "".join(c if " " <= c <= "~" else " " for c in str(e))[:60] + "\n")
+            why = "profile too big for the pad" if isinstance(e, MemoryError) and not str(e) else str(e)
+            self._write("ERR\t" + "".join(c if " " <= c <= "~" else " " for c in why)[:60] + "\n")
 
     def _slot_free(self):
         # the slot shows General again, with the very same lists: nothing of the old profile stays in RAM
         layer, keymap, labels, colors, names, knob_text, enc_map, _ = self.slot
         g = self.general
+        base = layer + 2        # the extra layers of the old profile start here: the pad's own layers end with the utility layer
+        if len(keymap) > base:
+            kb = self._kb
+            if kb is not None:      # a layer that is about to go must not stay switched on
+                kb.active_layers[:] = [n for n in kb.active_layers if n < base] or [g]
+                if self.leds is not None:
+                    self.leds.layer = -1
+                if self.ui is not None:
+                    self.ui.layer = -1
+            for lst in (keymap, labels, colors, names, knob_text, enc_map):
+                del lst[base:]
         keymap[layer] = keymap[g]
         labels[layer] = labels[g]
         colors[layer] = colors[g]
@@ -375,6 +391,13 @@ class AppProfiles(Module):
         names[layer] = sb.name
         knob_text[layer] = sb.knob_text
         enc_map[layer] = (sb.knob[1], sb.knob[0], sb.knob[2])     # (turn left, turn right, press)
+        for i, sub in enumerate(sb.sub):    # extra layers: the same index that the layer keys were built with
+            keymap.append([fn if k == "FN" else k for k in sub["keys"]])
+            labels.append(sub["labels"])
+            colors.append(sub["colors"])
+            names.append(sb.name[:10] + " " + str(i + 2))
+            knob_text.append(sb.knob_text)
+            enc_map.append(enc_map[layer])
         self.profiles[layer] = (sb.name, (), ())
         self.slot_ready = True
         gc.collect()
