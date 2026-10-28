@@ -193,24 +193,24 @@ describe('App', () => {
     } as unknown as Partial<SnekApi>
 
     it('offers to update a pad that is older than the firmware in this build', async () => {
-      await start(pad({ firmware: '0.3.4' }), bundleOk)
+      await start(pad({ firmware: '0.6.0' }), bundleOk)
       const strip = await screen.findByRole('alert')
       expect(strip.textContent).toContain('older than the firmware in this app (9.0.0)')
       expect(screen.getByRole('button', { name: 'Update pad' })).toBeTruthy()
     })
 
     it('opens the update dialog from the strip, and Cancel closes it again', async () => {
-      await start(pad({ firmware: '0.3.4' }), bundleOk)
+      await start(pad({ firmware: '0.6.0' }), bundleOk)
       await userEvent.click(await screen.findByRole('button', { name: 'Update pad' }))
       const dialog = screen.getByRole('dialog')
-      expect(dialog.textContent).toContain('0.3.4')
+      expect(dialog.textContent).toContain('0.6.0')
       expect(dialog.textContent).toContain('9.0.0')
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
     it('can be started from Settings too, even after the strip was dismissed', async () => {
-      await start(pad({ firmware: '0.3.4' }), bundleOk)
+      await start(pad({ firmware: '0.6.0' }), bundleOk)
       await userEvent.click(await screen.findByRole('button', { name: 'Dismiss firmware warning' }))
       expect(screen.queryByRole('alert')).toBeNull()
       await userEvent.click(screen.getByRole('button', { name: /Settings/ }))
@@ -220,7 +220,7 @@ describe('App', () => {
 
     it('starts sending when asked', async () => {
       const updateFirmware = vi.fn(() => new Promise(() => {})) // never ends: we only look at the start
-      await start(pad({ firmware: '0.3.4' }), {
+      await start(pad({ firmware: '0.6.0' }), {
         ...bundleOk,
         updateFirmware
       } as unknown as Partial<SnekApi>)
