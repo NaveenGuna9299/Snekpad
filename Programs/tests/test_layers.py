@@ -219,6 +219,17 @@ class SlotBuilderTests(Base):
         self.assertEqual(b.keys[0], "MO(6)")
         self.assertEqual(b.keys[1], "TG(7)")
 
+    def test_layer_0_goes_back_to_the_main_keys(self):
+        b = self.make(2, base=6)     # the slot is keymap index 4, the extra layers 6 and 7
+        b.add(0, "a", "#000000", '{"type":"layer","mode":"toggle","layer":0}')
+        b.add(1, "b", "#000000", '{"type":"tap_hold","tap":{"type":"key","key":"A"},"hold":{"type":"layer","mode":"toggle","layer":0}}')
+        self.assertEqual(b.keys[0], "TO(4)")
+        self.assertEqual(b.keys[1], "HT(A,TO(4),prefer_hold=False,tap_interrupted=False,tap_time=250)")
+
+    def test_layer_0_is_refused_on_a_pad_profile(self):
+        with self.assertRaises(ValueError):
+            real.check(config(profile(keys=[key("x", {"type": "layer", "mode": "toggle", "layer": 0})] + [key() for _ in range(11)])))
+
     def test_a_layer_key_to_a_layer_the_profile_lacks_is_refused(self):
         with self.assertRaises(ValueError):
             self.make(1).add(0, "a", "#000000", '{"type":"layer","mode":"hold","layer":2}')

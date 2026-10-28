@@ -37,6 +37,8 @@ def build(action, keyboard, a, ctx):
     if a["type"] == "layer":
         if ctx is None or a["layer"] not in ctx:
             raise ValueError("no such layer")
+        if a["layer"] == 0:     # back to the main keys: the profile's own layer, with every other layer switched off
+            return KC.TO(ctx[0])
         if a["mode"] == "hold":
             return KC.MO(ctx[a["layer"]])
         if a["mode"] == "toggle":

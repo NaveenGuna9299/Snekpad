@@ -6,6 +6,7 @@ Layers, double-tap and tap/hold keys for the keys you have most of, and a much l
 
 - **Up to 2 extra layers.** A Studio-only profile (the profiles Studio keeps itself and puts on the pad when their app is in focus) can have up to two more sets of 12 keys. Open the profile, click **+ Add layer**, and use the **Main keys / Layer 2 / Layer 3** tabs to edit each one.
 - **Layer keys.** Set a key to **Layer**: **hold** it to use the layer while held, or **toggle** it to switch to the layer and back. Choosing a layer key on a profile with no layers adds the first one for you.
+- **Getting back.** A key on Layer 2 or 3 can be set to **Layer 1 (main keys)**: it switches every other layer off and returns to the main keys, so a toggle never leaves you stuck. Use it as a plain layer key or as the hold of a tap/hold key. An unset key on an extra layer does nothing, so give the layer a way back.
 - **On the pad.** The screen shows the layer's own legend, the key LEDs show its colours, and the knob keeps the profile's actions. A layer you are holding is switched off when the profile changes.
 - **Studio has to be running** for a Studio-only profile, as before: the pad gets the profile when its app comes into focus.
 
@@ -37,6 +38,7 @@ Studio's memory meter for Studio-only profiles uses the new numbers. A pad that 
 
 - **The LED key remembers.** The LED key of the utility layer (hold FN) switches the key LEDs off and on. That state is now kept across a push from Studio and across a power-off, like the brightness already was: the pad no longer lights them up again every time it restarts.
 - **Clearer errors.** A push that runs out of the pad's memory now says so, and a push frees the Studio profile on the slot first so it has the most memory to work with. The "firmware too old for layers" warning no longer flashes for a moment after a push.
+- **Edits on an extra layer reach the pad.** A change made on a Layer 2 or Layer 3 tab was not sent again to the pad until something on the main keys changed. Studio now sends the profile whenever any of its layers change.
 
 ## Notes
 

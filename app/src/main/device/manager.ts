@@ -44,7 +44,7 @@ const PREVIEW_PROC = 'snekpad-preview' // the "program" the pad is told about wh
 const NOT_CONNECTED = { ok: false, error: 'pad not connected' } as const
 
 /** What the pad's slot holds of a profile: everything it shows or does, but not which apps it belongs to. */
-const fingerprint = (p: Profile): string => JSON.stringify([p.name, p.keys, p.encoder])
+const fingerprint = (p: Profile): string => JSON.stringify([p.name, p.keys, p.encoder, p.layers])
 
 export class DeviceManager extends EventEmitter {
   state: DeviceState = { status: 'disconnected' }

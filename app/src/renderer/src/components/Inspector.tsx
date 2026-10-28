@@ -24,6 +24,8 @@ type Props = {
   onApplyColorToAll: (color: string) => void
   /** The profile is a Studio-only one: it may have layers, layer keys and a double tap. */
   studio?: boolean
+  /** The keys shown are those of an extra layer, which can go back to the main keys. */
+  inLayer?: boolean
 }
 
 const KEY_ACTIONS: Action['type'][] = [
@@ -56,13 +58,15 @@ export function Inspector({
   onMatch,
   onTitles,
   onApplyColorToAll,
-  studio = false
+  studio = false,
+  inLayer = false
 }: Props): React.JSX.Element {
   return (
     <div className="flex w-80 shrink-0 flex-col gap-5 overflow-y-auto border-l border-line bg-surface p-4">
       {selection.kind === 'key' ? (
         <KeyPanel
           studio={studio}
+          inLayer={inLayer}
           profile={profile}
           index={selection.index}
           onKey={onKey}
@@ -168,9 +172,12 @@ export function KeyPanel({
   index,
   onKey,
   onApplyColorToAll,
-  studio = false
+  studio = false,
+  inLayer = false
 }: {
   studio?: boolean
+  /** The keys shown are those of an extra layer. */
+  inLayer?: boolean
   profile: Profile
   index: number
   onKey: Props['onKey']
@@ -218,6 +225,7 @@ export function KeyPanel({
           allowed={studio ? STUDIO_KEY_ACTIONS : KEY_ACTIONS}
           studio={studio}
           layerCount={profile.layers.length}
+          inLayer={inLayer}
           onChange={(action) => onKey(index, { action })}
         />
       )}

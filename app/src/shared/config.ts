@@ -107,11 +107,12 @@ const plainActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('consumer'), code: keyName })
 ])
 
-// Goes to the profile's extra layer while held ('hold') or switches to it and back ('toggle').
+// Goes to the profile's extra layer while held ('hold') or switches to it and back ('toggle'). Layer 0 is the main keys:
+// a key on an extra layer that goes back to them (the mode does not matter then).
 const layerActionSchema = z.object({
   type: z.literal('layer'),
   mode: z.enum(['hold', 'toggle']),
-  layer: z.number().int().min(1).max(MAX_LAYERS)
+  layer: z.number().int().min(0).max(MAX_LAYERS)
 })
 
 const tapMs = z.number().int().min(MIN_TAP_MS).max(MAX_TAP_MS)

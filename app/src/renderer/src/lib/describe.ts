@@ -20,6 +20,7 @@ export function describeAction(a: Action): string {
     case 'consumer':
       return a.code
     case 'layer':
+      if (a.layer === 0) return 'Back to the main keys'
       return a.mode === 'hold' ? `Hold for layer ${a.layer + 1}` : `Toggle layer ${a.layer + 1}`
     case 'tap_hold': {
       const parts = [`Tap: ${describeAction(a.tap)}`]

@@ -595,6 +595,7 @@ function App(): React.JSX.Element {
 
             <Inspector
               studio={isStudio}
+              inLayer={layerAt > 0}
               profile={shownProfile}
               selection={selection}
               onKey={setKey}

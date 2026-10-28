@@ -63,6 +63,8 @@ type Props = {
   studio?: boolean
   /** How many extra layers the profile has (a layer key chooses one of them). */
   layerCount?: number
+  /** The key is on one of the profile's extra layers, which can go back to the main keys. */
+  inLayer?: boolean
 }
 
 export function ActionEditor({
@@ -70,7 +72,8 @@ export function ActionEditor({
   allowed,
   onChange,
   studio = false,
-  layerCount = 1
+  layerCount = 1,
+  inLayer = false
 }: Props): React.JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -155,9 +158,13 @@ export function ActionEditor({
           Layer
           <select
             value={action.layer}
-            onChange={(e) => onChange({ ...action, layer: Number(e.target.value) })}
+            onChange={(e) => {
+              const layer = Number(e.target.value)
+              onChange({ ...action, layer, mode: layer === 0 ? 'toggle' : action.mode })
+            }}
             className="rounded-md border border-line bg-input px-2 py-1.5 text-sm text-fg"
           >
+            {inLayer && <option value={0}>Layer 1 (main keys)</option>}
             {Array.from({ length: Math.max(1, layerCount) }, (_, i) => (
               <option key={i} value={i + 1}>
                 Layer {i + 2}
@@ -167,7 +174,11 @@ export function ActionEditor({
         </label>
       )}
 
-      {action.type === 'layer' && (
+      {action.type === 'layer' && action.layer === 0 && (
+        <p className="text-xs text-muted">Switches back to the main keys, whatever layer is on.</p>
+      )}
+
+      {action.type === 'layer' && action.layer > 0 && (
         <label className="flex flex-col gap-1 text-xs text-muted">
           How it works
           <select
@@ -187,6 +198,7 @@ export function ActionEditor({
           onChange={onChange}
           studio={studio}
           layerCount={layerCount}
+          inLayer={inLayer}
         />
       )}
 
@@ -208,12 +220,14 @@ function TapHoldEditor({
   action,
   onChange,
   studio,
-  layerCount
+  layerCount,
+  inLayer
 }: {
   action: Extract<Action, { type: 'tap_hold' }>
   onChange: (a: Action) => void
   studio: boolean
   layerCount: number
+  inLayer: boolean
 }): React.JSX.Element {
   type Part = 'hold' | 'double'
   const [more, setMore] = useState<Record<Part, boolean>>({
@@ -260,6 +274,7 @@ function TapHoldEditor({
                 allowed={part === 'hold' && studio ? HOLD : PLAIN}
                 studio={studio}
                 layerCount={layerCount}
+                inLayer={inLayer}
                 onChange={(a) => onChange({ ...action, [part]: a })}
               />
             )}

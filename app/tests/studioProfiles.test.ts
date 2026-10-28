@@ -319,6 +319,22 @@ describe('DeviceManager and the Studio slot', () => {
     m.stop()
   })
 
+  it('a change on an extra layer is sent to the pad again', async () => {
+    const config = defaultConfig()
+    config.studioProfiles[0].layers = [{ keys: structuredClone(config.studioProfiles[0].keys) }]
+    const { m, link } = await connect(SLOT_FIRMWARE, config)
+    m.sendApp('chrome', 'Google')
+    await settle()
+    const first = lines(link, 'SLOT_BEGIN').length
+    const edited = structuredClone(config)
+    edited.studioProfiles[0].layers[0].keys[0].action = { type: 'layer', mode: 'toggle', layer: 0 }
+    m.setConfig(edited)
+    m.sendApp('chrome', 'Google')
+    await settle()
+    expect(lines(link, 'SLOT_BEGIN').length).toBe(first + 1)
+    m.stop()
+  })
+
   it('a profile with a sequence reaches the pad step by step', async () => {
     const config = defaultConfig()
     const term = structuredClone(config.profiles[2])

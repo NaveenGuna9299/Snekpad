@@ -37,6 +37,8 @@ class SlotBuilder:
         self.name = name[:12] or "Studio"
         self.knob_text = knob_text[:10]
         self.ctx = {}
+        if layers:
+            self.ctx[0] = base - 2      # the main keys: the slot layer itself (the extra layers start two after it)
         for i in range(layers):
             self.ctx[i + 1] = base + i
         self.keys = [None] * KEYS
