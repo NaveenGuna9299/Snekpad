@@ -29,9 +29,9 @@ Studio's memory meter for Studio-only profiles uses the new numbers. A pad that 
 
 ## Updating the pad
 
-- **Firmware 0.6.0 adds two files** (`slot_keys.mpy` and `key_extras.mpy`). A pad checks an update against the files it already knows, so a pad on **0.5.1 or older cannot take this update from Studio**. Studio says so and links to the release page. Flash it once from the computer, with `SnekPad-pad-v1.4.0.uf2` (a pad that is set up from scratch) or `Programs/flash_pad.ps1` (keeps your profiles), and after that updates run from Studio again.
+- **Firmware 0.6.0 adds two files** (`slot_keys.mpy` and `key_extras.mpy`). A pad checks an update against the files it already knows, so a pad on **0.5.1 or older cannot take this update from Studio**. Studio says so and links to the release page. Flash it once from the computer, and after that updates run from Studio again: either with `SnekPad-pad-v1.4.0.uf2` (hold BOOT while plugging the pad in and drag the file onto the `RPI-RP2` drive; it wipes the pad, so send your profiles again with **Push to pad**), or with `Programs/flash_pad.ps1` (keeps the pad's config).
 - **From 0.6.0 on, updates can add files.** Firmware 0.6.0 accepts a new module name when an update brings one (only plain `.mpy` names that would not replace something the pad already has), so this is the last release that needs a manual flash for that reason.
-- Your profiles are kept: a config saved by 1.3.0 loads unchanged, and the pad's own profiles are not touched.
+- Your profiles are safe: Studio keeps them, a config saved by 1.3.0 loads unchanged, and a pad that was flashed with the script keeps its config.
 
 ## Notes
 

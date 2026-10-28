@@ -8,16 +8,16 @@ plain USB keyboard. **SnekPad Studio**, a desktop app, is used to configure it. 
 
 ## Download
 
-SnekPad Studio v1.3.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
+SnekPad Studio v1.4.0 ([all releases](https://github.com/NaveenGuna9299/Snekpad/releases)):
 
 | OS                      | Download                                                                                                                                                  |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Windows                 | [SnekPad-Studio-Setup-1.3.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-Studio-Setup-1.3.0.exe)                       |
-| Windows (portable)      | [SnekPad-Studio-1.3.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-Studio-1.3.0-windows-portable.zip) |
-| macOS                   | [snekpad-studio-1.3.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio-1.3.0.dmg)                                   |
-| Linux (any distro)      | [snekpad-studio-1.3.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio-1.3.0.AppImage)                         |
-| Linux (Debian / Ubuntu) | [snekpad-studio_1.3.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/snekpad-studio_1.3.0_amd64.deb)                       |
-| Pad image (new pad)     | [SnekPad-pad-v1.3.0.uf2](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.3.0/SnekPad-pad-v1.3.0.uf2)                                       |
+| Windows                 | [SnekPad-Studio-Setup-1.4.0.exe](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/SnekPad-Studio-Setup-1.4.0.exe)                       |
+| Windows (portable)      | [SnekPad-Studio-1.4.0-windows-portable.zip](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/SnekPad-Studio-1.4.0-windows-portable.zip) |
+| macOS                   | [snekpad-studio-1.4.0.dmg](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/snekpad-studio-1.4.0.dmg)                                   |
+| Linux (any distro)      | [snekpad-studio-1.4.0.AppImage](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/snekpad-studio-1.4.0.AppImage)                         |
+| Linux (Debian / Ubuntu) | [snekpad-studio_1.4.0_amd64.deb](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/snekpad-studio_1.4.0_amd64.deb)                       |
+| Pad image (new pad)     | [SnekPad-pad-v1.4.0.uf2](https://github.com/NaveenGuna9299/Snekpad/releases/download/v1.4.0/SnekPad-pad-v1.4.0.uf2)                                       |
 
 The installers are not code-signed. Windows may show an "unknown publisher" warning (More info → Run anyway). On macOS,
 right-click the app and choose Open the first time. On Linux, make the AppImage executable (`chmod +x`) before running it.
@@ -36,6 +36,12 @@ The app configures the pad and updates its firmware. A new pad needs its firmwar
 [Quick start](#quick-start); after that, new firmware arrives with a new Studio (**Update pad**, with a knob press on
 the pad to allow it).
 
+**Updating from 1.3.0.** Studio 1.4.0 comes with pad firmware 0.6.0, which has two new files that a pad on 0.5.1 (the
+firmware of Studio 1.3.0) does not know, so it cannot take that one update from Studio: flash it once, with
+`SnekPad-pad-v1.4.0.uf2` (hold BOOT while plugging the pad in, drag the file onto the `RPI-RP2` drive; the pad is
+wiped, so send your profiles again from Studio, which keeps them) or with `Programs/flash_pad.ps1` (keeps the pad's
+config). From 0.6.0 on, updates run from Studio again, and can add files.
+
 ## What is in this repo
 
 | Folder                  | What it is                                                                         |
@@ -50,6 +56,9 @@ the pad to allow it).
   pad (needs pad firmware 0.5.0). Studio has to be running, at least in the tray, for those. A profile can switch on
   by program, or by a word in the window title (a website's name in any browser). Studio shows how much of the pad's
   memory a profile will take, can show it on the pad to try it, and exports, imports and backs up profiles.
+- Layers and smarter keys: a profile that Studio keeps (a Studio-only profile) can have up to two extra layers of 12
+  keys, reached with a layer key (hold, or toggle), and any key can do one thing on a tap and another on a hold; in a
+  Studio-only profile a double tap can do a third (needs pad firmware 0.6.0).
 - Rotary knob with three modes (idle, default, press). Each profile sets its own turn and press actions.
 - OLED screen showing the active profile and app.
 - Lighting effects: in Studio, **Home → Lighting effects** picks how the key LEDs look. **Static** shows your per-key
@@ -110,7 +119,7 @@ It can also be set up by hand: install CircuitPython, KMK and three Adafruit lib
 
 - [`app/README.md`](app/README.md): running the app, setting up a pad, the knob.
 - [`app/PROTOCOL.md`](app/PROTOCOL.md): the serial messages between the app and the pad.
-- [Release notes](RELEASE_NOTES_v1.3.0.md): what is new in this version (older ones are in the same folder).
+- [Release notes](RELEASE_NOTES_v1.4.0.md): what is new in this version (older ones are in the same folder).
 
 ## License
 
