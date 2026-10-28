@@ -11,8 +11,6 @@ import { crc32Bytes } from './protocol'
 export const FW_ALLOWED = [
   'firmware.mpy',
   'config_loader.mpy',
-  'slot_keys.mpy',
-  'key_extras.mpy',
   'rgb_keys.mpy',
   'encoder_modes.mpy',
   'app_profiles.mpy',

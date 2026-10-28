@@ -48,8 +48,8 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $build = Join-Path $here 'build'
 
 # --- what goes on the pad -------------------------------------------------------------------
-$files = 'firmware.mpy', 'config_loader.mpy', 'slot_keys.mpy', 'key_extras.mpy', 'rgb_keys.mpy', 'encoder_modes.mpy', 'app_profiles.mpy', 'oled_ui.mpy', 'fw_boot.mpy', 'fw_update.mpy', 'code.py', 'boot.py'
-$modules = 'config_loader', 'slot_keys', 'key_extras', 'rgb_keys', 'encoder_modes', 'app_profiles', 'oled_ui', 'fw_boot', 'fw_update', 'firmware'
+$files = 'firmware.mpy', 'config_loader.mpy', 'rgb_keys.mpy', 'encoder_modes.mpy', 'app_profiles.mpy', 'oled_ui.mpy', 'fw_boot.mpy', 'fw_update.mpy', 'code.py', 'boot.py'
+$modules = 'config_loader', 'rgb_keys', 'encoder_modes', 'app_profiles', 'oled_ui', 'fw_boot', 'fw_update', 'firmware'
 # fw_new / fw_old: files of a firmware update from the app. A flash from the computer replaces the whole firmware,
 # so a half-finished update (or a staged one) must not be applied on top of it at the next start.
 $junkDirs = '.Trash-1000', '.Trashes', '.fseventsd', '.vscode', 'System Volume Information', 'fw_new', 'fw_old'

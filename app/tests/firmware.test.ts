@@ -9,8 +9,7 @@ import {
   firmwareStatus,
   hasDevTools,
   isFirmwareVersion,
-  updateOffer,
-  OTA_NEW_FILES_FIRMWARE
+  updateOffer
 } from '../src/shared/firmware'
 import { isNewer } from '../src/shared/update'
 
@@ -84,16 +83,10 @@ describe('updateOffer', () => {
   it('offers the update to a pad that can take it and is older than the bundle', () => {
     expect(updateOffer(connected({ events: true, firmware: OTA_FIRMWARE }), '0.5.9')).toBe('ota')
     expect(updateOffer(connected({ events: true, firmware: '0.9.9' }), '1.0.0')).toBe('ota')
-    expect(
-      updateOffer(connected({ events: true, firmware: OTA_NEW_FILES_FIRMWARE }), '0.6.1')
-    ).toBe('ota')
   })
 
-  it('sends a pad older than 0.6.0 to a flash from the computer: the bundle carries files it would refuse', () => {
-    expect(updateOffer(connected({ events: true, firmware: '0.5.1' }), '0.6.0')).toBe('manual')
-    expect(updateOffer(connected({ events: true, firmware: '0.5.9' }), '1.0.0')).toBe('manual')
-    // a bundle from before the new files can still be sent to a pad that old (it holds none of them)
-    expect(updateOffer(connected({ events: true, firmware: '0.5.0' }), '0.5.1')).toBe('ota')
+  it('a pad on 0.5.1, the firmware of Studio 1.3.0, takes the 0.6.0 update from Studio (no flash from the computer)', () => {
+    expect(updateOffer(connected({ events: true, firmware: '0.5.1' }), '0.6.0')).toBe('ota')
   })
 
   it('offers nothing when the pad has the bundled firmware or newer', () => {

@@ -20,7 +20,7 @@ Usage (Python 3, run on the computer, not on the pad):
 
 Output goes to Programs/build/. Copy EVERYTHING in it to the root of CIRCUITPY, then delete the old
 .py files that now have a .mpy twin (CircuitPython prefers .py over .mpy of the same name):
-config_loader.py, slot_keys.py, key_extras.py, rgb_keys.py, encoder_modes.py, app_profiles.py, oled_ui.py and the kmk/ .py files.
+config_loader.py, rgb_keys.py, encoder_modes.py, app_profiles.py, oled_ui.py and the kmk/ .py files.
 code.py is replaced by a two-line stub that runs the compiled firmware.mpy. Edit code.py in this
 folder, not on the pad, and run this script again after every change to a .py file.
 """
@@ -38,12 +38,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "build")
 
 # modules imported by code.py that get their own .mpy
-MODULES = ("config_loader", "slot_keys", "key_extras", "rgb_keys", "encoder_modes", "app_profiles", "oled_ui", "fw_boot", "fw_update")
+MODULES = ("config_loader", "rgb_keys", "encoder_modes", "app_profiles", "oled_ui", "fw_boot", "fw_update")
 
 # The files a firmware update from SnekPad Studio may replace (must match ALLOWED in fw_update.py: a test checks).
 # Not in it, so only a flash from the computer changes them: code.py, boot.py, fw_boot.mpy (the safety net),
 # kmk/, lib/ and config.json.
-OTA_FILES = ("firmware.mpy", "config_loader.mpy", "slot_keys.mpy", "key_extras.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
+OTA_FILES = ("firmware.mpy", "config_loader.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
              "oled_ui.mpy", "fw_update.mpy", "snekpad32.bmp")
 
 # code.py can't be .mpy itself, so the pad's code.py just imports the compiled firmware.

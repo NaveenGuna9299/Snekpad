@@ -35,8 +35,9 @@ from binascii import a2b_base64
 import config_loader
 import fw_boot
 
-ALLOWED = ("firmware.mpy", "config_loader.mpy", "slot_keys.mpy", "key_extras.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
+ALLOWED = ("firmware.mpy", "config_loader.mpy", "rgb_keys.mpy", "encoder_modes.mpy", "app_profiles.mpy",
            "oled_ui.mpy", "fw_update.mpy", "snekpad32.bmp")
+NAME_MAX = 28               # characters in the name of a module that a later release adds
 MAX_FILES = 12
 MAX_FILE = 40000            # bytes; the biggest module is about 8 KB
 MAX_TOTAL = 150000
@@ -65,6 +66,30 @@ def _cp_version():
 def _free():
     st = os.statvfs(fw_boot.ROOT or "/")
     return st[0] * st[3]
+
+
+def _may_send(name):
+    """The files an update may carry: the firmware's own (ALLOWED), and a module that a later release adds, so that a pad
+    on this firmware never needs a flash from the computer just because an update brought a new file. Such a name is
+    lower case letters, digits and _ and ends in .mpy; fw_boot.mpy (the safety net) never; and nothing that would take
+    the place of a library or package the pad already has (/lib/<name>.mpy, /lib/<name>, /<name>/)."""
+    if name in ALLOWED:
+        return True
+    if len(name) > NAME_MAX or name[-4:] != ".mpy" or name == "fw_boot.mpy":
+        return False
+    stem = name[:-4]
+    if not "a" <= stem[:1] <= "z":
+        return False
+    for c in stem:
+        if not ("a" <= c <= "z" or "0" <= c <= "9" or c == "_"):
+            return False
+    for path in ("/lib/" + stem + ".mpy", "/lib/" + stem + ".py", "/lib/" + stem, "/" + stem):
+        try:
+            os.stat((fw_boot.ROOT or "") + path)
+            return False
+        except OSError:
+            pass
+    return True
 
 
 def _clean(text):
@@ -265,7 +290,7 @@ class Updater:
         if self.fh is not None:
             return self._err("previous file not finished")
         name, size, want = parts[1], int(parts[2]), int(parts[3], 16)
-        if name not in ALLOWED or name in self.done:
+        if not _may_send(name) or name in self.done:
             return self._err("file not allowed")
         if not 0 < size <= MAX_FILE:
             return self._err("bad size")

@@ -31,8 +31,6 @@ for _attr in ("Delay", "Press", "Release", "Tap"):
         setattr(sys.modules["kmk.modules.macros"], _attr, object)
 real = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(real)
-import key_extras  # noqa: E402  (layer and tap / hold keys)
-import slot_keys  # noqa: E402  (the slot builder lives here; config_loader.SlotBuilder loads it)
 
 
 class Key(str):
@@ -466,9 +464,6 @@ class SlotBuilderTests(unittest.TestCase):
     def setUp(self):
         patches = [
             mock.patch.object(real, "KC", FakeKC()),
-            mock.patch.object(slot_keys, "KC", FakeKC()),
-            mock.patch.object(key_extras, "KC", FakeKC()),
-            mock.patch.object(slot_keys, "Delay", lambda ms: ("delay", ms)),
             mock.patch.object(real, "Tap", lambda k: ("tap", k)),
             mock.patch.object(real, "Press", lambda k: ("press", k)),
             mock.patch.object(real, "Release", lambda k: ("release", k)),

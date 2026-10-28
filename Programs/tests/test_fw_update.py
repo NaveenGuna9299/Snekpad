@@ -409,6 +409,24 @@ class TransferTests(UpdateTestCase):
         self.assertFalse(self.has("code.py"))
         self.assertEqual(os.listdir(os.path.join(self.dir, "fw_new")), [])
 
+    def test_a_module_that_a_later_release_adds_can_be_sent(self):
+        # a pad on this firmware must not need a flash from the computer because an update brought a new file
+        self.begin_confirmed()
+        self.send_file("later_module2.mpy", data=b"NEW-MODULE" * 20)
+        self.assertEqual(self.last(), "OK")
+        self.send_file("firmware.mpy")
+        self.assertEqual(self.last(), "OK")
+
+    def test_a_new_module_name_must_be_plain_and_must_not_take_the_place_of_something_the_pad_has(self):
+        self.write("lib/neopixel.mpy", "LIB")
+        os.makedirs(os.path.join(self.dir, "lib", "adafruit_pkg"))
+        os.makedirs(os.path.join(self.dir, "kmk"))
+        self.begin_confirmed()
+        for name in ("fw_boot.mpy", "Capital.mpy", "1module.mpy", "with-dash.mpy", "two.dots.mpy", ".mpy", "x" * 29 + ".mpy",
+                     "module.py", "module", "module.mpy ", "neopixel.mpy", "adafruit_pkg.mpy", "kmk.mpy", "lib.mpy"):
+            self.cmd("FW_FILE\t%s\t10\t00000000" % name)
+            self.assertEqual(self.last(), "ERR\tfile not allowed", repr(name))
+
     def test_the_same_file_twice_is_refused(self):
         self.begin_confirmed()
         self.send_file("firmware.mpy")

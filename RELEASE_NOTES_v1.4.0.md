@@ -1,6 +1,6 @@
 # SnekPad v1.4.0
 
-Layers, double-tap and tap/hold keys for the keys you have most of, and a much lighter screen that gives the pad back about 14 KB of memory. New pad firmware (0.6.0): **a pad with older firmware needs one flash from the computer first** (see below).
+Layers, double-tap and tap/hold keys for the keys you have most of, and a much lighter screen that gives the pad back about 14 KB of memory (about 11 KB once the new code is counted). New pad firmware (0.6.0), which Studio installs on your pad like any earlier update (see below).
 
 ## Layers for Studio-only profiles
 
@@ -17,20 +17,21 @@ Layers, double-tap and tap/hold keys for the keys you have most of, and a much l
 
 ## A lighter screen
 
-The main screen page used to draw its text with 14 separate label objects, about 16 KB. It now draws the same text from rows of font tiles. It looks the same (the legend is still centred to the pixel), and the pad has about 14 KB more free memory once the screen is up. That memory is what makes layers and double tap fit: a Studio-only profile with two layers and a double tap leaves 13.8 KB free on a pad that only has General.
+The main screen page used to draw its text with 14 separate label objects, about 16 KB. It now draws the same text from rows of font tiles. It looks the same (the legend is still centred to the pixel), and the pad has about 14 KB more free memory once the screen is up. That memory is what makes layers and double tap fit: a Studio-only profile with two layers and a double tap leaves 14.4 KB free on a pad that only has General.
 
 | Measured on a pad (free memory) | before | now |
 |---|---|---|
-| after the screen starts, 3 profiles on the pad | 5.2 KB | 17.3 KB |
-| a plain Studio-only profile, General only on the pad | 7.5 KB | 18.6 KB |
-| a Studio-only profile with 2 layers and double tap | 2.4 KB | 13.8 KB |
+| after the screen starts, the 3 starter profiles on the pad | about 5 KB | 15.1 KB |
+| a plain Studio-only profile, General only on the pad | 9.2 KB | 17.9 KB |
+| a Studio-only profile with 2 layers and double tap | (new: 2.4 KB at best with the old screen) | 14.4 KB |
 
 Studio's memory meter for Studio-only profiles uses the new numbers. A pad that runs out of memory while building a profile now says "profile too big for the pad" instead of "unknown key".
 
 ## Updating the pad
 
-- **Firmware 0.6.0 adds two files** (`slot_keys.mpy` and `key_extras.mpy`). A pad checks an update against the files it already knows, so a pad on **0.5.1 or older cannot take this update from Studio**. Studio says so and links to the release page. Flash it once from the computer, with `SnekPad-pad-v1.4.0.uf2` (a pad that is set up from scratch) or `Programs/flash_pad.ps1` (keeps your profiles), and after that updates run from Studio again.
-- Your profiles are kept: a config saved by 1.3.0 loads unchanged, and the pad's own profiles are not touched.
+- **From Studio, as before.** A pad that came with Studio 1.3.0 (firmware 0.5.1) takes the 0.6.0 update from Studio 1.4.0: open Studio, click the firmware update, press the knob on the pad when it asks. Nothing has to be flashed from the computer, and your profiles are kept.
+- **Future updates can add files.** Firmware 0.6.0 accepts a new module name when an update brings one (only plain `.mpy` names that would not replace something the pad already has), so a later release will not need a manual flash just because it has a new file.
+- **Memory.** The pad has about 2–3 KB less free at start-up, to hold the layer, tap/hold and Studio-profile code. The lighter screen more than makes up for it.
 
 ## Notes
 

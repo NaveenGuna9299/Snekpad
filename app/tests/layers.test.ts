@@ -208,11 +208,11 @@ describe('sending a layered profile to the pad', () => {
 describe('what a layered profile costs on the pad', () => {
   const plain = blankProfile('a', 'a')
 
-  it('counts each layer, and the module for layer keys once', () => {
+  it('counts each layer', () => {
     const one = profileCost(withLayers(plain, 1)) - profileCost(plain)
     const two = profileCost(withLayers(plain, 2)) - profileCost(plain)
-    expect(one).toBeGreaterThan(1500) // the first layer also brings in key_extras.py (measured: 1872)
-    expect(two - one).toBe(740) // each further layer (measured: 736)
+    expect(one).toBe(740) // measured: 736
+    expect(two).toBe(1480)
   })
 
   it('counts the double-tap module once, however many keys use it', () => {
